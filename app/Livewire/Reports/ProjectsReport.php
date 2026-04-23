@@ -11,11 +11,9 @@ use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 #[Layout('layouts.app')]
-class TimeReport extends Component
+class ProjectsReport extends Component
 {
     use HasReportPeriod;
-
-    public string $groupBy = 'client';
 
     public function mount(): void
     {
@@ -30,12 +28,12 @@ class TimeReport extends Component
     /** @return Collection<int, \stdClass> */
     public function rows(): Collection
     {
-        return $this->buildQuery()->groupBy(GroupBy::from($this->groupBy));
+        return $this->buildQuery()->groupBy(GroupBy::Project);
     }
 
     public function render(): View
     {
-        return view('livewire.reports.time-report', [
+        return view('livewire.reports.projects-report', [
             'totals' => $this->totals(),
             'rows' => $this->rows(),
         ]);

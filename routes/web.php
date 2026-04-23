@@ -8,6 +8,10 @@ use App\Livewire\Admin\Projects\Index as AdminProjects;
 use App\Livewire\Admin\Rates\Index as AdminRates;
 use App\Livewire\Admin\Tasks\Index as AdminTasks;
 use App\Livewire\Admin\Users\Index as AdminUsers;
+use App\Livewire\Reports\ClientsReport;
+use App\Livewire\Reports\ProjectsReport;
+use App\Livewire\Reports\TasksReport;
+use App\Livewire\Reports\TeamOverviewReport;
 use App\Livewire\Reports\TeamReport;
 use App\Livewire\Reports\TimeReport;
 use App\Livewire\Timesheet\DayView;
@@ -31,10 +35,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/', fn () => redirect()->route('timesheet'));
     Route::get('/timesheet', DayView::class)->name('timesheet');
 
-    // Report routes
-    Route::middleware('can:access-admin')->prefix('reports')->name('reports.')->group(function () {
+    // Report routes (manager + admin)
+    Route::middleware('can:access-reports')->prefix('reports')->name('reports.')->group(function () {
         Route::get('/time', TimeReport::class)->name('time');
-        Route::get('/team/{user}', TeamReport::class)->name('team');
+        Route::get('/clients', ClientsReport::class)->name('clients');
+        Route::get('/projects', ProjectsReport::class)->name('projects');
+        Route::get('/tasks', TasksReport::class)->name('tasks');
+        Route::get('/team', TeamOverviewReport::class)->name('team');
+        Route::get('/team/{user}', TeamReport::class)->name('team.member');
     });
 
     // Admin routes

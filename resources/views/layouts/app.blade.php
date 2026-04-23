@@ -22,10 +22,20 @@
                 </a>
 
                 @if(auth()->user()->isManager())
-                <a href="{{ route('reports.time') }}"
-                   class="text-sm font-medium {{ request()->routeIs('reports.*') ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900' }}">
-                    Reports
-                </a>
+                <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                    <button @click="open = !open"
+                            class="text-sm font-medium flex items-center gap-1 {{ request()->routeIs('reports.*') ? 'text-blue-600' : 'text-gray-600 hover:text-gray-900' }}">
+                        Reports <span class="text-xs">▾</span>
+                    </button>
+                    <div x-show="open" x-cloak
+                         class="absolute top-full left-0 mt-1 w-36 bg-white border border-gray-200 rounded shadow-md z-50 py-1">
+                        <a href="{{ route('reports.time') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Time</a>
+                        <a href="{{ route('reports.clients') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Clients</a>
+                        <a href="{{ route('reports.projects') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Projects</a>
+                        <a href="{{ route('reports.tasks') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Tasks</a>
+                        <a href="{{ route('reports.team') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Team</a>
+                    </div>
+                </div>
                 @endif
 
                 @if(auth()->user()->isAdmin())

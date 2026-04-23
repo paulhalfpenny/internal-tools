@@ -11,11 +11,9 @@ use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 #[Layout('layouts.app')]
-class TimeReport extends Component
+class TasksReport extends Component
 {
     use HasReportPeriod;
-
-    public string $groupBy = 'client';
 
     public function mount(): void
     {
@@ -30,14 +28,18 @@ class TimeReport extends Component
     /** @return Collection<int, \stdClass> */
     public function rows(): Collection
     {
-        return $this->buildQuery()->groupBy(GroupBy::from($this->groupBy));
+        return $this->buildQuery()->groupBy(GroupBy::Task);
     }
 
     public function render(): View
     {
-        return view('livewire.reports.time-report', [
+        $rows = $this->rows();
+        $maxHours = $rows->max('total_hours') ?: 1.0;
+
+        return view('livewire.reports.tasks-report', [
             'totals' => $this->totals(),
-            'rows' => $this->rows(),
+            'rows' => $rows,
+            'maxHours' => (float) $maxHours,
         ]);
     }
 }
