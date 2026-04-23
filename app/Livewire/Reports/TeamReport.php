@@ -9,7 +9,9 @@ use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Renderless;
 use Livewire\Component;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 #[Layout('layouts.app')]
 class TeamReport extends Component
@@ -35,6 +37,12 @@ class TeamReport extends Component
     public function rows(): Collection
     {
         return $this->buildQuery($this->member->id)->groupBy(GroupBy::from($this->groupBy));
+    }
+
+    #[Renderless]
+    public function export(): StreamedResponse
+    {
+        return $this->exportCsv($this->member->id);
     }
 
     public function render(): View

@@ -1,0 +1,5 @@
+Date,Client,Project,Project Code,Task,Notes,Hours,Billable?,Invoiced?,Approved?,First Name,Last Name,Employee Id,Roles,Employee?,Billable Rate,Billable Amount,Cost Rate,Cost Amount,Currency,External Reference URL
+2026-04-01,Acme Corp,Website Redesign,ACM001,Development,"Built login page",2.0,Yes,No,No,Alice,Smith,,Senior Developer,Yes,84.0,168.0,0.0,0.0,British Pound - GBP,https://filteragency.harvestapp.com/time_entries/10001
+2026-04-01,Acme Corp,Website Redesign,ACM001,Testing,,1.0,Yes,No,No,Alice,Smith,,Senior Developer,Yes,84.0,84.0,0.0,0.0,British Pound - GBP,https://filteragency.harvestapp.com/time_entries/10002
+2026-04-02,Zeta Ltd,Support,ZET001,Customer Support,"Helped with issue, quote: ""urgent""",1.5,No,No,No,Bob,Jones,,Developer,Yes,0.0,0.0,0.0,0.0,British Pound - GBP,https://filteragency.harvestapp.com/time_entries/10003
+2026-04-02,Acme Corp,Website Redesign,ACM001,Development,,3.0,Yes,No,No,Alice,Smith,,Senior Developer,Yes,84.0,252.0,0.0,0.0,British Pound - GBP,https://filteragency.harvestapp.com/time_entries/10004

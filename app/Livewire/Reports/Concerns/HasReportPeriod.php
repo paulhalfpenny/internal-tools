@@ -2,8 +2,10 @@
 
 namespace App\Livewire\Reports\Concerns;
 
+use App\Domain\Reporting\DetailedTimeCsvExport;
 use App\Domain\Reporting\TimeReportQuery;
 use Carbon\CarbonImmutable;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 trait HasReportPeriod
 {
@@ -42,6 +44,19 @@ trait HasReportPeriod
             'last_year' => [$this->from, $this->to] = [$now->subYear()->startOfYear()->toDateString(), $now->subYear()->endOfYear()->toDateString()],
             default => null,
         };
+    }
+
+    public function exportCsv(?int $userId = null): StreamedResponse
+    {
+        $query = $this->buildQuery($userId);
+        $export = new DetailedTimeCsvExport($query);
+        $filename = 'detailed-time-'.$this->from.'-to-'.$this->to.'.csv';
+
+        return response()->streamDownload(function () use ($export): void {
+            $handle = fopen('php://output', 'w');
+            assert($handle !== false);
+            $export->writeTo($handle);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     protected function buildQuery(?int $userId = null): TimeReportQuery

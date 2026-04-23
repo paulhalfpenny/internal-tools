@@ -8,7 +8,9 @@ use App\Livewire\Reports\Concerns\HasReportPeriod;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Renderless;
 use Livewire\Component;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 #[Layout('layouts.app')]
 class ProjectsReport extends Component
@@ -29,6 +31,12 @@ class ProjectsReport extends Component
     public function rows(): Collection
     {
         return $this->buildQuery()->groupBy(GroupBy::Project);
+    }
+
+    #[Renderless]
+    public function export(): StreamedResponse
+    {
+        return $this->exportCsv();
     }
 
     public function render(): View
