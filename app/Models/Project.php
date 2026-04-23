@@ -4,7 +4,9 @@ namespace App\Models;
 
 use App\Enums\BillingType;
 use App\Enums\JdwCategory;
+use Database\Factories\ProjectFactory;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -32,6 +34,9 @@ use Illuminate\Support\Carbon;
  */
 class Project extends Model
 {
+    /** @use HasFactory<ProjectFactory> */
+    use HasFactory;
+
     protected $fillable = [
         'client_id', 'code', 'name', 'billing_type', 'default_hourly_rate',
         'starts_on', 'ends_on', 'is_archived',

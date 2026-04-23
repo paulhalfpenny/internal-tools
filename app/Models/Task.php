@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Database\Factories\TaskFactory;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
@@ -17,6 +19,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  */
 class Task extends Model
 {
+    /** @use HasFactory<TaskFactory> */
+    use HasFactory;
+
     protected $fillable = ['name', 'is_default_billable', 'colour', 'sort_order', 'is_archived'];
 
     protected function casts(): array

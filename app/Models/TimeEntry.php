@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Database\Factories\TimeEntryFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -27,6 +29,9 @@ use Illuminate\Support\Carbon;
  */
 class TimeEntry extends Model
 {
+    /** @use HasFactory<TimeEntryFactory> */
+    use HasFactory;
+
     protected $fillable = [
         'user_id', 'project_id', 'task_id', 'spent_on', 'hours', 'notes',
         'is_running', 'timer_started_at', 'is_billable', 'billable_rate_snapshot',
