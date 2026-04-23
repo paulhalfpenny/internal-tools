@@ -9,6 +9,7 @@ use App\Livewire\Admin\Rates\Index as AdminRates;
 use App\Livewire\Admin\Tasks\Index as AdminTasks;
 use App\Livewire\Admin\Users\Index as AdminUsers;
 use App\Livewire\Reports\ClientsReport;
+use App\Livewire\Reports\JdwReport;
 use App\Livewire\Reports\ProjectsReport;
 use App\Livewire\Reports\TasksReport;
 use App\Livewire\Reports\TeamOverviewReport;
@@ -43,6 +44,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/tasks', TasksReport::class)->name('tasks');
         Route::get('/team', TeamOverviewReport::class)->name('team');
         Route::get('/team/{user}', TeamReport::class)->name('team.member');
+        Route::get('/jdw', JdwReport::class)->name('jdw');
     });
 
     // Admin routes
