@@ -5,13 +5,13 @@ namespace App\Livewire\Timesheet;
 use App\Domain\TimeTracking\HoursParser;
 use App\Domain\TimeTracking\TimeEntryService;
 use App\Models\Project;
-use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\CalendarService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\View\View;
 use InvalidArgumentException;
 use Livewire\Attributes\Layout;
@@ -104,7 +104,6 @@ class DayView extends Component
         $this->calendarError = null;
         $this->resetModal();
     }
-
 
     public function startTimerFromModal(): void
     {
@@ -305,7 +304,7 @@ class DayView extends Component
 
         $dayTotal = $dayEntries->sum(fn (TimeEntry $e) => (float) $e->hours);
 
-        $projectsForPicker = \Illuminate\Support\Facades\Cache::remember(
+        $projectsForPicker = Cache::remember(
             "projects_picker_{$user->id}",
             now()->addMinutes(10),
             fn () => Project::with(['client', 'tasks'])
@@ -314,13 +313,13 @@ class DayView extends Component
                 ->orderBy('name')
                 ->get()
                 ->map(fn ($p) => [
-                    'id'          => $p->id,
-                    'name'        => $p->name,
+                    'id' => $p->id,
+                    'name' => $p->name,
                     'client_name' => $p->client->name,
-                    'tasks'       => $p->tasks->map(fn ($t) => [
-                        'id'          => $t->id,
-                        'name'        => $t->name,
-                        'colour'      => $t->colour,
+                    'tasks' => $p->tasks->map(fn ($t) => [
+                        'id' => $t->id,
+                        'name' => $t->name,
+                        'colour' => $t->colour,
                         'is_billable' => (bool) $t->pivot->getAttribute('is_billable'),
                     ])->values()->all(),
                 ])
@@ -342,7 +341,6 @@ class DayView extends Component
             'emptySong' => null,
         ]);
     }
-
 
     private function resetModal(): void
     {

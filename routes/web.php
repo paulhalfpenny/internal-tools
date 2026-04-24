@@ -15,12 +15,13 @@ use App\Livewire\Reports\TeamOverviewReport;
 use App\Livewire\Reports\TeamReport;
 use App\Livewire\Reports\TimeReport;
 use App\Livewire\Timesheet\DayView;
+use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
 // Local-only demo login — bypasses Google SSO for local tours.
 if (app()->environment('local')) {
     Route::get('/demo-login', function () {
-        $user = App\Models\User::where('email', config('app.admin_email', env('ADMIN_EMAIL')))->firstOrFail();
+        $user = User::where('email', config('app.admin_email', env('ADMIN_EMAIL')))->firstOrFail();
         auth()->login($user);
 
         return redirect()->route('timesheet');
@@ -58,6 +59,7 @@ Route::middleware('auth')->group(function () {
         // Seed by date so same day always returns same song
         mt_srand((int) crc32($date));
         $song = $songs[mt_rand(0, count($songs) - 1)];
+
         return response()->json($song);
     })->name('timesheet.song');
 

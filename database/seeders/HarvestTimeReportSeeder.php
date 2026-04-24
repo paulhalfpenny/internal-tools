@@ -24,11 +24,12 @@ class HarvestTimeReportSeeder extends Seeder
         $candidate = $base;
         $i = 2;
         while (isset($this->usedCodes[$candidate]) || Project::where('code', $candidate)->exists()) {
-            $candidate = $base . $i;
+            $candidate = $base.$i;
             $i++;
         }
 
         $this->usedCodes[$candidate] = true;
+
         return $candidate;
     }
 
@@ -39,6 +40,7 @@ class HarvestTimeReportSeeder extends Seeder
         $handle = fopen($path, 'r');
         if ($handle === false) {
             $this->command->error("Cannot open {$path}");
+
             return;
         }
 
@@ -74,9 +76,9 @@ class HarvestTimeReportSeeder extends Seeder
 
         fclose($handle);
 
-        $this->command->info('Unique clients: ' . count($projects));
-        $this->command->info('Unique projects: ' . array_sum(array_map('count', $projects)));
-        $this->command->info('Unique tasks: ' . count($tasks));
+        $this->command->info('Unique clients: '.count($projects));
+        $this->command->info('Unique projects: '.array_sum(array_map('count', $projects)));
+        $this->command->info('Unique tasks: '.count($tasks));
 
         // Colours pool for new tasks
         $colours = [
