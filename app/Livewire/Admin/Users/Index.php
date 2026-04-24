@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Models\User;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 
 #[Layout('layouts.app')]
@@ -15,6 +16,7 @@ class Index extends Component
 
     public string $editName = ''; // display only — name is sourced from Google OAuth, not editable
 
+    #[Locked]
     public string $editEmail = '';
 
     public string $editRole = '';
