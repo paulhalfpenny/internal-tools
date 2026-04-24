@@ -13,7 +13,7 @@ class Index extends Component
 {
     public ?int $editingId = null;
 
-    public string $editName = '';
+    public string $editName = ''; // display only — name is sourced from Google OAuth, not editable
 
     public string $editEmail = '';
 
@@ -55,12 +55,11 @@ class Index extends Component
         if ((int) $this->editingId === auth()->id()) {
             if ($this->editRole !== Role::Admin->value) {
                 $this->addError('editRole', 'You cannot change your own role.');
-
-                return;
             }
             if (! $this->editIsActive) {
                 $this->addError('editIsActive', 'You cannot deactivate yourself.');
-
+            }
+            if ($this->getErrorBag()->isNotEmpty()) {
                 return;
             }
         }
@@ -80,7 +79,6 @@ class Index extends Component
     public function cancel(): void
     {
         $this->editingId = null;
-        $this->editEmail = '';
     }
 
     public function render(): View
