@@ -15,6 +15,8 @@ class Index extends Component
 
     public string $editName = '';
 
+    public string $editEmail = '';
+
     public string $editRole = '';
 
     public string $editRoleTitle = '';
@@ -32,6 +34,7 @@ class Index extends Component
         $user = User::findOrFail($userId);
         $this->editingId = $userId;
         $this->editName = $user->name;
+        $this->editEmail = $user->email;
         $this->editRole = $user->role->value;
         $this->editRoleTitle = $user->role_title ?? '';
         $this->editDefaultRate = $user->default_hourly_rate !== null ? (string) $user->default_hourly_rate : '';
@@ -43,7 +46,6 @@ class Index extends Component
     public function save(): void
     {
         $this->validate([
-            'editName' => 'required|string|max:255',
             'editRole' => 'required|in:user,manager,admin',
             'editRoleTitle' => 'nullable|string|max:255',
             'editDefaultRate' => 'nullable|numeric|min:0',
@@ -53,16 +55,17 @@ class Index extends Component
         if ((int) $this->editingId === auth()->id()) {
             if ($this->editRole !== Role::Admin->value) {
                 $this->addError('editRole', 'You cannot change your own role.');
+
                 return;
             }
             if (! $this->editIsActive) {
                 $this->addError('editIsActive', 'You cannot deactivate yourself.');
+
                 return;
             }
         }
 
         User::findOrFail((int) $this->editingId)->update([
-            'name' => $this->editName,
             'role' => Role::from($this->editRole),
             'role_title' => $this->editRoleTitle ?: null,
             'default_hourly_rate' => $this->editDefaultRate !== '' ? (float) $this->editDefaultRate : null,
@@ -77,6 +80,7 @@ class Index extends Component
     public function cancel(): void
     {
         $this->editingId = null;
+        $this->editEmail = '';
     }
 
     public function render(): View

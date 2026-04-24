@@ -60,10 +60,9 @@
                     <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700">{{ $editName }}</div>
                 </div>
 
-                @php $editingUser = $users->firstWhere('id', $editingId); @endphp
                 <div class="mb-4">
                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Email</label>
-                    <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500">{{ $editingUser?->email }}</div>
+                    <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500">{{ $editEmail }}</div>
                 </div>
 
                 <div class="mb-1">
@@ -91,10 +90,9 @@
                     <p class="text-red-600 text-xs mb-1">{{ $message }}</p>
                 @enderror
                 @if($isSelfEdit)
-                    <p class="text-xs text-amber-600 mb-4 mt-1">You cannot change your own role or deactivate yourself.</p>
-                @else
-                    <div class="mb-4"></div>
+                    <p class="text-xs text-amber-600 mt-1 mb-4">You cannot change your own role or deactivate yourself.</p>
                 @endif
+                <div class="mb-4"></div>
 
                 <div class="mb-4">
                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Job Title</label>
