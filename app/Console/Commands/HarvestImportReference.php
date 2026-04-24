@@ -39,8 +39,16 @@ class HarvestImportReference extends Command
 
     private int $errors = 0;
 
-    /** @var array<int, array<int, bool>> project_id -> task_id -> is_billable */
+    /**
+     * Keyed by projectCacheKey -> taskCacheKey -> ['is_billable', 'project_id', 'task_id'].
+     * String keys are used so that dry-run new entities (id=0) don't collapse into the same slot.
+     *
+     * @var array<string, array<string, array{is_billable: bool, project_id: int, task_id: int}>>
+     */
     private array $projectTaskLinks = [];
+
+    /** @var list<string> Messages from entity creation, printed after the progress bar finishes. */
+    private array $creationLog = [];
 
     public function handle(): int
     {
@@ -69,11 +77,15 @@ class HarvestImportReference extends Command
         fgetcsv($handle);
 
         $bar = $this->output->createProgressBar();
+
+        // Note: this runs outside a transaction. If the process is killed mid-import,
+        // clients/projects may be partially created without their project_task links.
         $bar->start();
 
         while (($row = fgetcsv($handle)) !== false) {
             $bar->advance();
 
+            // Columns used: 1=client, 2=project, 3=code, 4=task, 7=billable
             if (count($row) < 8) {
                 $this->errors++;
 
@@ -94,15 +106,26 @@ class HarvestImportReference extends Command
         $bar->finish();
         $this->newLine();
 
-        // Bulk-insert project-task links
+        // Print entity-creation messages collected during the loop (avoids corrupting the progress bar)
+        foreach ($this->creationLog as $message) {
+            $this->line($message);
+        }
+
+        // Bulk-insert project-task links.
+        // Note: insertOrIgnore means existing links are never updated — re-running is safe
+        // but won't correct is_billable on rows that already exist.
         if (! $dryRun) {
             $links = [];
-            foreach ($this->projectTaskLinks as $projectId => $tasks) {
-                foreach ($tasks as $taskId => $isBillable) {
+            foreach ($this->projectTaskLinks as $tasks) {
+                foreach ($tasks as $entry) {
+                    // Skip rows where either ID is 0 (dry-run new entities that were never persisted)
+                    if ($entry['project_id'] === 0 || $entry['task_id'] === 0) {
+                        continue;
+                    }
                     $links[] = [
-                        'project_id' => $projectId,
-                        'task_id' => $taskId,
-                        'is_billable' => $isBillable,
+                        'project_id' => $entry['project_id'],
+                        'task_id' => $entry['task_id'],
+                        'is_billable' => $entry['is_billable'],
                     ];
                 }
             }
@@ -113,13 +136,10 @@ class HarvestImportReference extends Command
 
             $linksCreated = count($links);
         } else {
-            $linksCreated = 0;
-            foreach ($this->projectTaskLinks as $tasks) {
-                $linksCreated += count($tasks);
-            }
+            $linksCreated = array_sum(array_map('count', $this->projectTaskLinks));
         }
 
-        $this->info("Done.");
+        $this->info('Done.');
         $this->table(
             ['Entity', 'Created', 'Existing'],
             [
@@ -128,7 +148,7 @@ class HarvestImportReference extends Command
                 ['Tasks', $this->tasksCreated, $this->tasksExisting],
             ]
         );
-        $this->info("Project-task links" . ($dryRun ? ' (would be created)' : ' created') . ": {$linksCreated}");
+        $this->info('Project-task links'.($dryRun ? ' (would be created)' : ' created').": {$linksCreated}");
 
         if ($this->errors > 0) {
             $this->warn("Errors: {$this->errors}");
@@ -150,20 +170,28 @@ class HarvestImportReference extends Command
 
         $isBillable = strtolower($billableStr) === 'yes';
 
-        $clientId = $this->resolveClient($clientName, $dryRun);
-        $projectId = $this->resolveProject($projectName, $projectCode, $clientId, $dryRun);
-        $taskId = $this->resolveTask($taskName, $isBillable, $dryRun);
+        $clientCacheKey = strtolower($clientName);
+        $clientId = $this->resolveClient($clientName, $clientCacheKey, $dryRun);
 
-        // Track project-task link (first occurrence wins for is_billable)
-        if (! isset($this->projectTaskLinks[$projectId][$taskId])) {
-            $this->projectTaskLinks[$projectId][$taskId] = $isBillable;
+        $projectCacheKey = strtolower($projectName).'|'.$clientCacheKey;
+        $projectId = $this->resolveProject($projectName, $projectCode, $projectCacheKey, $clientId, $dryRun);
+
+        $taskCacheKey = strtolower($taskName);
+        $taskId = $this->resolveTask($taskName, $taskCacheKey, $isBillable, $dryRun);
+
+        // Track project-task link keyed by string cache keys so dry-run new entities
+        // (all assigned id=0) don't collapse into the same array slot. First occurrence wins for is_billable.
+        if (! isset($this->projectTaskLinks[$projectCacheKey][$taskCacheKey])) {
+            $this->projectTaskLinks[$projectCacheKey][$taskCacheKey] = [
+                'is_billable' => $isBillable,
+                'project_id' => $projectId,
+                'task_id' => $taskId,
+            ];
         }
     }
 
-    private function resolveClient(string $name, bool $dryRun): int
+    private function resolveClient(string $name, string $key, bool $dryRun): int
     {
-        $key = strtolower($name);
-
         if (isset($this->clientCache[$key])) {
             return $this->clientCache[$key];
         }
@@ -173,7 +201,7 @@ class HarvestImportReference extends Command
         if ($client === null) {
             if (! $dryRun) {
                 $client = Client::create(['name' => $name]);
-                $this->line("  Created client: {$name}");
+                $this->creationLog[] = "  Created client: {$name}";
             }
             $this->clientsCreated++;
             $this->clientCache[$key] = $dryRun ? 0 : $client->id;
@@ -185,11 +213,8 @@ class HarvestImportReference extends Command
         return $this->clientCache[$key];
     }
 
-    private function resolveProject(string $name, string $code, int $clientId, bool $dryRun): int
+    private function resolveProject(string $name, string $code, string $key, int $clientId, bool $dryRun): int
     {
-        // Key includes client_id so same-named projects under different clients resolve separately
-        $key = strtolower($name) . '|' . $clientId;
-
         if (isset($this->projectCache[$key])) {
             return $this->projectCache[$key];
         }
@@ -206,7 +231,7 @@ class HarvestImportReference extends Command
                     'code' => $code !== '' ? $code : null,
                     'billing_type' => 'hourly',
                 ]);
-                $this->line("  Created project: {$name}");
+                $this->creationLog[] = "  Created project: {$name}";
             }
             $this->projectsCreated++;
             $this->projectCache[$key] = $dryRun ? 0 : $project->id;
@@ -218,10 +243,8 @@ class HarvestImportReference extends Command
         return $this->projectCache[$key];
     }
 
-    private function resolveTask(string $name, bool $isBillable, bool $dryRun): int
+    private function resolveTask(string $name, string $key, bool $isBillable, bool $dryRun): int
     {
-        $key = strtolower($name);
-
         if (isset($this->taskCache[$key])) {
             return $this->taskCache[$key];
         }
@@ -234,7 +257,7 @@ class HarvestImportReference extends Command
                     'name' => $name,
                     'is_default_billable' => $isBillable,
                 ]);
-                $this->line("  Created task: {$name}");
+                $this->creationLog[] = "  Created task: {$name}";
             }
             $this->tasksCreated++;
             $this->taskCache[$key] = $dryRun ? 0 : $task->id;
