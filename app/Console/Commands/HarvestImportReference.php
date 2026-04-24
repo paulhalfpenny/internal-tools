@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
 use Illuminate\Console\Command;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 class HarvestImportReference extends Command
@@ -225,12 +226,26 @@ class HarvestImportReference extends Command
 
         if ($project === null) {
             if (! $dryRun) {
-                $project = Project::create([
-                    'client_id' => $clientId,
-                    'name' => $name,
-                    'code' => $code !== '' ? $code : null,
-                    'billing_type' => 'hourly',
-                ]);
+                try {
+                    $project = Project::create([
+                        'client_id' => $clientId,
+                        'name' => $name,
+                        'code' => $code !== '' ? $code : null,
+                        'billing_type' => 'hourly',
+                    ]);
+                } catch (QueryException $e) {
+                    if (str_contains($e->getMessage(), 'projects_code_unique') || $e->getCode() === '23000') {
+                        $project = Project::create([
+                            'client_id' => $clientId,
+                            'name' => $name,
+                            'code' => null,
+                            'billing_type' => 'hourly',
+                        ]);
+                        $this->creationLog[] = "  [code conflict] Created project without code: {$name} (code '{$code}' already in use)";
+                    } else {
+                        throw $e;
+                    }
+                }
                 $this->creationLog[] = "  Created project: {$name}";
             }
             $this->projectsCreated++;
