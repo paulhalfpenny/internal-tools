@@ -20,7 +20,7 @@ class Edit extends Component
 
     public int $clientId;
 
-    public string $code;
+    public ?string $code = null;
 
     public string $name;
 
@@ -106,7 +106,7 @@ class Edit extends Component
     {
         $this->validate([
             'clientId' => 'required|exists:clients,id',
-            'code' => 'required|string|max:50|unique:projects,code,'.$this->project->id,
+            'code' => 'nullable|string|max:50|unique:projects,code,'.$this->project->id,
             'name' => 'required|string|max:255',
             'billingType' => 'required|in:hourly,fixed_fee,non_billable',
             'defaultRate' => 'nullable|numeric|min:0',
@@ -117,7 +117,7 @@ class Edit extends Component
 
         $this->project->update([
             'client_id' => $this->clientId,
-            'code' => $this->code,
+            'code' => $this->code ?: null,
             'name' => $this->name,
             'billing_type' => BillingType::from($this->billingType),
             'default_hourly_rate' => $this->defaultRate !== '' ? (float) $this->defaultRate : null,

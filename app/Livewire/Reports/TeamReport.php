@@ -36,7 +36,7 @@ class TeamReport extends Component
     /** @return Collection<int, \stdClass> */
     public function rows(): Collection
     {
-        return $this->buildQuery($this->member->id)->groupBy(GroupBy::from($this->groupBy));
+        return $this->buildQuery($this->member->id)->groupBy(GroupBy::tryFrom($this->groupBy) ?? GroupBy::Project);
     }
 
     #[Renderless]
