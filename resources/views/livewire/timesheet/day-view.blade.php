@@ -1,8 +1,17 @@
 <div
-    class="max-w-4xl mx-auto px-4 py-6"
     x-data="{}"
     @keydown.n.window="$wire.openNewModal()"
 >
+    @if($isImpersonating)
+        <div class="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+            <div class="text-sm text-amber-900">
+                <span class="font-semibold">Editing timesheet for {{ $viewedUser->name }}</span>
+                <span class="text-amber-700 ml-2">({{ $viewedUser->email }})</span>
+            </div>
+            <a href="{{ route('admin.timesheets') }}" class="text-sm text-amber-900 hover:underline">← Back to admin index</a>
+        </div>
+    @endif
+
     {{-- Day header --}}
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
@@ -120,27 +129,29 @@
 
                     {{-- Actions --}}
                     <div class="flex items-center gap-1 flex-shrink-0">
-                        @if ($entry->is_running)
-                            <button
-                                wire:click="stopTimer({{ $entry->id }})"
-                                class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
-                                title="Stop timer"
-                            >
-                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M6 6h12v12H6z"/>
-                                </svg>
-                            </button>
-                        @else
-                            <button
-                                wire:click="startTimer({{ $entry->id }})"
-                                class="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition"
-                                title="Start timer"
-                            >
-                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M8 5v14l11-7z"/>
-                                </svg>
-                            </button>
-                        @endif
+                        @unless($isImpersonating)
+                            @if ($entry->is_running)
+                                <button
+                                    wire:click="stopTimer({{ $entry->id }})"
+                                    class="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition"
+                                    title="Stop timer"
+                                >
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M6 6h12v12H6z"/>
+                                    </svg>
+                                </button>
+                            @else
+                                <button
+                                    wire:click="startTimer({{ $entry->id }})"
+                                    class="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition"
+                                    title="Start timer"
+                                >
+                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                </button>
+                            @endif
+                        @endunless
                         <button
                             wire:click="openEditModal({{ $entry->id }})"
                             class="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition"
@@ -269,6 +280,17 @@
                     selectedProjectId: {{ $selectedProjectId ?? 'null' }},
                     selectedTaskId: {{ $selectedTaskId ?? 'null' }},
                     projects: {{ Js::from($projectsForPicker) }},
+                    init() {
+                        this.$watch('$wire.showModal', (open) => {
+                            if (open) {
+                                this.selectedProjectId = $wire.selectedProjectId;
+                                this.selectedTaskId = $wire.selectedTaskId;
+                                this.projectOpen = false;
+                                this.taskOpen = false;
+                                this.projectSearch = '';
+                            }
+                        });
+                    },
                     get selectedProject() {
                         return this.projects.find(p => p.id === this.selectedProjectId) ?? null;
                     },
@@ -477,14 +499,15 @@
                 {{-- Modal footer --}}
                 <div class="flex items-center px-6 py-4 border-t border-gray-100">
                     <button
-                        @click="doSave({{ $editingEntryId ? 'false' : 'isTimerMode' }})"
+                        @click="doSave({{ $editingEntryId ? 'false' : ($isImpersonating ? 'false' : 'isTimerMode') }})"
                         class="px-5 py-2 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white rounded-full transition"
-                        x-text="{{ $editingEntryId ? "'Save entry'" : "isTimerMode ? 'Start timer' : 'Save entry'" }}"
+                        x-text="{{ $editingEntryId || $isImpersonating ? "'Save entry'" : "isTimerMode ? 'Start timer' : 'Save entry'" }}"
                     ></button>
                     <button
                         wire:click="closeModal"
                         class="ml-3 px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-full transition"
                     >Cancel</button>
+                    @unless($isImpersonating)
                     <div class="ml-auto">
                         <button
                             wire:click="openCalendarPanel"
@@ -501,6 +524,7 @@
                             Pull in a calendar event
                         </button>
                     </div>
+                    @endunless
                 </div>
 
             </div>

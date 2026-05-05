@@ -12,6 +12,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use InvalidArgumentException;
 use Livewire\Attributes\Layout;
@@ -51,10 +52,44 @@ class DayView extends Component
 
     public ?string $calendarError = null;
 
-    public function mount(): void
+    // Admin impersonation: when set, the admin is editing this user's timesheet.
+    public ?int $viewedUserId = null;
+
+    public bool $isImpersonating = false;
+
+    private ?User $viewedUserCache = null;
+
+    public function mount(?User $user = null): void
     {
         $this->selectedDate = Carbon::today()->toDateString();
         $this->entryDate = $this->selectedDate;
+
+        if ($user !== null && $user->exists) {
+            abort_unless(Gate::allows('access-admin'), 403);
+            if ($user->id !== auth()->id()) {
+                $this->viewedUserId = $user->id;
+                $this->isImpersonating = true;
+            }
+        }
+    }
+
+    protected function viewedUser(): User
+    {
+        if ($this->viewedUserCache !== null) {
+            return $this->viewedUserCache;
+        }
+
+        if ($this->viewedUserId !== null) {
+            $user = User::find($this->viewedUserId);
+            if ($user) {
+                return $this->viewedUserCache = $user;
+            }
+        }
+
+        /** @var User $authUser */
+        $authUser = auth()->user();
+
+        return $this->viewedUserCache = $authUser;
     }
 
     public function selectDate(string $date): void
@@ -107,6 +142,10 @@ class DayView extends Component
 
     public function startTimerFromModal(): void
     {
+        if ($this->isImpersonating) {
+            return;
+        }
+
         $this->hoursError = '';
 
         $this->validate([
@@ -126,8 +165,7 @@ class DayView extends Component
             }
         }
 
-        /** @var User $user */
-        $user = auth()->user();
+        $user = $this->viewedUser();
         $service = app(TimeEntryService::class);
 
         $entry = $service->create($user, [
@@ -165,8 +203,7 @@ class DayView extends Component
         $projectId = (int) $this->selectedProjectId;
         $taskId = (int) $this->selectedTaskId;
 
-        /** @var User $user */
-        $user = auth()->user();
+        $user = $this->viewedUser();
         $service = app(TimeEntryService::class);
 
         $data = [
@@ -201,6 +238,10 @@ class DayView extends Component
 
     public function startTimer(int $entryId): void
     {
+        if ($this->isImpersonating) {
+            return;
+        }
+
         $entry = $this->guardEntry($entryId);
         if (! $entry) {
             return;
@@ -211,6 +252,10 @@ class DayView extends Component
 
     public function stopTimer(int $entryId): void
     {
+        if ($this->isImpersonating) {
+            return;
+        }
+
         $entry = $this->guardEntry($entryId);
         if (! $entry) {
             return;
@@ -221,6 +266,10 @@ class DayView extends Component
 
     public function openCalendarPanel(): void
     {
+        if ($this->isImpersonating) {
+            return;
+        }
+
         $this->showCalendarPanel = true;
         $this->calendarError = null;
         $this->calendarLoading = false;
@@ -255,6 +304,10 @@ class DayView extends Component
 
     public function pullFromCalendarEvent(string $title, float $hours): void
     {
+        if ($this->isImpersonating) {
+            return;
+        }
+
         $this->notes = $title;
         $this->hoursInput = $this->formatHoursAsTime($hours);
         $this->showCalendarPanel = false;
@@ -276,8 +329,7 @@ class DayView extends Component
 
     public function render(): View
     {
-        /** @var User $user */
-        $user = auth()->user();
+        $user = $this->viewedUser();
 
         $selectedDay = CarbonImmutable::parse($this->selectedDate);
         $weekStart = $selectedDay->startOfWeek(); // Monday
@@ -339,6 +391,7 @@ class DayView extends Component
             'projectsForPicker' => $projectsForPicker,
             'usedEventTitles' => $usedEventTitles,
             'emptySong' => null,
+            'viewedUser' => $user,
         ]);
     }
 
@@ -355,8 +408,7 @@ class DayView extends Component
 
     private function guardEntry(int $entryId): ?TimeEntry
     {
-        /** @var User $user */
-        $user = auth()->user();
+        $user = $this->viewedUser();
         $entry = TimeEntry::find($entryId);
 
         if (! $entry || $entry->user_id !== $user->id) {

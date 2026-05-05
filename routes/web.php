@@ -6,6 +6,7 @@ use App\Livewire\Admin\Projects\Edit as AdminProjectEdit;
 use App\Livewire\Admin\Projects\Index as AdminProjects;
 use App\Livewire\Admin\Rates\Index as AdminRates;
 use App\Livewire\Admin\Tasks\Index as AdminTasks;
+use App\Livewire\Admin\Timesheets\Index as AdminTimesheets;
 use App\Livewire\Admin\Users\Index as AdminUsers;
 use App\Livewire\Reports\ClientsReport;
 use App\Livewire\Reports\JdwReport;
@@ -84,5 +85,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/projects', AdminProjects::class)->name('projects');
         Route::get('/projects/{project}/edit', AdminProjectEdit::class)->name('projects.edit');
         Route::get('/rates', AdminRates::class)->name('rates');
+        Route::get('/timesheets', AdminTimesheets::class)->name('timesheets');
+        Route::get('/timesheets/{user}', DayView::class)->name('timesheets.user');
     });
 });
