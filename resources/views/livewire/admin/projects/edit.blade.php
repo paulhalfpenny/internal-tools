@@ -7,6 +7,9 @@
     @if(session('status'))
         <div class="mb-4 px-4 py-2 bg-green-50 border border-green-200 text-green-700 text-sm rounded">{{ session('status') }}</div>
     @endif
+    @if(session('asana_warning'))
+        <div class="mb-4 px-4 py-2 bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm rounded">{{ session('asana_warning') }}</div>
+    @endif
 
     <div class="grid grid-cols-3 gap-6">
         {{-- Main details --}}
@@ -98,6 +101,44 @@
                         @endif
                     </div>
                 </div>
+            </div>
+
+            {{-- Asana --}}
+            <div class="bg-white rounded-lg border border-gray-200 p-6">
+                <div class="flex items-start justify-between mb-4">
+                    <h2 class="text-sm font-semibold text-gray-700">Asana</h2>
+                    @if($project->asana_project_gid)
+                        <button type="button" wire:click="refreshAsanaTasks" class="px-3 py-1 text-xs font-medium text-blue-700 border border-blue-200 rounded hover:bg-blue-50">
+                            Refresh tasks
+                        </button>
+                    @endif
+                </div>
+
+                @if(! $asanaConnected)
+                    <p class="text-sm text-gray-500">
+                        Connect your Asana account on
+                        <a href="{{ route('profile.asana') }}" class="text-blue-700 underline">your profile</a>
+                        to link projects.
+                    </p>
+                @elseif($asanaProjects->isEmpty())
+                    <p class="text-sm text-gray-500">
+                        No cached Asana projects yet. Visit
+                        <a href="{{ route('admin.integrations.asana') }}" class="text-blue-700 underline">Asana integration</a>
+                        and click "Pull projects from my workspace".
+                    </p>
+                @else
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Linked Asana project</label>
+                    <select wire:model="asanaProjectGid" class="w-full border border-gray-300 rounded text-sm px-3 py-2" style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
+                        <option value="">Not linked</option>
+                        @foreach($asanaProjects as $ap)
+                            <option value="{{ $ap->gid }}">{{ $ap->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('asanaProjectGid')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                    <p class="text-xs text-gray-500 mt-2">
+                        When linked, time entries on this project must pick an Asana task. Cumulative hours are pushed to a custom field on each task.
+                    </p>
+                @endif
             </div>
 
             {{-- Tasks --}}

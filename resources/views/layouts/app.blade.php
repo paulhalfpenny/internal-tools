@@ -68,6 +68,8 @@
                         <hr class="my-1 border-gray-100">
                         <a href="{{ route('admin.rates') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Rates</a>
                         <a href="{{ route('admin.timesheets') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Timesheets</a>
+                        <hr class="my-1 border-gray-100">
+                        <a href="{{ route('admin.integrations.asana') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Asana integration</a>
                     </div>
                 </div>
                 @endif
@@ -85,6 +87,7 @@
                         <p class="text-sm font-medium text-gray-900 truncate">{{ auth()->user()->name }}</p>
                         <p class="text-xs text-gray-500 truncate">{{ auth()->user()->email }}</p>
                     </div>
+                    <a href="{{ route('profile.asana') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Asana connection</a>
                     <form method="POST" action="{{ route('auth.logout') }}">
                         @csrf
                         <button type="submit"

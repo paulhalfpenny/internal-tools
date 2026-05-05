@@ -4,6 +4,7 @@ namespace App\Livewire\Timesheet;
 
 use App\Domain\TimeTracking\HoursParser;
 use App\Domain\TimeTracking\TimeEntryService;
+use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -32,6 +33,8 @@ class DayView extends Component
     public ?int $selectedProjectId = null;
 
     public ?int $selectedTaskId = null;
+
+    public string $selectedAsanaTaskGid = '';
 
     // Entry form fields
     public string $hoursInput = '';
@@ -125,6 +128,7 @@ class DayView extends Component
         $this->editingEntryId = $entryId;
         $this->selectedProjectId = $entry->project_id;
         $this->selectedTaskId = $entry->task_id;
+        $this->selectedAsanaTaskGid = $entry->asana_task_gid ?? '';
         $this->hoursInput = (string) $entry->hours;
         $this->notes = $entry->notes ?? '';
         $this->entryDate = $entry->spent_on->toDateString();
@@ -154,6 +158,10 @@ class DayView extends Component
             'entryDate' => 'required|date',
         ]);
 
+        if (! $this->validateAsanaTaskRequirement()) {
+            return;
+        }
+
         $hours = 0.0;
         if ($this->hoursInput !== '' && $this->hoursInput !== '0:00') {
             try {
@@ -174,6 +182,7 @@ class DayView extends Component
             'spent_on' => $this->entryDate,
             'hours' => $hours,
             'notes' => $this->notes !== '' ? $this->notes : null,
+            'asana_task_gid' => $this->selectedAsanaTaskGid !== '' ? $this->selectedAsanaTaskGid : null,
         ]);
 
         $service->startTimer($entry);
@@ -190,6 +199,10 @@ class DayView extends Component
             'hoursInput' => 'required|string',
             'entryDate' => 'required|date',
         ]);
+
+        if (! $this->validateAsanaTaskRequirement()) {
+            return;
+        }
 
         try {
             $hours = HoursParser::parse($this->hoursInput);
@@ -212,6 +225,7 @@ class DayView extends Component
             'spent_on' => $this->entryDate,
             'hours' => $hours,
             'notes' => $this->notes !== '' ? $this->notes : null,
+            'asana_task_gid' => $this->selectedAsanaTaskGid !== '' ? $this->selectedAsanaTaskGid : null,
         ];
 
         if ($this->editingEntryId !== null) {
@@ -224,6 +238,54 @@ class DayView extends Component
         }
 
         $this->closeModal();
+    }
+
+    private function validateAsanaTaskRequirement(): bool
+    {
+        if ($this->selectedProjectId === null) {
+            return true;
+        }
+
+        $project = Project::find($this->selectedProjectId);
+        if ($project === null || ! $project->asanaLinked()) {
+            return true;
+        }
+
+        if (! $this->asanaIntegrationAvailable()) {
+            $this->addError(
+                'selectedAsanaTaskGid',
+                'Asana integration is not active. An admin needs to connect Asana before time can be logged on linked projects.'
+            );
+
+            return false;
+        }
+
+        if ($this->selectedAsanaTaskGid === '') {
+            $this->addError('selectedAsanaTaskGid', 'Pick the Asana task this time relates to.');
+
+            return false;
+        }
+
+        $exists = AsanaTask::where('gid', $this->selectedAsanaTaskGid)
+            ->where('asana_project_gid', $project->asana_project_gid)
+            ->exists();
+
+        if (! $exists) {
+            $this->addError('selectedAsanaTaskGid', 'That Asana task is no longer in this project. Refresh tasks and try again.');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function asanaIntegrationAvailable(): bool
+    {
+        return User::query()
+            ->whereNotNull('asana_access_token')
+            ->whereNotNull('asana_user_gid')
+            ->where('is_active', true)
+            ->exists();
     }
 
     public function deleteEntry(int $entryId): void
@@ -368,6 +430,7 @@ class DayView extends Component
                     'id' => $p->id,
                     'name' => $p->name,
                     'client_name' => $p->client->name,
+                    'asana_project_gid' => $p->asana_project_gid,
                     'tasks' => $p->tasks->map(fn ($t) => [
                         'id' => $t->id,
                         'name' => $t->name,
@@ -379,6 +442,25 @@ class DayView extends Component
                 ->all()
         );
 
+        $linkedAsanaProjectGids = collect($projectsForPicker)
+            ->pluck('asana_project_gid')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $asanaTasksByProject = AsanaTask::query()
+            ->whereIn('asana_project_gid', $linkedAsanaProjectGids)
+            ->where('is_completed', false)
+            ->orderBy('name')
+            ->get(['gid', 'asana_project_gid', 'name'])
+            ->groupBy('asana_project_gid')
+            ->map(fn ($group) => $group->map(fn (AsanaTask $t) => [
+                'gid' => $t->gid,
+                'name' => $t->name,
+            ])->values()->all())
+            ->all();
+
         // Track which calendar event titles are already logged today
         $usedEventTitles = $dayEntries->pluck('notes')->filter()->map(fn ($n) => strtolower($n))->all();
 
@@ -389,6 +471,8 @@ class DayView extends Component
             'dayEntries' => $dayEntries,
             'dayTotal' => $dayTotal,
             'projectsForPicker' => $projectsForPicker,
+            'asanaTasksByProject' => $asanaTasksByProject,
+            'asanaAvailable' => $this->asanaIntegrationAvailable(),
             'usedEventTitles' => $usedEventTitles,
             'emptySong' => null,
             'viewedUser' => $user,
@@ -400,10 +484,12 @@ class DayView extends Component
         $this->editingEntryId = null;
         $this->selectedProjectId = null;
         $this->selectedTaskId = null;
+        $this->selectedAsanaTaskGid = '';
         $this->hoursInput = '';
         $this->notes = '';
         $this->hoursError = '';
         $this->entryDate = $this->selectedDate;
+        $this->resetErrorBag();
     }
 
     private function guardEntry(int $entryId): ?TimeEntry

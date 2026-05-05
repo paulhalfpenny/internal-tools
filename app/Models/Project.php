@@ -27,6 +27,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $starts_on
  * @property Carbon|null $ends_on
  * @property bool $is_archived
+ * @property string|null $asana_project_gid
+ * @property string|null $asana_workspace_gid
+ * @property string|null $asana_custom_field_gid
  * @property JdwCategory|null $jdw_category
  * @property int|null $jdw_sort_order
  * @property string|null $jdw_status
@@ -45,6 +48,7 @@ class Project extends Model
         'client_id', 'code', 'name', 'is_billable', 'default_hourly_rate',
         'budget_type', 'budget_amount', 'budget_hours', 'budget_starts_on',
         'starts_on', 'ends_on', 'is_archived',
+        'asana_project_gid', 'asana_workspace_gid', 'asana_custom_field_gid',
         'jdw_category', 'jdw_sort_order', 'jdw_status', 'jdw_estimated_launch', 'jdw_description',
     ];
 
@@ -89,5 +93,10 @@ class Project extends Model
     public function timeEntries(): HasMany
     {
         return $this->hasMany(TimeEntry::class);
+    }
+
+    public function asanaLinked(): bool
+    {
+        return $this->asana_project_gid !== null;
     }
 }

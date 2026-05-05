@@ -15,7 +15,7 @@ final class TimeEntryService
     public function __construct(private readonly RateResolver $rateResolver) {}
 
     /**
-     * @param  array{project_id: int, task_id: int, spent_on: string, hours: float, notes: string|null}  $data
+     * @param  array{project_id: int, task_id: int, spent_on: string, hours: float, notes: string|null, asana_task_gid?: string|null}  $data
      */
     public function create(User $user, array $data): TimeEntry
     {
@@ -35,11 +35,12 @@ final class TimeEntryService
             'is_billable' => $resolution->isBillable,
             'billable_rate_snapshot' => $resolution->rateSnapshot,
             'billable_amount' => $resolution->billableAmount,
+            'asana_task_gid' => $data['asana_task_gid'] ?? null,
         ]);
     }
 
     /**
-     * @param  array{project_id?: int, task_id?: int, spent_on?: string, hours?: float, notes?: string|null}  $data
+     * @param  array{project_id?: int, task_id?: int, spent_on?: string, hours?: float, notes?: string|null, asana_task_gid?: string|null}  $data
      */
     public function update(TimeEntry $entry, array $data): TimeEntry
     {
@@ -53,7 +54,7 @@ final class TimeEntryService
 
         $resolution = $this->rateResolver->resolveWithHours($project, $task, $user, $hours);
 
-        $entry->update([
+        $update = [
             'project_id' => $project->id,
             'task_id' => $task->id,
             'spent_on' => $data['spent_on'] ?? $entry->spent_on->toDateString(),
@@ -62,7 +63,13 @@ final class TimeEntryService
             'is_billable' => $resolution->isBillable,
             'billable_rate_snapshot' => $resolution->rateSnapshot,
             'billable_amount' => $resolution->billableAmount,
-        ]);
+        ];
+
+        if (array_key_exists('asana_task_gid', $data)) {
+            $update['asana_task_gid'] = $data['asana_task_gid'];
+        }
+
+        $entry->update($update);
 
         $entry->refresh();
 

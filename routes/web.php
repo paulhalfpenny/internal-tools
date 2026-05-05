@@ -1,13 +1,16 @@
 <?php
 
 use App\Http\Controllers\Auth\GoogleController;
+use App\Http\Controllers\Integrations\AsanaOAuthController;
 use App\Livewire\Admin\Clients\Index as AdminClients;
+use App\Livewire\Admin\Integrations\AsanaSettings as AdminAsanaSettings;
 use App\Livewire\Admin\Projects\Edit as AdminProjectEdit;
 use App\Livewire\Admin\Projects\Index as AdminProjects;
 use App\Livewire\Admin\Rates\Index as AdminRates;
 use App\Livewire\Admin\Tasks\Index as AdminTasks;
 use App\Livewire\Admin\Timesheets\Index as AdminTimesheets;
 use App\Livewire\Admin\Users\Index as AdminUsers;
+use App\Livewire\Profile\AsanaConnection as ProfileAsanaConnection;
 use App\Livewire\Reports\ClientsReport;
 use App\Livewire\Reports\JdwReport;
 use App\Livewire\Reports\ProjectBudget;
@@ -87,5 +90,20 @@ Route::middleware('auth')->group(function () {
         Route::get('/rates', AdminRates::class)->name('rates');
         Route::get('/timesheets', AdminTimesheets::class)->name('timesheets');
         Route::get('/timesheets/{user}', DayView::class)->name('timesheets.user');
+        Route::get('/integrations/asana', AdminAsanaSettings::class)->name('integrations.asana');
+    });
+
+    // Profile / personal integrations
+    Route::get('/profile/asana', ProfileAsanaConnection::class)->name('profile.asana');
+
+    // Asana OAuth
+    Route::prefix('integrations/asana')->name('integrations.asana.')->group(function () {
+        Route::get('/redirect', [AsanaOAuthController::class, 'redirect'])
+            ->name('redirect')
+            ->middleware('throttle:asana-oauth');
+        Route::get('/callback', [AsanaOAuthController::class, 'callback'])
+            ->name('callback')
+            ->middleware('throttle:asana-oauth');
+        Route::post('/disconnect', [AsanaOAuthController::class, 'disconnect'])->name('disconnect');
     });
 });

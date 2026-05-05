@@ -276,18 +276,26 @@
                 x-data="{
                     projectOpen: false,
                     taskOpen: false,
+                    asanaTaskOpen: false,
+                    asanaTaskSearch: '',
                     projectSearch: '',
                     selectedProjectId: {{ $selectedProjectId ?? 'null' }},
                     selectedTaskId: {{ $selectedTaskId ?? 'null' }},
+                    selectedAsanaTaskGid: @js($selectedAsanaTaskGid),
                     projects: {{ Js::from($projectsForPicker) }},
+                    asanaTasksByProject: {{ Js::from($asanaTasksByProject) }},
+                    asanaAvailable: {{ $asanaAvailable ? 'true' : 'false' }},
                     init() {
                         this.$watch('$wire.showModal', (open) => {
                             if (open) {
                                 this.selectedProjectId = $wire.selectedProjectId;
                                 this.selectedTaskId = $wire.selectedTaskId;
+                                this.selectedAsanaTaskGid = $wire.selectedAsanaTaskGid ?? '';
                                 this.projectOpen = false;
                                 this.taskOpen = false;
+                                this.asanaTaskOpen = false;
                                 this.projectSearch = '';
+                                this.asanaTaskSearch = '';
                             }
                         });
                     },
@@ -296,6 +304,24 @@
                     },
                     get selectedTask() {
                         return this.selectedProject?.tasks.find(t => t.id === this.selectedTaskId) ?? null;
+                    },
+                    get asanaProjectGid() {
+                        return this.selectedProject?.asana_project_gid ?? null;
+                    },
+                    get asanaRequired() {
+                        return !!this.asanaProjectGid;
+                    },
+                    get asanaTasks() {
+                        if (!this.asanaProjectGid) return [];
+                        return this.asanaTasksByProject[this.asanaProjectGid] ?? [];
+                    },
+                    get filteredAsanaTasks() {
+                        const q = this.asanaTaskSearch.toLowerCase();
+                        if (!q) return this.asanaTasks;
+                        return this.asanaTasks.filter(t => t.name.toLowerCase().includes(q));
+                    },
+                    get selectedAsanaTask() {
+                        return this.asanaTasks.find(t => t.gid === this.selectedAsanaTaskGid) ?? null;
                     },
                     get groupedProjects() {
                         const q = this.projectSearch.toLowerCase();
@@ -309,17 +335,22 @@
                     pickProject(id) {
                         this.selectedProjectId = id;
                         this.selectedTaskId = null;
+                        this.selectedAsanaTaskGid = '';
                         this.projectSearch = '';
                         this.projectOpen = false;
-                        this.taskOpen = true;
                     },
                     pickTask(id) {
                         this.selectedTaskId = id;
                         this.taskOpen = false;
                     },
+                    pickAsanaTask(gid) {
+                        this.selectedAsanaTaskGid = gid;
+                        this.asanaTaskOpen = false;
+                    },
                     async doSave(isTimer) {
                         $wire.selectedProjectId = this.selectedProjectId;
                         $wire.selectedTaskId = this.selectedTaskId;
+                        $wire.selectedAsanaTaskGid = this.selectedAsanaTaskGid;
                         await $nextTick();
                         isTimer ? $wire.startTimerFromModal() : $wire.save();
                     },
@@ -347,7 +378,7 @@
                     <div class="text-sm font-semibold text-gray-700">Project / Task</div>
 
                     {{-- Project dropdown --}}
-                    <div class="relative z-20">
+                    <div class="relative z-30">
                         <button
                             type="button"
                             @click="projectOpen = !projectOpen; taskOpen = false"
@@ -405,6 +436,74 @@
                             </div>
                         </div>
                     </div>
+
+                    {{-- Asana task (only when project is linked) --}}
+                    <template x-if="asanaRequired">
+                        <div class="relative z-20">
+                            <template x-if="!asanaAvailable">
+                                <div class="border border-yellow-200 bg-yellow-50 rounded-lg px-3 py-2 text-xs text-yellow-800">
+                                    This project is linked to Asana, but no admin has connected the integration yet. Time can't be logged on it until they do.
+                                </div>
+                            </template>
+
+                            <template x-if="asanaAvailable">
+                                <div>
+                                    <button
+                                        type="button"
+                                        @click="asanaTaskOpen = !asanaTaskOpen"
+                                        class="w-full flex items-center justify-between border border-gray-300 rounded-lg px-4 py-2.5 text-left bg-white hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    >
+                                        <template x-if="selectedAsanaTask">
+                                            <span class="text-sm font-medium text-gray-900 truncate" x-text="selectedAsanaTask.name"></span>
+                                        </template>
+                                        <template x-if="!selectedAsanaTask">
+                                            <span class="text-gray-400 text-sm">Select an Asana task…</span>
+                                        </template>
+                                        <svg class="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                        </svg>
+                                    </button>
+                                    <div
+                                        x-show="asanaTaskOpen"
+                                        @click.outside="asanaTaskOpen = false"
+                                        class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
+                                        style="display: none"
+                                    >
+                                        <div class="p-2 border-b border-gray-100">
+                                            <input
+                                                type="text"
+                                                x-model="asanaTaskSearch"
+                                                placeholder="Search Asana tasks…"
+                                                class="w-full text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                x-init="$el.focus()"
+                                            />
+                                        </div>
+                                        <div class="max-h-60 overflow-y-auto py-1">
+                                            <template x-if="filteredAsanaTasks.length === 0">
+                                                <p class="text-sm text-gray-400 px-3 py-4 text-center">
+                                                    <template x-if="asanaTasks.length === 0">
+                                                        <span>No Asana tasks cached for this project. An admin can refresh tasks on the project edit page.</span>
+                                                    </template>
+                                                    <template x-if="asanaTasks.length > 0">
+                                                        <span>No tasks match.</span>
+                                                    </template>
+                                                </p>
+                                            </template>
+                                            <template x-for="task in filteredAsanaTasks" :key="task.gid">
+                                                <button
+                                                    type="button"
+                                                    @click="pickAsanaTask(task.gid)"
+                                                    class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-green-50 hover:text-green-700 transition truncate"
+                                                    x-text="task.name"
+                                                ></button>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            @error('selectedAsanaTaskGid')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                        </div>
+                    </template>
 
                     {{-- Task dropdown --}}
                     <div class="relative z-10">

@@ -5,10 +5,14 @@ namespace App\Livewire\Admin\Projects;
 use App\Domain\Budgeting\ProjectBudgetCalculator;
 use App\Enums\BudgetType;
 use App\Enums\JdwCategory;
+use App\Jobs\Asana\PullAsanaTasksJob;
+use App\Models\AsanaProject;
+use App\Models\AsanaSyncLog;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Asana\AsanaService;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
@@ -60,6 +64,8 @@ class Edit extends Component
 
     public string $jdwDescription = '';
 
+    public string $asanaProjectGid = '';
+
     public function mount(Project $project): void
     {
         $this->project = $project->load(['tasks', 'users']);
@@ -79,6 +85,7 @@ class Edit extends Component
         $this->jdwStatus = $project->jdw_status ?? '';
         $this->jdwEstimatedLaunch = $project->jdw_estimated_launch ?? '';
         $this->jdwDescription = $project->jdw_description ?? '';
+        $this->asanaProjectGid = $project->asana_project_gid ?? '';
 
         foreach ($project->tasks as $task) {
             /** @var Pivot $pivot */
@@ -115,7 +122,7 @@ class Edit extends Component
         }
     }
 
-    public function save(): void
+    public function save(AsanaService $asana): void
     {
         $this->validate([
             'clientId' => 'required|exists:clients,id',
@@ -130,7 +137,39 @@ class Edit extends Component
             'budgetAmount' => 'nullable|numeric|min:0|required_with:budgetType',
             'budgetHours' => 'nullable|numeric|min:0',
             'budgetStartsOn' => 'nullable|date|required_if:budgetType,monthly_ci',
+            'asanaProjectGid' => 'nullable|string|exists:asana_projects,gid',
         ]);
+
+        $previousGid = $this->project->asana_project_gid;
+        $newGid = $this->asanaProjectGid !== '' ? $this->asanaProjectGid : null;
+        $newWorkspaceGid = null;
+        $newCustomFieldGid = $this->project->asana_custom_field_gid;
+
+        if ($newGid !== null && $newGid !== $previousGid) {
+            $cached = AsanaProject::find($newGid);
+            $newWorkspaceGid = $cached?->workspace_gid;
+            $newCustomFieldGid = null;
+
+            $authUser = $this->authUser();
+            if ($newWorkspaceGid !== null && $authUser->asanaConnected()) {
+                try {
+                    $newCustomFieldGid = $asana->forUser($authUser)
+                        ->ensureHoursCustomField($newGid, $newWorkspaceGid);
+                } catch (\Throwable $e) {
+                    AsanaSyncLog::error('asana.project_link.custom_field_failed', [
+                        'asana_project_gid' => $newGid,
+                        'error' => $e->getMessage(),
+                    ], $this->project);
+                    session()->flash('asana_warning', 'Project linked, but the cumulative-hours custom field could not be set up. It will be retried on the first time entry sync.');
+                }
+            }
+        } elseif ($newGid === null) {
+            $newWorkspaceGid = null;
+            $newCustomFieldGid = null;
+        } else {
+            // unchanged
+            $newWorkspaceGid = $this->project->asana_workspace_gid;
+        }
 
         $this->project->update([
             'client_id' => $this->clientId,
@@ -149,7 +188,15 @@ class Edit extends Component
             'jdw_status' => $this->jdwStatus ?: null,
             'jdw_estimated_launch' => $this->jdwEstimatedLaunch ?: null,
             'jdw_description' => $this->jdwDescription ?: null,
+            'asana_project_gid' => $newGid,
+            'asana_workspace_gid' => $newWorkspaceGid,
+            'asana_custom_field_gid' => $newCustomFieldGid,
         ]);
+
+        $authUser = $this->authUser();
+        if ($newGid !== null && $newGid !== $previousGid && $authUser->asanaConnected()) {
+            PullAsanaTasksJob::dispatch($newGid, $authUser->id);
+        }
 
         // Sync tasks
         $taskSync = [];
@@ -169,8 +216,29 @@ class Edit extends Component
         session()->flash('status', 'Project saved.');
     }
 
+    public function refreshAsanaTasks(): void
+    {
+        $authUser = $this->authUser();
+        if (! $authUser->asanaConnected() || $this->project->asana_project_gid === null) {
+            return;
+        }
+
+        PullAsanaTasksJob::dispatch($this->project->asana_project_gid, $authUser->id);
+        session()->flash('status', 'Refreshing Asana tasks in the background.');
+    }
+
     public function render(ProjectBudgetCalculator $budgetCalculator): View
     {
+        $authUser = $this->authUser();
+        $workspaceGid = $authUser->asana_workspace_gid;
+        $asanaProjects = $workspaceGid !== null
+            ? AsanaProject::query()
+                ->where('workspace_gid', $workspaceGid)
+                ->where('is_archived', false)
+                ->orderBy('name')
+                ->get()
+            : collect();
+
         return view('livewire.admin.projects.edit', [
             'clients' => Client::where('is_archived', false)->orderBy('name')->get(),
             'allTasks' => Task::where('is_archived', false)->orderBy('sort_order')->orderBy('name')->get(),
@@ -178,6 +246,16 @@ class Edit extends Component
             'budgetTypes' => BudgetType::cases(),
             'jdwCategories' => JdwCategory::cases(),
             'budgetStatus' => $this->project->budget_type !== null ? $budgetCalculator->forProject($this->project) : null,
+            'asanaProjects' => $asanaProjects,
+            'asanaConnected' => $authUser->asanaConnected(),
         ]);
+    }
+
+    private function authUser(): User
+    {
+        /** @var User $user */
+        $user = auth()->user();
+
+        return $user;
     }
 }

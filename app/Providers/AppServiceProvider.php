@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\TimeEntry;
 use App\Models\User;
+use App\Observers\TimeEntryAsanaObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -19,7 +21,13 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($request->ip());
         });
 
+        RateLimiter::for('asana-oauth', function (Request $request) {
+            return Limit::perMinute(10)->by($request->ip());
+        });
+
         Gate::define('access-admin', fn (User $user) => $user->isAdmin());
         Gate::define('access-reports', fn (User $user) => $user->isManager());
+
+        TimeEntry::observe(TimeEntryAsanaObserver::class);
     }
 }

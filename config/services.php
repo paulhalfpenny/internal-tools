@@ -41,4 +41,11 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI'),
     ],
 
+    'asana' => [
+        'client_id' => env('ASANA_CLIENT_ID'),
+        'client_secret' => env('ASANA_CLIENT_SECRET'),
+        'redirect' => env('ASANA_REDIRECT_URI'),
+        'custom_field_name' => env('ASANA_HOURS_FIELD_NAME', 'Hours tracked (Internal Tools)'),
+    ],
+
 ];
