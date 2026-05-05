@@ -1,7 +1,6 @@
 <?php
 
 use App\Domain\Billing\RateResolver;
-use App\Enums\BillingType;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
@@ -11,13 +10,13 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
 // Helpers to build lightweight model stubs without hitting the database
 
 function makeProject(
-    BillingType $billingType = BillingType::Hourly,
+    bool $isBillable = true,
     ?float $defaultRate = null,
     array $taskPivots = [],  // [task_id => ['is_billable' => bool, 'hourly_rate_override' => ?float]]
     array $userPivots = [],  // [user_id => ['hourly_rate_override' => ?float]]
 ): Project {
     $project = new Project;
-    $project->billing_type = $billingType;
+    $project->is_billable = $isBillable;
     $project->default_hourly_rate = $defaultRate;
 
     $tasks = new Collection;
@@ -65,7 +64,7 @@ function makeUser(int $id = 1, ?float $defaultRate = null): User
 // --- is_billable resolution ---
 
 test('non_billable project always returns is_billable false', function () {
-    $project = makeProject(BillingType::NonBillable, 100.0, [1 => ['is_billable' => true, 'hourly_rate_override' => null]]);
+    $project = makeProject(false, 100.0, [1 => ['is_billable' => true, 'hourly_rate_override' => null]]);
     $task = makeTask(1);
     $user = makeUser(1, 50.0);
 
@@ -76,7 +75,7 @@ test('non_billable project always returns is_billable false', function () {
 });
 
 test('task not assigned to project returns is_billable false', function () {
-    $project = makeProject(BillingType::Hourly, 84.0, []); // no tasks assigned
+    $project = makeProject(true, 84.0, []); // no tasks assigned
     $task = makeTask(99);
     $user = makeUser(1, 50.0);
 
@@ -86,7 +85,7 @@ test('task not assigned to project returns is_billable false', function () {
 });
 
 test('project_task.is_billable false returns is_billable false', function () {
-    $project = makeProject(BillingType::Hourly, 84.0, [1 => ['is_billable' => false, 'hourly_rate_override' => null]]);
+    $project = makeProject(true, 84.0, [1 => ['is_billable' => false, 'hourly_rate_override' => null]]);
     $task = makeTask(1);
     $user = makeUser(1, 50.0);
 
@@ -97,7 +96,7 @@ test('project_task.is_billable false returns is_billable false', function () {
 });
 
 test('project_task.is_billable true on hourly project returns is_billable true', function () {
-    $project = makeProject(BillingType::Hourly, 84.0, [1 => ['is_billable' => true, 'hourly_rate_override' => null]]);
+    $project = makeProject(true, 84.0, [1 => ['is_billable' => true, 'hourly_rate_override' => null]]);
     $task = makeTask(1);
     $user = makeUser(1);
 
@@ -107,7 +106,7 @@ test('project_task.is_billable true on hourly project returns is_billable true',
 });
 
 test('fixed_fee project with billable task returns is_billable true', function () {
-    $project = makeProject(BillingType::FixedFee, null, [1 => ['is_billable' => true, 'hourly_rate_override' => null]]);
+    $project = makeProject(true, null, [1 => ['is_billable' => true, 'hourly_rate_override' => null]]);
     $task = makeTask(1);
     $user = makeUser(1);
 
@@ -120,7 +119,7 @@ test('fixed_fee project with billable task returns is_billable true', function (
 
 test('project_user rate override wins over all others', function () {
     $project = makeProject(
-        BillingType::Hourly,
+        true,
         defaultRate: 84.0,
         taskPivots: [1 => ['is_billable' => true, 'hourly_rate_override' => null]],
         userPivots: [1 => ['hourly_rate_override' => 120.0]],
@@ -135,7 +134,7 @@ test('project_user rate override wins over all others', function () {
 
 test('project default rate used when no user override', function () {
     $project = makeProject(
-        BillingType::Hourly,
+        true,
         defaultRate: 84.0,
         taskPivots: [1 => ['is_billable' => true, 'hourly_rate_override' => null]],
         userPivots: [1 => ['hourly_rate_override' => null]],
@@ -150,7 +149,7 @@ test('project default rate used when no user override', function () {
 
 test('user default rate used when project has no default and no user override', function () {
     $project = makeProject(
-        BillingType::Hourly,
+        true,
         defaultRate: null,
         taskPivots: [1 => ['is_billable' => true, 'hourly_rate_override' => null]],
         userPivots: [1 => ['hourly_rate_override' => null]],
@@ -165,7 +164,7 @@ test('user default rate used when project has no default and no user override', 
 
 test('null rate when billable task has no rate at any level', function () {
     $project = makeProject(
-        BillingType::Hourly,
+        true,
         defaultRate: null,
         taskPivots: [1 => ['is_billable' => true, 'hourly_rate_override' => null]],
         userPivots: [],
@@ -182,7 +181,7 @@ test('null rate when billable task has no rate at any level', function () {
 test('user not assigned to project still falls through to project then user rate', function () {
     // user not in userPivots — falls through to project default
     $project = makeProject(
-        BillingType::Hourly,
+        true,
         defaultRate: 75.0,
         taskPivots: [1 => ['is_billable' => true, 'hourly_rate_override' => null]],
         userPivots: [], // user not assigned
@@ -199,7 +198,7 @@ test('user not assigned to project still falls through to project then user rate
 
 test('resolveWithHours computes billable_amount correctly', function () {
     $project = makeProject(
-        BillingType::Hourly,
+        true,
         defaultRate: 84.0,
         taskPivots: [1 => ['is_billable' => true, 'hourly_rate_override' => null]],
         userPivots: [],
@@ -213,7 +212,7 @@ test('resolveWithHours computes billable_amount correctly', function () {
 });
 
 test('resolveWithHours returns zero amount when non-billable', function () {
-    $project = makeProject(BillingType::NonBillable, 84.0);
+    $project = makeProject(false, 84.0);
     $task = makeTask(1);
     $user = makeUser(1);
 
@@ -224,7 +223,7 @@ test('resolveWithHours returns zero amount when non-billable', function () {
 
 test('resolveWithHours returns zero amount when billable but no rate', function () {
     $project = makeProject(
-        BillingType::Hourly,
+        true,
         defaultRate: null,
         taskPivots: [1 => ['is_billable' => true, 'hourly_rate_override' => null]],
         userPivots: [],
@@ -239,7 +238,7 @@ test('resolveWithHours returns zero amount when billable but no rate', function 
 
 test('resolveWithHours rounds to 2 decimal places', function () {
     $project = makeProject(
-        BillingType::Hourly,
+        true,
         defaultRate: 84.0,
         taskPivots: [1 => ['is_billable' => true, 'hourly_rate_override' => null]],
         userPivots: [],

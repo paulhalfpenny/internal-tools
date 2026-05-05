@@ -228,7 +228,6 @@ class HarvestImport extends Command
                     'client_id' => $clientId,
                     'name' => $name,
                     'code' => $code !== '' ? $code : null,
-                    'billing_type' => 'hourly',
                 ]);
                 $this->line("  Created project: {$name}");
             } else {

@@ -18,7 +18,7 @@
             <h2 class="text-sm font-medium text-gray-700">New project</h2>
             <button @click="showForm = false" class="text-sm text-gray-400 hover:text-gray-600">Cancel</button>
         </div>
-        <div class="grid grid-cols-4 gap-4 items-end">
+        <div class="grid grid-cols-3 gap-4 items-end">
             <div>
                 <label class="block text-xs font-medium text-gray-600 mb-1">Client <span class="text-red-500">*</span></label>
                 <select wire:model="clientId" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
@@ -39,21 +39,59 @@
                 <input wire:model="code" type="text" placeholder="e.g. AAB001" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
                 @error('code')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
             </div>
-            <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Billing type</label>
-                <select wire:model="billingType" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
-                    @foreach($billingTypes as $type)
-                        <option value="{{ $type->value }}">{{ ucfirst(str_replace('_', ' ', $type->value)) }}</option>
-                    @endforeach
-                </select>
-            </div>
         </div>
-        <div class="mt-4 flex items-end gap-4 justify-start">
-            <div class="w-40">
+        <div class="mt-4 grid grid-cols-3 gap-4 items-end">
+            <div>
                 <label class="block text-xs font-medium text-gray-600 mb-1">Default rate (£/hr)</label>
                 <input wire:model="defaultRate" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
                 @error('defaultRate')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
             </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Billable</label>
+                <select wire:model="isBillable" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
+                    <option value="1">Billable</option>
+                    <option value="0">Non-billable</option>
+                </select>
+            </div>
+            <div></div>
+        </div>
+
+        <div class="mt-4 pt-4 border-t border-gray-100">
+            <h3 class="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">Budget (optional)</h3>
+            <div class="grid grid-cols-4 gap-4 items-end">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Budget type</label>
+                    <select wire:model.live="budgetType" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
+                        <option value="">No budget</option>
+                        @foreach($budgetTypes as $type)
+                            <option value="{{ $type->value }}">{{ $type->label() }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">
+                        {{ $budgetType === 'monthly_ci' ? 'Monthly budget (£)' : 'Total fee (£)' }}
+                    </label>
+                    <input wire:model="budgetAmount" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded text-sm px-3 py-2" {{ $budgetType === '' ? 'disabled' : '' }}>
+                    @error('budgetAmount')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Budget hours</label>
+                    <input wire:model="budgetHours" type="number" step="0.25" min="0" class="w-full border border-gray-300 rounded text-sm px-3 py-2" {{ $budgetType === '' ? 'disabled' : '' }}>
+                </div>
+                @if($budgetType === 'monthly_ci')
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1">Budget starts on</label>
+                        <input wire:model="budgetStartsOn" type="date" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
+                        @error('budgetStartsOn')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                    </div>
+                @else
+                    <div></div>
+                @endif
+            </div>
+        </div>
+
+        <div class="mt-4 flex justify-start">
             <button wire:click="save" class="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700">
                 Create project
             </button>
@@ -68,7 +106,7 @@
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Code</th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Project</th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Client</th>
-                    <th class="px-4 py-3 text-left font-medium text-gray-600">Billing</th>
+                    <th class="px-4 py-3 text-left font-medium text-gray-600">Billable</th>
                     <th class="px-4 py-3 text-right font-medium text-gray-600">Rate</th>
                     <th class="px-4 py-3"></th>
                 </tr>
@@ -80,8 +118,8 @@
                         <td class="px-4 py-3 font-medium">{{ $project->name }}</td>
                         <td class="px-4 py-3 text-gray-500">{{ $project->client->name }}</td>
                         <td class="px-4 py-3">
-                            <span class="text-xs px-2 py-0.5 rounded-full {{ $project->billing_type->value === 'non_billable' ? 'bg-gray-100 text-gray-500' : 'bg-blue-50 text-blue-700' }}">
-                                {{ str_replace('_', ' ', $project->billing_type->value) }}
+                            <span class="text-xs px-2 py-0.5 rounded-full {{ $project->is_billable ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500' }}">
+                                {{ $project->is_billable ? 'Billable' : 'Non-billable' }}
                             </span>
                         </td>
                         <td class="px-4 py-3 text-right text-gray-700">

@@ -2,7 +2,6 @@
 
 namespace App\Domain\Reporting;
 
-use App\Enums\BillingType;
 use App\Enums\GroupBy;
 use App\Models\TimeEntry;
 use Carbon\CarbonImmutable;
@@ -21,7 +20,6 @@ final class TimeReportQuery
         public ?int $taskId = null,
         public bool $billableOnly = false,
         public bool $activeProjectsOnly = false,
-        public bool $includeFixedFee = false,
     ) {}
 
     public function totals(): TotalsDto
@@ -180,18 +178,8 @@ final class TimeReportQuery
             $query->whereHas('project', fn (Builder $q) => $q->where('client_id', $clientId));
         }
 
-        $activeProjectsOnly = $this->activeProjectsOnly;
-        $includeFixedFee = $this->includeFixedFee;
-
-        if ($activeProjectsOnly || ! $includeFixedFee) {
-            $query->whereHas('project', function (Builder $q) use ($activeProjectsOnly, $includeFixedFee): void {
-                if ($activeProjectsOnly) {
-                    $q->where('is_archived', false);
-                }
-                if (! $includeFixedFee) {
-                    $q->where('billing_type', '!=', BillingType::FixedFee->value);
-                }
-            });
+        if ($this->activeProjectsOnly) {
+            $query->whereHas('project', fn (Builder $q) => $q->where('is_archived', false));
         }
 
         return $query;

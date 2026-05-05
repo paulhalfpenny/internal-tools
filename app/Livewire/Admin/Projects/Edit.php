@@ -2,7 +2,8 @@
 
 namespace App\Livewire\Admin\Projects;
 
-use App\Enums\BillingType;
+use App\Domain\Budgeting\ProjectBudgetCalculator;
+use App\Enums\BudgetType;
 use App\Enums\JdwCategory;
 use App\Models\Client;
 use App\Models\Project;
@@ -24,13 +25,21 @@ class Edit extends Component
 
     public string $name;
 
-    public string $billingType;
+    public bool $isBillable = true;
 
     public string $defaultRate;
 
     public string $startsOn;
 
     public string $endsOn;
+
+    public string $budgetType = '';
+
+    public string $budgetAmount = '';
+
+    public string $budgetHours = '';
+
+    public string $budgetStartsOn = '';
 
     // Task assignments: task_id => ['is_billable' => bool]
     /** @var array<int, array{is_billable: bool}> */
@@ -57,10 +66,14 @@ class Edit extends Component
         $this->clientId = $project->client_id;
         $this->code = $project->code;
         $this->name = $project->name;
-        $this->billingType = $project->billing_type->value;
+        $this->isBillable = (bool) $project->is_billable;
         $this->defaultRate = $project->default_hourly_rate !== null ? (string) $project->default_hourly_rate : '';
         $this->startsOn = $project->starts_on?->toDateString() ?? '';
         $this->endsOn = $project->ends_on?->toDateString() ?? '';
+        $this->budgetType = $project->budget_type?->value ?? '';
+        $this->budgetAmount = $project->budget_amount !== null ? (string) $project->budget_amount : '';
+        $this->budgetHours = $project->budget_hours !== null ? (string) $project->budget_hours : '';
+        $this->budgetStartsOn = $project->budget_starts_on?->toDateString() ?? '';
         $this->jdwCategory = $project->jdw_category?->value ?? '';
         $this->jdwSortOrder = $project->jdw_sort_order !== null ? (string) $project->jdw_sort_order : '';
         $this->jdwStatus = $project->jdw_status ?? '';
@@ -108,21 +121,29 @@ class Edit extends Component
             'clientId' => 'required|exists:clients,id',
             'code' => 'nullable|string|max:50|unique:projects,code,'.$this->project->id,
             'name' => 'required|string|max:255',
-            'billingType' => 'required|in:hourly,fixed_fee,non_billable',
+            'isBillable' => 'boolean',
             'defaultRate' => 'nullable|numeric|min:0',
             'startsOn' => 'nullable|date',
             'endsOn' => 'nullable|date',
             'jdwSortOrder' => 'nullable|integer|min:0',
+            'budgetType' => 'nullable|in:fixed_fee,monthly_ci',
+            'budgetAmount' => 'nullable|numeric|min:0|required_with:budgetType',
+            'budgetHours' => 'nullable|numeric|min:0',
+            'budgetStartsOn' => 'nullable|date|required_if:budgetType,monthly_ci',
         ]);
 
         $this->project->update([
             'client_id' => $this->clientId,
             'code' => $this->code ?: null,
             'name' => $this->name,
-            'billing_type' => BillingType::from($this->billingType),
+            'is_billable' => $this->isBillable,
             'default_hourly_rate' => $this->defaultRate !== '' ? (float) $this->defaultRate : null,
             'starts_on' => $this->startsOn ?: null,
             'ends_on' => $this->endsOn ?: null,
+            'budget_type' => $this->budgetType !== '' ? BudgetType::from($this->budgetType) : null,
+            'budget_amount' => $this->budgetType !== '' && $this->budgetAmount !== '' ? (float) $this->budgetAmount : null,
+            'budget_hours' => $this->budgetType !== '' && $this->budgetHours !== '' ? (float) $this->budgetHours : null,
+            'budget_starts_on' => $this->budgetType === 'monthly_ci' && $this->budgetStartsOn !== '' ? $this->budgetStartsOn : null,
             'jdw_category' => $this->jdwCategory !== '' ? JdwCategory::from($this->jdwCategory) : null,
             'jdw_sort_order' => $this->jdwSortOrder !== '' ? (int) $this->jdwSortOrder : null,
             'jdw_status' => $this->jdwStatus ?: null,
@@ -148,14 +169,15 @@ class Edit extends Component
         session()->flash('status', 'Project saved.');
     }
 
-    public function render(): View
+    public function render(ProjectBudgetCalculator $budgetCalculator): View
     {
         return view('livewire.admin.projects.edit', [
             'clients' => Client::where('is_archived', false)->orderBy('name')->get(),
             'allTasks' => Task::where('is_archived', false)->orderBy('sort_order')->orderBy('name')->get(),
             'allUsers' => User::where('is_active', true)->orderBy('name')->get(),
-            'billingTypes' => BillingType::cases(),
+            'budgetTypes' => BudgetType::cases(),
             'jdwCategories' => JdwCategory::cases(),
+            'budgetStatus' => $this->project->budget_type !== null ? $budgetCalculator->forProject($this->project) : null,
         ]);
     }
 }

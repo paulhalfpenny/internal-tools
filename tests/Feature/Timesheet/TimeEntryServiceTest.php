@@ -1,7 +1,6 @@
 <?php
 
 use App\Domain\TimeTracking\TimeEntryService;
-use App\Enums\BillingType;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
@@ -18,8 +17,7 @@ function setupProjectWithTaskAndUser(
 ): array {
     $user = User::factory()->create(['default_hourly_rate' => 50.0]);
     $project = Project::factory()->create([
-        'billing_type' => BillingType::Hourly,
-        'default_hourly_rate' => $projectRate,
+                'default_hourly_rate' => $projectRate,
     ]);
     $task = Task::factory()->create(['is_default_billable' => true]);
 
@@ -128,8 +126,7 @@ test('non-billable project produces zero billing amount', function () {
 test('project-user rate override is used in billing calculation', function () {
     $user = User::factory()->create(['default_hourly_rate' => 50.0]);
     $project = Project::factory()->create([
-        'billing_type' => BillingType::Hourly,
-        'default_hourly_rate' => 84.0,
+                'default_hourly_rate' => 84.0,
     ]);
     $task = Task::factory()->create();
     $project->tasks()->attach($task->id, ['is_billable' => true, 'hourly_rate_override' => null]);

@@ -17,8 +17,6 @@ trait HasReportPeriod
 
     public bool $showArchived = false;
 
-    public bool $includeFixedFee = false;
-
     public function mountHasReportPeriod(): void
     {
         $this->applyPreset($this->preset);
@@ -66,7 +64,6 @@ trait HasReportPeriod
             to: CarbonImmutable::parse($this->to),
             userId: $userId,
             activeProjectsOnly: ! $this->showArchived,
-            includeFixedFee: $this->includeFixedFee,
         );
     }
 }

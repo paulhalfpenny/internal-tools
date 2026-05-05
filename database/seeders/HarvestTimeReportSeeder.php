@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Enums\BillingType;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
@@ -117,7 +116,6 @@ class HarvestTimeReportSeeder extends Seeder
                     ['client_id' => $client->id, 'name' => $projectName],
                     [
                         'code' => $code,
-                        'billing_type' => BillingType::Hourly,
                         'is_archived' => false,
                     ]
                 );

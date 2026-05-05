@@ -231,7 +231,6 @@ class HarvestImportReference extends Command
                         'client_id' => $clientId,
                         'name' => $name,
                         'code' => $code !== '' ? $code : null,
-                        'billing_type' => 'hourly',
                     ]);
                 } catch (QueryException $e) {
                     if (str_contains($e->getMessage(), 'projects_code_unique') || $e->getCode() === '23000') {
@@ -239,7 +238,6 @@ class HarvestImportReference extends Command
                             'client_id' => $clientId,
                             'name' => $name,
                             'code' => null,
-                            'billing_type' => 'hourly',
                         ]);
                         $this->creationLog[] = "  [code conflict] Created project without code: {$name} (code '{$code}' already in use)";
                     } else {

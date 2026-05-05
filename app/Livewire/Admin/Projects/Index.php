@@ -2,7 +2,7 @@
 
 namespace App\Livewire\Admin\Projects;
 
-use App\Enums\BillingType;
+use App\Enums\BudgetType;
 use App\Models\Client;
 use App\Models\Project;
 use Illuminate\View\View;
@@ -20,9 +20,17 @@ class Index extends Component
 
     public string $name = '';
 
-    public string $billingType = 'hourly';
+    public bool $isBillable = true;
 
     public string $defaultRate = '';
+
+    public string $budgetType = '';
+
+    public string $budgetAmount = '';
+
+    public string $budgetHours = '';
+
+    public string $budgetStartsOn = '';
 
     public function save(): void
     {
@@ -30,16 +38,24 @@ class Index extends Component
             'clientId' => 'required|exists:clients,id',
             'code' => 'required|string|max:50|unique:projects,code',
             'name' => 'required|string|max:255',
-            'billingType' => 'required|in:hourly,fixed_fee,non_billable',
+            'isBillable' => 'boolean',
             'defaultRate' => 'nullable|numeric|min:0',
+            'budgetType' => 'nullable|in:fixed_fee,monthly_ci',
+            'budgetAmount' => 'nullable|numeric|min:0|required_with:budgetType',
+            'budgetHours' => 'nullable|numeric|min:0',
+            'budgetStartsOn' => 'nullable|date|required_if:budgetType,monthly_ci',
         ]);
 
         $project = Project::create([
             'client_id' => (int) $this->clientId,
             'code' => $this->code,
             'name' => $this->name,
-            'billing_type' => BillingType::from($this->billingType),
+            'is_billable' => $this->isBillable,
             'default_hourly_rate' => $this->defaultRate !== '' ? (float) $this->defaultRate : null,
+            'budget_type' => $this->budgetType !== '' ? BudgetType::from($this->budgetType) : null,
+            'budget_amount' => $this->budgetType !== '' && $this->budgetAmount !== '' ? (float) $this->budgetAmount : null,
+            'budget_hours' => $this->budgetType !== '' && $this->budgetHours !== '' ? (float) $this->budgetHours : null,
+            'budget_starts_on' => $this->budgetType === 'monthly_ci' && $this->budgetStartsOn !== '' ? $this->budgetStartsOn : null,
         ]);
 
         $this->redirect(route('admin.projects.edit', $project));
@@ -62,7 +78,7 @@ class Index extends Component
         return view('livewire.admin.projects.index', [
             'projects' => $query->get(),
             'clients' => Client::where('is_archived', false)->orderBy('name')->get(),
-            'billingTypes' => BillingType::cases(),
+            'budgetTypes' => BudgetType::cases(),
         ]);
     }
 }

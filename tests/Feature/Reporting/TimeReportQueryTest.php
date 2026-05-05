@@ -1,7 +1,6 @@
 <?php
 
 use App\Domain\Reporting\TimeReportQuery;
-use App\Enums\BillingType;
 use App\Enums\GroupBy;
 use App\Models\Client;
 use App\Models\Project;
@@ -33,7 +32,7 @@ function entry(array $attrs): TimeEntry
 
 test('totals sums hours and billable amounts correctly', function () {
     $user = User::factory()->create();
-    $project = Project::factory()->create(['billing_type' => BillingType::Hourly]);
+    $project = Project::factory()->create([]);
     $task = Task::factory()->create();
 
     entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 2.0, 'billable_amount' => 168.0]);
@@ -63,7 +62,7 @@ test('totals returns empty DTO when no entries in range', function () {
 
 test('totals uninvoiced_amount excludes invoiced entries', function () {
     $user = User::factory()->create();
-    $project = Project::factory()->create(['billing_type' => BillingType::Hourly]);
+    $project = Project::factory()->create([]);
     $task = Task::factory()->create();
 
     entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 1.0, 'billable_amount' => 84.0]);
@@ -81,7 +80,7 @@ test('totals uninvoiced_amount excludes invoiced entries', function () {
 test('totals filters by user_id', function () {
     $u1 = User::factory()->create();
     $u2 = User::factory()->create();
-    $project = Project::factory()->create(['billing_type' => BillingType::Hourly]);
+    $project = Project::factory()->create([]);
     $task = Task::factory()->create();
 
     entry(['user_id' => $u1->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 3.0, 'billable_amount' => 252.0]);
@@ -98,7 +97,7 @@ test('totals filters by user_id', function () {
 
 test('totals excludes entries outside the date range', function () {
     $user = User::factory()->create();
-    $project = Project::factory()->create(['billing_type' => BillingType::Hourly]);
+    $project = Project::factory()->create([]);
     $task = Task::factory()->create();
 
     entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 5.0, 'spent_on' => '2026-03-31']); // outside
@@ -117,8 +116,8 @@ test('totals excludes entries outside the date range', function () {
 test('groupBy Client aggregates correctly', function () {
     $c1 = Client::factory()->create(['name' => 'Acme']);
     $c2 = Client::factory()->create(['name' => 'Zeta']);
-    $p1 = Project::factory()->create(['client_id' => $c1->id, 'billing_type' => BillingType::Hourly]);
-    $p2 = Project::factory()->create(['client_id' => $c2->id, 'billing_type' => BillingType::Hourly]);
+    $p1 = Project::factory()->create(['client_id' => $c1->id, ]);
+    $p2 = Project::factory()->create(['client_id' => $c2->id, ]);
     $task = Task::factory()->create();
     $user = User::factory()->create();
 
@@ -138,8 +137,8 @@ test('groupBy Client aggregates correctly', function () {
 
 test('groupBy Project returns rows ordered by client then project', function () {
     $client = Client::factory()->create(['name' => 'Client A']);
-    $p1 = Project::factory()->create(['client_id' => $client->id, 'name' => 'Alpha', 'billing_type' => BillingType::Hourly]);
-    $p2 = Project::factory()->create(['client_id' => $client->id, 'name' => 'Beta', 'billing_type' => BillingType::Hourly]);
+    $p1 = Project::factory()->create(['client_id' => $client->id, 'name' => 'Alpha', ]);
+    $p2 = Project::factory()->create(['client_id' => $client->id, 'name' => 'Beta', ]);
     $task = Task::factory()->create();
     $user = User::factory()->create();
 
@@ -156,7 +155,7 @@ test('groupBy Project returns rows ordered by client then project', function () 
 
 test('groupBy Task includes colour field', function () {
     $user = User::factory()->create();
-    $project = Project::factory()->create(['billing_type' => BillingType::Hourly]);
+    $project = Project::factory()->create([]);
     $task = Task::factory()->create(['name' => 'Development', 'colour' => '#10B981']);
 
     entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 4.0, 'billable_amount' => 336.0]);
@@ -173,7 +172,7 @@ test('groupBy Task includes colour field', function () {
 test('groupBy User aggregates per user', function () {
     $u1 = User::factory()->create(['name' => 'Alice']);
     $u2 = User::factory()->create(['name' => 'Bob']);
-    $project = Project::factory()->create(['billing_type' => BillingType::Hourly]);
+    $project = Project::factory()->create([]);
     $task = Task::factory()->create();
 
     entry(['user_id' => $u1->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 5.0, 'billable_amount' => 420.0]);
@@ -191,7 +190,7 @@ test('groupBy User aggregates per user', function () {
 
 test('billableOnly filter excludes non-billable entries from totals', function () {
     $user = User::factory()->create();
-    $project = Project::factory()->create(['billing_type' => BillingType::Hourly]);
+    $project = Project::factory()->create([]);
     $task = Task::factory()->create();
 
     entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 2.0, 'is_billable' => true, 'billable_amount' => 168.0]);
@@ -210,7 +209,7 @@ test('billableOnly filter excludes non-billable entries from totals', function (
 
 test('entries returns a LazyCollection of TimeEntry models', function () {
     $user = User::factory()->create();
-    $project = Project::factory()->create(['billing_type' => BillingType::Hourly]);
+    $project = Project::factory()->create([]);
     $task = Task::factory()->create();
 
     entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 1.0]);

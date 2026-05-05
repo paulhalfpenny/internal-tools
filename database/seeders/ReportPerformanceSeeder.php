@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Enums\BillingType;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
@@ -34,7 +33,7 @@ class ReportPerformanceSeeder extends Seeder
         foreach ($clients as $client) {
             $clientProjects = Project::factory(rand(3, 8))->create([
                 'client_id' => $client->id,
-                'billing_type' => BillingType::Hourly,
+                'is_billable' => true,
             ]);
             foreach ($clientProjects as $project) {
                 $project->tasks()->attach(
@@ -108,7 +107,7 @@ class ReportPerformanceSeeder extends Seeder
                     $taskId = $taskIds->random();
                     $hours = round(rand(50, 400) / 100, 2); // 0.5–4.0 hours
                     $rate = 84.0;
-                    $isBillable = $project->billing_type === BillingType::Hourly;
+                    $isBillable = (bool) $project->is_billable;
 
                     $rows[] = [
                         'user_id' => $user->id,

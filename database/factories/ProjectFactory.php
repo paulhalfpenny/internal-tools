@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Enums\BillingType;
 use App\Models\Client;
 use App\Models\Project;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -18,7 +17,7 @@ class ProjectFactory extends Factory
             'client_id' => Client::factory(),
             'code' => strtoupper(fake()->unique()->bothify('???###')),
             'name' => fake()->words(3, true),
-            'billing_type' => BillingType::Hourly,
+            'is_billable' => true,
             'default_hourly_rate' => 84.00,
             'starts_on' => null,
             'ends_on' => null,
@@ -28,6 +27,6 @@ class ProjectFactory extends Factory
 
     public function nonBillable(): static
     {
-        return $this->state(fn (array $attributes) => ['billing_type' => BillingType::NonBillable]);
+        return $this->state(fn (array $attributes) => ['is_billable' => false]);
     }
 }

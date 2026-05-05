@@ -3,7 +3,6 @@
 use App\Domain\Reporting\CsvFormatter;
 use App\Domain\Reporting\DetailedTimeCsvExport;
 use App\Domain\Reporting\TimeReportQuery;
-use App\Enums\BillingType;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
@@ -29,8 +28,7 @@ function makeExportEntry(array $attrs = []): TimeEntry
         'client_id' => $client->id,
         'name' => 'Website Redesign',
         'code' => 'ACM001',
-        'billing_type' => BillingType::Hourly,
-    ]);
+            ]);
     $task = Task::factory()->create(['name' => 'Development']);
 
     return TimeEntry::create(array_merge([

@@ -2,7 +2,6 @@
 
 namespace App\Domain\Billing;
 
-use App\Enums\BillingType;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
@@ -18,7 +17,7 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
  *   4. null → non-billable
  *
  * Resolution for is_billable:
- *   1. If project.billing_type = non_billable → false
+ *   1. If project.is_billable = false → false
  *   2. Else project_task.is_billable for this (project, task)
  *
  * Rates and billability are frozen at save time. Changing project/user/task
@@ -53,7 +52,7 @@ final class RateResolver
 
     private function resolveBillable(Project $project, Task $task): bool
     {
-        if ($project->billing_type === BillingType::NonBillable) {
+        if (! $project->is_billable) {
             return false;
         }
 
