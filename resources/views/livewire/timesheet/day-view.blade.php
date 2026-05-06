@@ -282,6 +282,7 @@
                     selectedProjectId: {{ $selectedProjectId ?? 'null' }},
                     selectedTaskId: {{ $selectedTaskId ?? 'null' }},
                     selectedAsanaTaskGid: @js($selectedAsanaTaskGid),
+                    liveHoursInput: @js($hoursInput),
                     projects: {{ Js::from($projectsForPicker) }},
                     asanaTasksByProject: {{ Js::from($asanaTasksByProject) }},
                     asanaAvailable: {{ $asanaAvailable ? 'true' : 'false' }},
@@ -291,6 +292,7 @@
                                 this.selectedProjectId = $wire.selectedProjectId;
                                 this.selectedTaskId = $wire.selectedTaskId;
                                 this.selectedAsanaTaskGid = $wire.selectedAsanaTaskGid ?? '';
+                                this.liveHoursInput = $wire.hoursInput ?? '';
                                 this.projectOpen = false;
                                 this.taskOpen = false;
                                 this.asanaTaskOpen = false;
@@ -355,8 +357,7 @@
                         isTimer ? $wire.startTimerFromModal() : $wire.save();
                     },
                     get isTimerMode() {
-                        const h = $wire.hoursInput ?? '';
-                        return h.trim() === '';
+                        return (this.liveHoursInput ?? '').trim() === '';
                     }
                 }"
                 @click.stop
@@ -584,6 +585,7 @@
                             <input
                                 type="text"
                                 wire:model.blur="hoursInput"
+                                @input="liveHoursInput = $event.target.value"
                                 placeholder="0.00"
                                 class="w-full h-full border {{ $hoursError ? 'border-red-400' : 'border-gray-300' }} rounded-lg px-3 py-2.5 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-green-500 placeholder-gray-400"
                             />
