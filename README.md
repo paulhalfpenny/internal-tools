@@ -1,3 +1,40 @@
+# Filter Internal Tools
+
+## Timesheet completion notifications
+
+Email + Slack reminders that chase users when their timesheets fall behind.
+
+**Channels.** Email is sent via [Resend](https://resend.com) (`MAIL_MAILER=resend`, `RESEND_KEY=`). Slack DMs use a bot token at `SLACK_BOT_USER_OAUTH_TOKEN` and require the `chat:write` and `users:read.email` scopes.
+
+**Per-user settings** live on `users` (managed in **Admin → Users**):
+
+- `weekly_capacity_hours` — weekly target (default 40h, override per user).
+- `reports_to_user_id` — line manager (drives the Friday digest).
+- `notifications_paused_until` — vacation pause; no reminders fire until it passes.
+- `email_notifications_enabled`, `slack_notifications_enabled` — per-channel opt-out.
+- `slack_user_id` — resolved nightly from the user's email.
+
+**Schedule** (London time, registered in `bootstrap/app.php`):
+
+| When | Command | What it does |
+| --- | --- | --- |
+| Thu 09:30 | `timesheets:send-reminders --type=mid-week` | DM + email to anyone <60% of weekly target by end of Wednesday |
+| Mon 09:30 | `timesheets:send-reminders --type=weekly-overdue` | Chases anyone who finished last week below target |
+| 1st @ 09:30 | `timesheets:send-reminders --type=monthly-overdue` | Chases anyone who finished last month below pro-rata target |
+| Fri 16:00 | `timesheets:send-reminders --type=manager-digest` | Sends each manager a digest of their direct reports who are behind; admins additionally get a global digest |
+| 03:00 daily | `slack:sync-user-ids` | Resolves `slack_user_id` for new joiners via `users.lookupByEmail` |
+
+Runs depend on `php artisan schedule:run` being wired up in cron in production. The reminder command takes:
+
+- `--dry-run` — print the recipient list, send nothing.
+- `--user=<id>` — limit dispatch to a single user (handy for staging tests).
+
+Example: `php artisan timesheets:send-reminders --type=mid-week --dry-run` or `--user=42` for a single-recipient end-to-end test against Resend / Slack staging.
+
+**Production prerequisites.** Verify the Filter sending domain in the Resend dashboard, set `RESEND_KEY` in the production `.env`, install the Slack app to the workspace and capture the bot token, then run `php artisan slack:sync-user-ids` once to populate `slack_user_id` for the existing team.
+
+---
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">

@@ -4,10 +4,12 @@ namespace App\Providers;
 
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Notifications\Channels\SlackChannel;
 use App\Observers\TimeEntryAsanaObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -29,5 +31,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('access-reports', fn (User $user) => $user->isManager());
 
         TimeEntry::observe(TimeEntryAsanaObserver::class);
+
+        Notification::extend('slack', fn ($app) => $app->make(SlackChannel::class));
     }
 }

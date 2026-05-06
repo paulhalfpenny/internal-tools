@@ -21,9 +21,11 @@ class UserFactory extends Factory
             'role_title' => null,
             'is_contractor' => false,
             'default_hourly_rate' => null,
-            'weekly_capacity_hours' => 37.50,
+            'weekly_capacity_hours' => 40.00,
             'is_active' => true,
             'last_login_at' => null,
+            'email_notifications_enabled' => true,
+            'slack_notifications_enabled' => true,
         ];
     }
 

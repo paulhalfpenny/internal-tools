@@ -4,6 +4,7 @@ namespace App\Livewire\Admin\Users;
 
 use App\Enums\Role;
 use App\Models\User;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
@@ -12,6 +13,7 @@ use Livewire\Component;
 #[Layout('layouts.app')]
 class Index extends Component
 {
+    #[Locked]
     public ?int $editingId = null;
 
     public string $editName = ''; // display only — name is sourced from Google OAuth, not editable
@@ -31,6 +33,16 @@ class Index extends Component
 
     public bool $editIsContractor = false;
 
+    public ?int $editReportsToUserId = null;
+
+    public string $editNotificationsPausedUntil = '';
+
+    public bool $editEmailNotificationsEnabled = true;
+
+    public bool $editSlackNotificationsEnabled = true;
+
+    public ?string $editSlackUserId = null;
+
     public function edit(int $userId): void
     {
         $user = User::findOrFail($userId);
@@ -43,6 +55,11 @@ class Index extends Component
         $this->editWeeklyCapacity = (string) $user->weekly_capacity_hours;
         $this->editIsActive = $user->is_active;
         $this->editIsContractor = $user->is_contractor;
+        $this->editReportsToUserId = $user->reports_to_user_id;
+        $this->editNotificationsPausedUntil = $user->notifications_paused_until?->toDateString() ?? '';
+        $this->editEmailNotificationsEnabled = $user->email_notifications_enabled;
+        $this->editSlackNotificationsEnabled = $user->slack_notifications_enabled;
+        $this->editSlackUserId = $user->slack_user_id;
     }
 
     public function save(): void
@@ -52,6 +69,12 @@ class Index extends Component
             'editRoleTitle' => 'nullable|string|max:255',
             'editDefaultRate' => 'nullable|numeric|min:0',
             'editWeeklyCapacity' => 'required|numeric|min:0|max:168',
+            'editReportsToUserId' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where(fn ($q) => $q->whereIn('role', [Role::Manager->value, Role::Admin->value])->where('is_active', true)),
+            ],
+            'editNotificationsPausedUntil' => 'nullable|date',
         ]);
 
         if ((int) $this->editingId === auth()->id()) {
@@ -66,6 +89,20 @@ class Index extends Component
             }
         }
 
+        if ($this->editReportsToUserId !== null) {
+            if ($this->editReportsToUserId === (int) $this->editingId) {
+                $this->addError('editReportsToUserId', 'A user cannot report to themselves.');
+
+                return;
+            }
+
+            if (in_array($this->editReportsToUserId, $this->descendantIds((int) $this->editingId), true)) {
+                $this->addError('editReportsToUserId', 'That choice would create a circular reporting line.');
+
+                return;
+            }
+        }
+
         User::findOrFail((int) $this->editingId)->update([
             'role' => Role::from($this->editRole),
             'role_title' => $this->editRoleTitle ?: null,
@@ -73,9 +110,32 @@ class Index extends Component
             'weekly_capacity_hours' => (float) $this->editWeeklyCapacity,
             'is_active' => $this->editIsActive,
             'is_contractor' => $this->editIsContractor,
+            'reports_to_user_id' => $this->editReportsToUserId,
+            'notifications_paused_until' => $this->editNotificationsPausedUntil !== '' ? $this->editNotificationsPausedUntil : null,
+            'email_notifications_enabled' => $this->editEmailNotificationsEnabled,
+            'slack_notifications_enabled' => $this->editSlackNotificationsEnabled,
         ]);
 
         $this->editingId = null;
+    }
+
+    /**
+     * IDs of every user that ultimately reports up to $userId (transitive direct reports).
+     *
+     * @return array<int>
+     */
+    private function descendantIds(int $userId): array
+    {
+        $descendants = [];
+        $queue = [$userId];
+
+        while ($queue !== []) {
+            $batch = User::query()->whereIn('reports_to_user_id', $queue)->pluck('id')->all();
+            $queue = array_values(array_diff($batch, $descendants));
+            $descendants = array_merge($descendants, $queue);
+        }
+
+        return $descendants;
     }
 
     public function cancel(): void
@@ -85,9 +145,22 @@ class Index extends Component
 
     public function render(): View
     {
+        $managerCandidates = collect();
+        if ($this->editingId !== null) {
+            $excluded = array_merge([(int) $this->editingId], $this->descendantIds((int) $this->editingId));
+
+            $managerCandidates = User::query()
+                ->where('is_active', true)
+                ->whereIn('role', [Role::Manager->value, Role::Admin->value])
+                ->whereNotIn('id', $excluded)
+                ->orderBy('name')
+                ->get();
+        }
+
         return view('livewire.admin.users.index', [
             'users' => User::orderBy('name')->get(),
             'roles' => Role::cases(),
+            'managerCandidates' => $managerCandidates,
         ]);
     }
 }

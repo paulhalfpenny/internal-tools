@@ -49,7 +49,7 @@
             x-data
             @keydown.escape.window="$wire.cancel()"
         >
-            <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6" @click.stop>
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto" @click.stop>
                 <div class="flex items-center justify-between mb-5">
                     <h2 class="text-base font-semibold text-gray-900">Edit User</h2>
                     <button wire:click="cancel" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
@@ -126,6 +126,44 @@
                     </label>
                 </div>
                 @error('editIsActive')<p class="text-red-600 text-xs -mt-4 mb-3">{{ $message }}</p>@enderror
+
+                <div class="border-t border-gray-100 pt-5 mb-5">
+                    <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Notifications & reporting line</h3>
+
+                    <div class="mb-4">
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Line manager</label>
+                        <select wire:model="editReportsToUserId" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
+                            <option value="">— None —</option>
+                            @foreach($managerCandidates as $candidate)
+                                <option value="{{ $candidate->id }}">{{ $candidate->name }} ({{ ucfirst($candidate->role->value) }})</option>
+                            @endforeach
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Determines who receives the Friday digest about this user's hours.</p>
+                        @error('editReportsToUserId')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Pause notifications until</label>
+                        <input wire:model="editNotificationsPausedUntil" type="date" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
+                        <p class="text-xs text-gray-500 mt-1">Use during holidays/long absences. Reminders resume the day <strong>after</strong> this date.</p>
+                        @error('editNotificationsPausedUntil')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                    </div>
+
+                    <div class="flex gap-5 mb-4">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input wire:model="editEmailNotificationsEnabled" type="checkbox" class="rounded"> Email reminders
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer">
+                            <input wire:model="editSlackNotificationsEnabled" type="checkbox" class="rounded"> Slack DMs
+                        </label>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Slack user ID</label>
+                        <div class="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-500 font-mono">{{ $editSlackUserId ?: '— not resolved yet —' }}</div>
+                        <p class="text-xs text-gray-500 mt-1">Resolved automatically by the nightly Slack sync.</p>
+                    </div>
+                </div>
 
                 <div class="flex gap-2">
                     <button wire:click="save" class="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">Save changes</button>

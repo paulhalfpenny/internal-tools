@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Integrations\AsanaOAuthController;
 use App\Livewire\Admin\Clients\Index as AdminClients;
 use App\Livewire\Admin\Integrations\AsanaSettings as AdminAsanaSettings;
+use App\Livewire\Admin\Notifications\Index as AdminNotifications;
 use App\Livewire\Admin\Projects\Edit as AdminProjectEdit;
 use App\Livewire\Admin\Projects\Index as AdminProjects;
 use App\Livewire\Admin\Rates\Index as AdminRates;
@@ -91,6 +92,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/timesheets', AdminTimesheets::class)->name('timesheets');
         Route::get('/timesheets/{user}', DayView::class)->name('timesheets.user');
         Route::get('/integrations/asana', AdminAsanaSettings::class)->name('integrations.asana');
+        Route::get('/notifications', AdminNotifications::class)->name('notifications');
     });
 
     // Profile / personal integrations
