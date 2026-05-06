@@ -18,12 +18,14 @@ use Illuminate\View\View;
 use InvalidArgumentException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Layout('layouts.app')]
 class DayView extends Component
 {
-    public string $selectedDate;
+    #[Url(as: 'date')]
+    public string $selectedDate = '';
 
     // Modal state
     public bool $showModal = false;
@@ -64,7 +66,9 @@ class DayView extends Component
 
     public function mount(?User $user = null): void
     {
-        $this->selectedDate = Carbon::today()->toDateString();
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->selectedDate)) {
+            $this->selectedDate = Carbon::today()->toDateString();
+        }
         $this->entryDate = $this->selectedDate;
 
         if ($user !== null && $user->exists) {
