@@ -575,7 +575,7 @@
                     {{-- Notes + Time row --}}
                     <div class="flex gap-3 items-stretch">
                         <textarea
-                            wire:model="notes"
+                            wire:model.blur="notes"
                             rows="1"
                             placeholder="Notes (optional)"
                             class="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none placeholder-gray-400"
@@ -583,7 +583,7 @@
                         <div class="flex-shrink-0 w-24 flex flex-col">
                             <input
                                 type="text"
-                                wire:model="hoursInput"
+                                wire:model.blur="hoursInput"
                                 placeholder="0.00"
                                 class="w-full h-full border {{ $hoursError ? 'border-red-400' : 'border-gray-300' }} rounded-lg px-3 py-2.5 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-green-500 placeholder-gray-400"
                             />
