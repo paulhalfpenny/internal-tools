@@ -2,7 +2,9 @@
 
 namespace App\Livewire\Admin\Notifications;
 
+use App\Models\User;
 use App\Settings\NotificationSettings;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -15,6 +17,8 @@ class Index extends Component
     public bool $slackEnabled = false;
 
     public ?string $savedAt = null;
+
+    public ?string $syncedAt = null;
 
     public function mount(): void
     {
@@ -30,11 +34,23 @@ class Index extends Component
         $this->savedAt = now()->format('H:i:s');
     }
 
+    public function syncSlack(): void
+    {
+        Artisan::call('slack:sync-user-ids');
+
+        $this->syncedAt = now()->format('H:i:s');
+    }
+
     public function render(): View
     {
         return view('livewire.admin.notifications.index', [
             'slackConfigured' => filled(config('services.slack.notifications.bot_user_oauth_token')),
             'mailerDriver' => config('mail.default'),
+            'unresolvedSlackUsers' => User::query()
+                ->where('is_active', true)
+                ->whereNull('slack_user_id')
+                ->orderBy('name')
+                ->get(['id', 'name', 'email']),
         ]);
     }
 }

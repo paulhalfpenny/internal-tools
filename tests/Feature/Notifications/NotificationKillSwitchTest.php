@@ -109,3 +109,19 @@ test('non-admin cannot reach the notifications settings page', function () {
 
     $this->get(route('admin.notifications'))->assertForbidden();
 });
+
+test('unresolved Slack users panel lists active users with no slack_user_id', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $resolved = User::factory()->create(['name' => 'Resolved', 'slack_user_id' => 'UABC123']);
+    $unresolvedActive = User::factory()->create(['name' => 'Unresolved Active', 'slack_user_id' => null]);
+    $unresolvedInactive = User::factory()->create(['name' => 'Unresolved Inactive', 'slack_user_id' => null, 'is_active' => false]);
+
+    $this->actingAs($admin);
+
+    $component = Livewire::test(AdminNotifications::class);
+    $names = $component->viewData('unresolvedSlackUsers')->pluck('name')->all();
+
+    expect($names)->toContain('Unresolved Active');
+    expect($names)->not->toContain('Resolved');
+    expect($names)->not->toContain('Unresolved Inactive');
+});
