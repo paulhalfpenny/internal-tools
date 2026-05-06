@@ -64,8 +64,8 @@
                     <span class="text-xs text-green-700" wire:key="synced-{{ $syncedAt }}">Synced at {{ $syncedAt }}.</span>
                 @endif
                 <button wire:click="syncSlack" wire:loading.attr="disabled" class="px-3 py-1.5 text-xs border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
-                    <span wire:loading.remove wire:target="syncSlack">Re-run sync now</span>
-                    <span wire:loading wire:target="syncSlack">Syncing…</span>
+                    <span wire:loading.remove wire:target="syncSlack">Re-run</span>
+                    <span wire:loading wire:target="syncSlack">Re-running…</span>
                 </button>
             </div>
         </div>
@@ -91,7 +91,7 @@
                 <ol class="list-decimal list-inside mt-2 space-y-1 pl-1">
                     <li>Ask the user to add their <span class="font-mono">@filteragency.com</span> email to their Slack profile (Slack → Profile → Edit profile → "Add another email"). They can keep their existing Slack account intact.</li>
                     <li>Alternatively, if the user has left the company, mark them inactive in <a href="{{ route('admin.users') }}" class="text-blue-600 hover:underline">Admin → Users</a> and they'll drop off the list.</li>
-                    <li>Click <em>Re-run sync now</em> above to verify, or wait for the nightly 03:00 sync.</li>
+                    <li>Click <em>Re-run</em> above to verify, or wait for the nightly 03:00 sync.</li>
                 </ol>
             </details>
         @endif
