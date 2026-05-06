@@ -111,6 +111,23 @@
                             <span class="text-gray-400 text-sm">{{ $entry->project->client->name }}</span>
                         </div>
                         <div class="text-sm text-gray-600 mt-0.5">{{ $entry->task->name }}</div>
+                        @if ($entry->asana_task_gid)
+                            <a
+                                href="https://app.asana.com/0/0/{{ $entry->asana_task_gid }}/f"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-[#E1236C] mt-1 group"
+                                title="Open in Asana"
+                            >
+                                <svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                    <path d="M18.78 12.653a4.105 4.105 0 1 0-.001 8.21 4.105 4.105 0 0 0 .001-8.21Zm-13.56 0a4.105 4.105 0 1 0 0 8.211 4.105 4.105 0 0 0 0-8.211Zm10.885-7.582a4.105 4.105 0 1 1-8.21 0 4.105 4.105 0 0 1 8.21 0Z"/>
+                                </svg>
+                                <span class="truncate">{{ $entry->asanaTask?->name ?? 'Linked Asana task' }}</span>
+                                <svg class="w-3 h-3 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                </svg>
+                            </a>
+                        @endif
                         @if ($entry->notes)
                             <div class="text-xs text-gray-400 mt-1">{{ $entry->notes }}</div>
                         @endif

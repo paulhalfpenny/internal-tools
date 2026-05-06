@@ -410,7 +410,7 @@ class DayView extends Component
         $weekTotal = $weekEntries->sum(fn (TimeEntry $e) => (float) $e->hours);
 
         // Entries for the selected day
-        $dayEntries = TimeEntry::with(['project.client', 'task'])
+        $dayEntries = TimeEntry::with(['project.client', 'task', 'asanaTask'])
             ->where('user_id', $user->id)
             ->where('spent_on', $this->selectedDate)
             ->orderBy('created_at')

@@ -29,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property User $user
  * @property Project $project
  * @property Task $task
+ * @property ?AsanaTask $asanaTask
  */
 class TimeEntry extends Model
 {
@@ -73,5 +74,11 @@ class TimeEntry extends Model
     public function task(): BelongsTo
     {
         return $this->belongsTo(Task::class);
+    }
+
+    /** @return BelongsTo<AsanaTask, $this> */
+    public function asanaTask(): BelongsTo
+    {
+        return $this->belongsTo(AsanaTask::class, 'asana_task_gid', 'gid');
     }
 }
