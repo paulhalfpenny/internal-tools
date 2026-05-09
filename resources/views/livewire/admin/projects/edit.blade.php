@@ -177,10 +177,10 @@
             <div class="bg-white rounded-lg border border-gray-200 p-6">
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-sm font-semibold text-gray-700">Team &amp; Rates</h2>
-                    <div class="flex items-center gap-4">
-                        <button type="button" wire:click="openAddUserModal" class="text-sm text-blue-600 hover:underline">+ Add user</button>
-                        <a href="{{ route('admin.rates.library') }}" class="text-xs text-blue-600 hover:underline">Manage rate library →</a>
-                    </div>
+                    <button type="button" wire:click="openAddUserModal"
+                            class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700">
+                        + Add user
+                    </button>
                 </div>
 
                 @php
@@ -225,8 +225,7 @@
                                 </td>
                                 <td class="px-2 py-2 text-right">
                                     <button type="button"
-                                            wire:click="removeUser({{ $user->id }})"
-                                            wire:confirm="Remove {{ $user->name }} from this project? Their existing time entries are kept; they just won't be assigned to it any more."
+                                            wire:click="openRemoveUserModal({{ $user->id }})"
                                             class="text-xs text-gray-400 hover:text-red-600 hover:underline">
                                         Remove from project
                                     </button>
@@ -244,14 +243,14 @@
                      wire:click="closeAddUserModal"
                      x-data
                      @keydown.escape.window="$wire.closeAddUserModal()">
-                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 px-6 pt-6 pb-8" @click.stop>
-                        <div class="flex items-center justify-between mb-4">
+                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 px-8 py-8" @click.stop>
+                        <div class="flex items-center justify-between mb-6">
                             <h2 class="text-base font-semibold text-gray-900">Add team member</h2>
                             <button wire:click="closeAddUserModal" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
                         </div>
 
                         @if(! empty($pendingNewUserIds))
-                            <ul class="mb-4 space-y-1">
+                            <ul class="mb-5 space-y-2">
                                 @foreach($pendingNewUserIds as $queuedId)
                                     @php $queuedUser = $allUsers->firstWhere('id', $queuedId); @endphp
                                     @if($queuedUser)
@@ -265,16 +264,16 @@
                             </ul>
                         @endif
 
-                        <div class="mb-4">
-                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">User</label>
-                            <select wire:model="pendingNewUserDropdown" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
+                        <div class="mb-6">
+                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">User</label>
+                            <select wire:model.live="pendingNewUserDropdown" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
                                 <option value="">— Select a user —</option>
                                 @foreach($unassignedUsers as $user)
                                     <option value="{{ $user->id }}">{{ $user->name }}</option>
                                 @endforeach
                             </select>
                             @if($unassignedUsers->isEmpty() && empty($pendingNewUserIds))
-                                <p class="text-xs text-gray-400 mt-1">All active users are already on this project.</p>
+                                <p class="text-xs text-gray-400 mt-2">All active users are already on this project.</p>
                             @endif
                         </div>
 
@@ -292,6 +291,37 @@
                                     Save
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            @if($confirmRemoveUserId !== null)
+                @php $removeUser = $allUsers->firstWhere('id', $confirmRemoveUserId); @endphp
+                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+                     wire:click="closeRemoveUserModal"
+                     x-data
+                     @keydown.escape.window="$wire.closeRemoveUserModal()">
+                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 px-8 py-8" @click.stop>
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-base font-semibold text-gray-900">Remove team member</h2>
+                            <button wire:click="closeRemoveUserModal" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                        </div>
+
+                        <p class="text-sm text-gray-700 mb-2">
+                            Remove <strong>{{ $removeUser?->name }}</strong> from this project?
+                        </p>
+                        <p class="text-xs text-gray-500 mb-6">
+                            Their existing time entries are kept; they just won't be assigned to it any more.
+                        </p>
+
+                        <div class="flex justify-end gap-2">
+                            <button wire:click="closeRemoveUserModal" class="px-4 py-2 bg-white border border-gray-300 text-sm rounded-md hover:bg-gray-50">Cancel</button>
+                            <button wire:click="confirmRemoveUser"
+                                    class="px-4 py-2 text-white text-sm font-medium rounded-md"
+                                    style="background-color: #DC2626;">
+                                Remove from project
+                            </button>
                         </div>
                     </div>
                 </div>

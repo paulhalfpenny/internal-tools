@@ -160,8 +160,32 @@ class Edit extends Component
         $this->closeAddUserModal();
     }
 
+    // Remove-user confirmation modal state
+    public ?int $confirmRemoveUserId = null;
+
+    public function openRemoveUserModal(int $userId): void
+    {
+        $this->confirmRemoveUserId = $userId;
+    }
+
+    public function closeRemoveUserModal(): void
+    {
+        $this->confirmRemoveUserId = null;
+    }
+
+    public function confirmRemoveUser(): void
+    {
+        if ($this->confirmRemoveUserId === null) {
+            return;
+        }
+        $this->project->users()->detach($this->confirmRemoveUserId);
+        unset($this->userAssignments[$this->confirmRemoveUserId]);
+        $this->confirmRemoveUserId = null;
+    }
+
     public function removeUser(int $userId): void
     {
+        // Used by tests; UI flow goes through openRemoveUserModal → confirmRemoveUser.
         $this->project->users()->detach($userId);
         unset($this->userAssignments[$userId]);
     }
