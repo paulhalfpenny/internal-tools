@@ -2,7 +2,8 @@
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-xl font-semibold text-gray-900">Users</h1>
         <input wire:model.live.debounce.300ms="search" type="search" placeholder="Search by name, email or title…"
-               class="w-72 border border-gray-300 rounded text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+               class="w-72 border border-gray-300 rounded text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+               style="min-width: 250px">
     </div>
 
     <div class="bg-white rounded-lg border border-gray-200 overflow-x-auto">

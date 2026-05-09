@@ -3,7 +3,8 @@
         <h1 class="text-xl font-semibold text-gray-900">Projects</h1>
         <div class="flex items-center gap-4">
             <input wire:model.live.debounce.300ms="search" type="search" placeholder="Search by name, code or client…"
-                   class="w-72 border border-gray-300 rounded text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                   class="w-72 border border-gray-300 rounded text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   style="min-width: 250px">
             <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
                 <input wire:model.live="showArchived" type="checkbox" class="rounded"> Show archived
             </label>
