@@ -102,31 +102,30 @@
                     <input wire:model="editRoleTitle" type="text" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
                 </div>
 
-                <div class="grid grid-cols-2 gap-3 mb-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Role / Rate</label>
-                        <select wire:model="editRateId" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
-                            <option value="">— None —</option>
-                            @foreach($rates as $rate)
-                                <option value="{{ $rate->id }}">{{ $rate->label() }}</option>
-                            @endforeach
-                        </select>
-                        @error('editRateId')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Capacity (hrs/week)</label>
-                        <input wire:model="editWeeklyCapacity" type="number" step="0.5" min="0" max="168" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
-                        @error('editWeeklyCapacity')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                    </div>
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Employment Type</label>
+                    <select wire:model="editIsContractor" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
+                        <option value="0">Employee</option>
+                        <option value="1">Contractor</option>
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Role / Rate</label>
+                    <select wire:model="editRateId" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
+                        <option value="">— None —</option>
+                        @foreach($rates as $rate)
+                            <option value="{{ $rate->id }}">{{ $rate->label() }}</option>
+                        @endforeach
+                    </select>
+                    @error('editRateId')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
 
                 <div class="grid grid-cols-2 gap-3 mb-6">
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Employment</label>
-                        <select wire:model="editIsContractor" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
-                            <option value="0">Employee</option>
-                            <option value="1">Contractor</option>
-                        </select>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Capacity (hrs/week)</label>
+                        <input wire:model="editWeeklyCapacity" type="number" step="0.5" min="0" max="168" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
+                        @error('editWeeklyCapacity')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</label>
