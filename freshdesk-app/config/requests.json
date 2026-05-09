@@ -30,8 +30,7 @@
         "Authorization": "Bearer <%= context.token %>",
         "Content-Type": "application/json",
         "Accept": "application/json"
-      },
-      "body": "<%= context.body %>"
+      }
     }
   },
   "startTimer": {
@@ -43,8 +42,7 @@
         "Authorization": "Bearer <%= context.token %>",
         "Content-Type": "application/json",
         "Accept": "application/json"
-      },
-      "body": "<%= context.body %>"
+      }
     }
   },
   "stopTimer": {

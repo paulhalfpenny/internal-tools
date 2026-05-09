@@ -7,6 +7,9 @@
     "default_value": "https://internaltools.filteragency.com",
     "regex": {
       "no-trailing-slash": "^https?://[^/]+$"
+    },
+    "error_message": {
+      "no-trailing-slash": "Use the base URL without a trailing slash, e.g. https://internaltools.filteragency.com"
     }
   }
 }

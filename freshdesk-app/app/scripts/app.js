@@ -118,7 +118,8 @@ async function loadAfterConnect() {
   const grouped = {};
   state.projects.forEach((p) => {
     const key = p.client_name || '—';
-    (grouped[key] ||= []).push(p);
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(p);
   });
   Object.keys(grouped).sort().forEach((clientName) => {
     const og = document.createElement('optgroup');
@@ -316,7 +317,7 @@ function resetForm() {
 
 async function invoke(template, body) {
   const opts = { context: { token: state.token } };
-  if (body !== undefined) opts.context.body = JSON.stringify(body);
+  if (body !== undefined) opts.body = JSON.stringify(body);
   const resp = await client.request.invokeTemplate(template, opts);
   return JSON.parse(resp.response || 'null');
 }
