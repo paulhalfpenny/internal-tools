@@ -10,6 +10,15 @@
             </div>
             <a href="{{ route('admin.timesheets') }}" class="text-sm text-amber-900 hover:underline">← Back to admin index</a>
         </div>
+    @elseif($isReadOnly)
+        <div class="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+            <div class="text-sm text-blue-900">
+                <span class="font-semibold">Viewing timesheet for {{ $viewedUser->name }}</span>
+                <span class="text-blue-700 ml-2">({{ $viewedUser->email }})</span>
+                <span class="text-blue-700 ml-2">— read-only</span>
+            </div>
+            <a href="{{ route('timesheet') }}" class="text-sm text-blue-900 hover:underline">← Back to my timesheet</a>
+        </div>
     @endif
 
     {{-- Day header --}}
@@ -36,24 +45,58 @@
             <h2 class="text-lg font-semibold text-gray-800">
                 {{ \Carbon\Carbon::parse($selectedDate)->format('l, j F Y') }}
             </h2>
+            @unless($isReadOnly)
+                <button
+                    @click="$wire.showModal = true; $wire.openNewModal()"
+                    class="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition ml-3"
+                    title="New entry (N)"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Track time
+                </button>
+            @endunless
         </div>
         <div class="flex items-center gap-2">
-        <button
-            wire:click="selectDate('{{ \Carbon\Carbon::today()->toDateString() }}')"
-            class="inline-flex items-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition {{ $selectedDate === \Carbon\Carbon::today()->toDateString() ? 'invisible' : '' }}"
-        >
-            Today
-        </button>
-        <button
-            @click="$wire.showModal = true; $wire.openNewModal()"
-            class="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
-            title="New entry (N)"
-        >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            Track time
-        </button>
+            <button
+                wire:click="selectDate('{{ \Carbon\Carbon::today()->toDateString() }}')"
+                class="inline-flex items-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition {{ $selectedDate === \Carbon\Carbon::today()->toDateString() ? 'invisible' : '' }}"
+            >
+                Today
+            </button>
+
+            @if($teamMembers->isNotEmpty())
+                <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                    <button
+                        type="button"
+                        @click="open = !open"
+                        class="inline-flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition"
+                    >
+                        Team Timesheets
+                        <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                    </button>
+                    <div
+                        x-show="open"
+                        x-cloak
+                        x-transition:enter="transition ease-out duration-100"
+                        x-transition:enter-start="opacity-0 scale-95"
+                        x-transition:enter-end="opacity-100 scale-100"
+                        class="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1 overflow-y-auto"
+                        style="max-height: 320px;"
+                    >
+                        <div class="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wide">Direct reports</div>
+                        @foreach($teamMembers as $member)
+                            <a
+                                href="{{ route('team.timesheet', $member->id) }}"
+                                class="block px-3 py-2 text-sm text-gray-800 hover:bg-gray-50 hover:text-gray-900"
+                            >{{ $member->name }}</a>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
         </div>
     </div>
 
@@ -145,6 +188,7 @@
                     </div>
 
                     {{-- Actions --}}
+                    @unless($isReadOnly)
                     <div class="flex items-center gap-1 flex-shrink-0">
                         @unless($isImpersonating)
                             @if ($entry->is_running)
@@ -189,6 +233,7 @@
                             </svg>
                         </button>
                     </div>
+                    @endunless
                 </div>
             @endforeach
         </div>

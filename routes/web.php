@@ -52,6 +52,9 @@ Route::post('/auth/logout', function () {
 Route::middleware('auth')->group(function () {
     Route::get('/', fn () => redirect()->route('timesheet'));
     Route::get('/timesheet', DayView::class)->name('timesheet');
+    Route::get('/team/{user}', DayView::class)
+        ->name('team.timesheet')
+        ->middleware('can:view-team-timesheet,user');
     Route::get('/timesheet/song/{date}', function (string $date) {
         $path = base_path('sourcefiles/songs/depeche_mode_song_titles.csv');
         $handle = fopen($path, 'r');

@@ -15,10 +15,10 @@ use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use InvalidArgumentException;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -61,9 +61,20 @@ class DayView extends Component
     public ?string $lastCalendarPullTitle = null;
 
     // Admin impersonation: when set, the admin is editing this user's timesheet.
+    #[Locked]
     public ?int $viewedUserId = null;
 
+    // True when an admin is editing another user's timesheet. Some actions
+    // (calendar pull, timer) are blocked because they need the target's
+    // Google token; create/edit/delete are still allowed.
+    #[Locked]
     public bool $isImpersonating = false;
+
+    // True when a manager is viewing a direct report's timesheet. Strictly
+    // read-only: every write action returns early and the UI hides edit
+    // affordances. Locked so a tampered wire payload can't flip it to false.
+    #[Locked]
+    public bool $isReadOnly = false;
 
     private ?User $viewedUserCache = null;
 
@@ -74,11 +85,20 @@ class DayView extends Component
         }
         $this->entryDate = $this->selectedDate;
 
-        if ($user !== null && $user->exists) {
-            abort_unless(Gate::allows('access-admin'), 403);
-            if ($user->id !== auth()->id()) {
+        if ($user !== null && $user->exists && $user->id !== auth()->id()) {
+            /** @var User $authUser */
+            $authUser = auth()->user();
+
+            if ($authUser->isAdmin()) {
+                // Admin viewing anyone — full impersonation (can edit).
                 $this->viewedUserId = $user->id;
                 $this->isImpersonating = true;
+            } elseif ($user->reports_to_user_id === $authUser->id) {
+                // Manager viewing a direct report — read-only.
+                $this->viewedUserId = $user->id;
+                $this->isReadOnly = true;
+            } else {
+                abort(403);
             }
         }
     }
@@ -119,6 +139,10 @@ class DayView extends Component
 
     public function openNewModal(): void
     {
+        if ($this->isReadOnly) {
+            return;
+        }
+
         $this->resetModal();
         $this->entryDate = $this->selectedDate;
         $this->showModal = true;
@@ -134,6 +158,9 @@ class DayView extends Component
 
     public function openEditModal(int $entryId): void
     {
+        if ($this->isReadOnly) {
+            return;
+        }
         $entry = $this->guardEntry($entryId);
         if (! $entry) {
             return;
@@ -159,7 +186,7 @@ class DayView extends Component
 
     public function startTimerFromModal(): void
     {
-        if ($this->isImpersonating) {
+        if ($this->isImpersonating || $this->isReadOnly) {
             return;
         }
 
@@ -204,6 +231,9 @@ class DayView extends Component
 
     public function save(): void
     {
+        if ($this->isReadOnly) {
+            return;
+        }
         $this->hoursError = '';
 
         $this->validate([
@@ -323,6 +353,9 @@ class DayView extends Component
 
     public function deleteEntry(int $entryId): void
     {
+        if ($this->isReadOnly) {
+            return;
+        }
         $entry = $this->guardEntry($entryId);
         if (! $entry) {
             return;
@@ -333,7 +366,7 @@ class DayView extends Component
 
     public function startTimer(int $entryId): void
     {
-        if ($this->isImpersonating) {
+        if ($this->isImpersonating || $this->isReadOnly) {
             return;
         }
 
@@ -347,7 +380,7 @@ class DayView extends Component
 
     public function stopTimer(int $entryId): void
     {
-        if ($this->isImpersonating) {
+        if ($this->isImpersonating || $this->isReadOnly) {
             return;
         }
 
@@ -361,7 +394,7 @@ class DayView extends Component
 
     public function openCalendarPanel(): void
     {
-        if ($this->isImpersonating) {
+        if ($this->isImpersonating || $this->isReadOnly) {
             return;
         }
 
@@ -380,7 +413,7 @@ class DayView extends Component
 
     public function pullFromCalendarEvent(string $title, float $hours): void
     {
-        if ($this->isImpersonating) {
+        if ($this->isImpersonating || $this->isReadOnly) {
             return;
         }
 
@@ -506,6 +539,20 @@ class DayView extends Component
         // it stays correct across re-renders (and after the modal closes/reopens).
         $this->calendarError = ($calendarHasToken || $this->isImpersonating) ? null : 'no_token';
 
+        // Direct reports of the *currently authenticated* user (not the viewed
+        // user, which differs during impersonation/team-view). Powers the
+        // 'Team Timesheets' dropdown in the header. We keep it empty when
+        // viewing someone else's sheet to avoid stacking dropdowns on a sheet
+        // that's already secondary.
+        $teamMembers = collect();
+        $authUser = auth()->user();
+        if ($authUser !== null && $this->viewedUserId === null) {
+            $teamMembers = $authUser->directReports()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name']);
+        }
+
         return view('livewire.timesheet.day-view', [
             'weekDays' => $weekDays,
             'dayTotals' => $dayTotals,
@@ -517,6 +564,7 @@ class DayView extends Component
             'asanaAvailable' => $this->asanaIntegrationAvailable(),
             'usedEventTitles' => $usedEventTitles,
             'calendarEvents' => $calendarEvents,
+            'teamMembers' => $teamMembers,
             'emptySong' => null,
             'viewedUser' => $user,
         ]);
