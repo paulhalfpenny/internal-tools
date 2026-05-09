@@ -22,7 +22,7 @@
                         <td class="px-4 py-3 font-medium text-gray-900">{{ $user->name }}</td>
                         <td class="px-4 py-3 text-gray-500">{{ $user->email }}</td>
                         <td class="px-4 py-3">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium
                                 {{ $user->role->value === 'admin' ? 'bg-red-100 text-red-700' : ($user->role->value === 'manager' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600') }}">
                                 {{ ucfirst($user->role->value) }}
                             </span>
@@ -79,7 +79,7 @@
                         @endforeach
                     </select>
                 </div>
-                <p class="text-xs text-gray-500 mb-1 pl-0.5">
+                <p class="text-xs text-gray-500 mb-1">
                     @if($editRole === 'admin')
                         Full access: timesheet, reports, and admin screens.
                     @elseif($editRole === 'manager')
@@ -136,7 +136,7 @@
                 </div>
                 @error('editIsActive')<p class="text-red-600 text-xs -mt-4 mb-3">{{ $message }}</p>@enderror
 
-                <div class="border-t border-gray-100 pt-6 mt-6 mb-5">
+                <div class="border-t border-gray-100 pt-6 mt-6 mb-6">
                     <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Notifications & reporting line</h3>
 
                     <div class="mb-4">
@@ -174,7 +174,7 @@
                     </div>
                 </div>
 
-                <div class="flex gap-2">
+                <div class="flex gap-2 mt-6">
                     <button wire:click="save" class="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">Save changes</button>
                     <button wire:click="cancel" class="px-4 py-2 bg-white border border-gray-300 text-sm rounded-md hover:bg-gray-50">Cancel</button>
                 </div>

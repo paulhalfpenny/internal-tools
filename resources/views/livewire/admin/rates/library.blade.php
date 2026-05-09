@@ -1,19 +1,19 @@
 <div x-data="{ showForm: false }">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-start justify-between mb-6 gap-4">
         <div>
-            <h1 class="text-xl font-semibold text-gray-900">Rate library</h1>
+            <a href="{{ route('admin.rates') }}" class="text-sm text-gray-500 hover:text-gray-700">← Resolved rates</a>
+            <h1 class="text-xl font-semibold text-gray-900 mt-1">Rate library</h1>
             <p class="text-sm text-gray-500 mt-1">
                 Reusable named rates. Editing a rate here updates the resolved rate on every project, user or override that points at it
                 — historical time entries keep their snapshot.
             </p>
         </div>
-        <div class="flex items-center gap-4">
-            <a href="{{ route('admin.rates') }}" class="text-sm text-gray-500 hover:text-gray-700">← Resolved rates</a>
+        <div class="flex items-center gap-4 flex-shrink-0">
             <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
                 <input wire:model.live="showArchived" type="checkbox" class="rounded"> Show archived
             </label>
             <button @click="showForm = true" x-show="!showForm"
-                    class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                    class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 whitespace-nowrap">
                 + New rate
             </button>
         </div>
@@ -62,7 +62,7 @@
                                 @error('editHourlyRate')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                             </td>
                             <td colspan="2" class="px-4 py-2">
-                                <div class="flex gap-2">
+                                <div class="flex gap-2 justify-end">
                                     <button wire:click="save" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">Save</button>
                                     <button wire:click="cancel" class="px-3 py-2 bg-white border border-gray-300 text-sm rounded hover:bg-gray-50">Cancel</button>
                                 </div>
