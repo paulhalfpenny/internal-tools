@@ -264,7 +264,7 @@
                             </ul>
                         @endif
 
-                        <div class="mb-6">
+                        <div class="mt-2 mb-6">
                             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">User</label>
                             <select wire:model.live="pendingNewUserDropdown" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
                                 <option value="">— Select a user —</option>
