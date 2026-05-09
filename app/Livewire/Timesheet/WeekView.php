@@ -328,8 +328,10 @@ class WeekView extends Component
             ->get();
 
         // Pull projects (with client + tasks) the user has access to.
+        // Note: separate cache key from DayView's "projects_picker_{id}" which
+        // caches a different (array) shape for its own picker.
         $projects = Cache::remember(
-            "projects_picker_{$user->id}",
+            "projects_picker_eloquent_{$user->id}",
             now()->addMinutes(10),
             fn () => Project::with(['client', 'tasks'])
                 ->where('is_archived', false)
