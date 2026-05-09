@@ -95,13 +95,75 @@ class Edit extends Component
         }
     }
 
-    public function toggleUser(int $userId): void
+    // --- Team membership ---
+
+    // Add-user modal state
+    public bool $showAddUserModal = false;
+
+    /** @var array<int, int> queued user IDs awaiting modal Save */
+    public array $pendingNewUserIds = [];
+
+    public ?int $pendingNewUserDropdown = null;
+
+    public function openAddUserModal(): void
     {
-        if (isset($this->userAssignments[$userId])) {
-            unset($this->userAssignments[$userId]);
-        } else {
+        $this->pendingNewUserIds = [];
+        $this->pendingNewUserDropdown = null;
+        $this->showAddUserModal = true;
+    }
+
+    public function closeAddUserModal(): void
+    {
+        $this->showAddUserModal = false;
+        $this->pendingNewUserIds = [];
+        $this->pendingNewUserDropdown = null;
+    }
+
+    public function queuePendingUser(): void
+    {
+        if ($this->pendingNewUserDropdown === null) {
+            return;
+        }
+        $id = (int) $this->pendingNewUserDropdown;
+        if (! in_array($id, $this->pendingNewUserIds, true) && ! isset($this->userAssignments[$id])) {
+            $this->pendingNewUserIds[] = $id;
+        }
+        $this->pendingNewUserDropdown = null;
+    }
+
+    public function unqueuePendingUser(int $userId): void
+    {
+        $this->pendingNewUserIds = array_values(array_filter(
+            $this->pendingNewUserIds,
+            fn ($id) => $id !== $userId,
+        ));
+    }
+
+    public function confirmAddUsers(): void
+    {
+        // Include the dropdown's current value if the admin hit Save without
+        // pressing Add another first.
+        if ($this->pendingNewUserDropdown !== null) {
+            $this->queuePendingUser();
+        }
+
+        foreach ($this->pendingNewUserIds as $userId) {
+            if (isset($this->userAssignments[$userId])) {
+                continue;
+            }
+            $this->project->users()->syncWithoutDetaching([
+                $userId => ['hourly_rate_override' => null, 'rate_id' => null],
+            ]);
             $this->userAssignments[$userId] = ['hourly_rate_override' => ''];
         }
+
+        $this->closeAddUserModal();
+    }
+
+    public function removeUser(int $userId): void
+    {
+        $this->project->users()->detach($userId);
+        unset($this->userAssignments[$userId]);
     }
 
     public function save(AsanaService $asana): void

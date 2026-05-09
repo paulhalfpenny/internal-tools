@@ -173,27 +173,38 @@
                 </div>
             </div>
 
-            {{-- Users --}}
+            {{-- Team & Rates --}}
             <div class="bg-white rounded-lg border border-gray-200 p-6">
                 <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-sm font-semibold text-gray-700">Team members &amp; rates</h2>
-                    <a href="{{ route('admin.rates.library') }}" class="text-xs text-blue-600 hover:underline">Manage rate library →</a>
+                    <h2 class="text-sm font-semibold text-gray-700">Team &amp; Rates</h2>
+                    <div class="flex items-center gap-4">
+                        <button type="button" wire:click="openAddUserModal" class="text-sm text-blue-600 hover:underline">+ Add user</button>
+                        <a href="{{ route('admin.rates.library') }}" class="text-xs text-blue-600 hover:underline">Manage rate library →</a>
+                    </div>
                 </div>
+
+                @php
+                    $assignedUsers = $allUsers->filter(fn ($u) => isset($userAssignments[$u->id]))->values();
+                    $unassignedUsers = $allUsers->filter(fn ($u) => ! isset($userAssignments[$u->id]) && ! in_array($u->id, $pendingNewUserIds, true))->values();
+                    $fallbackLabel = '£'.number_format(\App\Domain\Billing\RateResolver::FALLBACK_HOURLY_RATE, 2).'/hr';
+                @endphp
+
+                @if($assignedUsers->isEmpty())
+                    <p class="text-sm text-gray-400 py-8 text-center">No team members yet. Click <strong>+ Add user</strong> to assign one.</p>
+                @else
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-sm">
                         <thead>
                             <tr class="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
-                                <th class="px-2 py-2 w-8"></th>
                                 <th class="text-left px-2 py-2 font-medium">Member</th>
                                 <th class="text-left px-2 py-2 font-medium">Default role &amp; rate</th>
                                 <th class="text-left px-2 py-2 font-medium">Project rate (£/hr)</th>
+                                <th class="text-right px-2 py-2 font-medium"></th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-50">
-                        @foreach($allUsers as $user)
+                        @foreach($assignedUsers as $user)
                             @php
-                                $assigned = isset($userAssignments[$user->id]);
-                                $fallbackLabel = '£'.number_format(\App\Domain\Billing\RateResolver::FALLBACK_HOURLY_RATE, 2).'/hr';
                                 if ($user->rate_id) {
                                     $libRate = $rates->firstWhere('id', $user->rate_id);
                                     $userDefault = $libRate
@@ -204,30 +215,87 @@
                                 }
                             @endphp
                             <tr>
-                                <td class="px-2 py-2">
-                                    <input type="checkbox" id="user-{{ $user->id }}" {{ $assigned ? 'checked' : '' }}
-                                           wire:click="toggleUser({{ $user->id }})" class="rounded">
-                                </td>
-                                <td class="px-2 py-2">
-                                    <label for="user-{{ $user->id }}" class="cursor-pointer">{{ $user->name }}</label>
-                                </td>
+                                <td class="px-2 py-2 font-medium">{{ $user->name }}</td>
                                 <td class="px-2 py-2 text-gray-500">{{ $userDefault }}</td>
-                                @if($assigned)
-                                    <td class="px-2 py-2">
-                                        <input type="number" step="0.01" min="0"
-                                               wire:model="userAssignments.{{ $user->id }}.hourly_rate_override"
-                                               placeholder="—"
-                                               class="w-28 border border-gray-300 rounded text-sm px-2 py-1.5">
-                                    </td>
-                                @else
-                                    <td class="px-2 py-2 text-xs text-gray-300">Not assigned</td>
-                                @endif
+                                <td class="px-2 py-2">
+                                    <input type="number" step="0.01" min="0"
+                                           wire:model="userAssignments.{{ $user->id }}.hourly_rate_override"
+                                           placeholder="—"
+                                           class="w-28 border border-gray-300 rounded text-sm px-2 py-1.5">
+                                </td>
+                                <td class="px-2 py-2 text-right">
+                                    <button type="button"
+                                            wire:click="removeUser({{ $user->id }})"
+                                            wire:confirm="Remove {{ $user->name }} from this project? Their existing time entries are kept; they just won't be assigned to it any more."
+                                            class="text-xs text-gray-400 hover:text-red-600 hover:underline">
+                                        Remove from project
+                                    </button>
+                                </td>
                             </tr>
                         @endforeach
                         </tbody>
                     </table>
                 </div>
+                @endif
             </div>
+
+            @if($showAddUserModal)
+                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+                     wire:click="closeAddUserModal"
+                     x-data
+                     @keydown.escape.window="$wire.closeAddUserModal()">
+                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 px-6 pt-6 pb-8" @click.stop>
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-base font-semibold text-gray-900">Add team member</h2>
+                            <button wire:click="closeAddUserModal" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                        </div>
+
+                        @if(! empty($pendingNewUserIds))
+                            <ul class="mb-4 space-y-1">
+                                @foreach($pendingNewUserIds as $queuedId)
+                                    @php $queuedUser = $allUsers->firstWhere('id', $queuedId); @endphp
+                                    @if($queuedUser)
+                                        <li class="flex items-center justify-between bg-blue-50 border border-blue-100 rounded px-3 py-2 text-sm">
+                                            <span>{{ $queuedUser->name }}</span>
+                                            <button type="button" wire:click="unqueuePendingUser({{ $queuedId }})"
+                                                    class="text-xs text-gray-400 hover:text-red-600">Remove</button>
+                                        </li>
+                                    @endif
+                                @endforeach
+                            </ul>
+                        @endif
+
+                        <div class="mb-4">
+                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">User</label>
+                            <select wire:model="pendingNewUserDropdown" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
+                                <option value="">— Select a user —</option>
+                                @foreach($unassignedUsers as $user)
+                                    <option value="{{ $user->id }}">{{ $user->name }}</option>
+                                @endforeach
+                            </select>
+                            @if($unassignedUsers->isEmpty() && empty($pendingNewUserIds))
+                                <p class="text-xs text-gray-400 mt-1">All active users are already on this project.</p>
+                            @endif
+                        </div>
+
+                        <div class="flex items-center justify-between">
+                            <button type="button" wire:click="queuePendingUser"
+                                    @if(! $pendingNewUserDropdown) disabled @endif
+                                    class="text-sm text-blue-600 hover:underline disabled:text-gray-300 disabled:no-underline disabled:cursor-not-allowed">
+                                + Add another
+                            </button>
+                            <div class="flex gap-2">
+                                <button wire:click="closeAddUserModal" class="px-4 py-2 bg-white border border-gray-300 text-sm rounded-md hover:bg-gray-50">Cancel</button>
+                                <button wire:click="confirmAddUsers"
+                                        @if(empty($pendingNewUserIds) && ! $pendingNewUserDropdown) disabled @endif
+                                        class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed">
+                                    Save
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            @endif
         </div>
 
         <div class="flex justify-end">
