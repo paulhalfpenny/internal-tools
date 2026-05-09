@@ -72,8 +72,8 @@ test('weekly-overdue dispatches for users below target last week', function () {
     $hit = User::factory()->create(['name' => 'Hit']);
 
     foreach (range(0, 4) as $i) {
-        reminderEntry($missed, "2026-05-0".(4 + $i), 7);
-        reminderEntry($hit, "2026-05-0".(4 + $i), 9);
+        reminderEntry($missed, '2026-05-0'.(4 + $i), 7);
+        reminderEntry($hit, '2026-05-0'.(4 + $i), 9);
     }
 
     $this->artisan('timesheets:send-reminders', ['--type' => 'weekly-overdue'])->assertSuccessful();
@@ -115,7 +115,7 @@ test('manager digest scopes to direct reports and admins receive global view', f
     $u4 = User::factory()->create(['name' => 'U4', 'reports_to_user_id' => $manager2->id]);
 
     foreach (range(0, 4) as $i) {
-        $date = "2026-05-0".(4 + $i);
+        $date = '2026-05-0'.(4 + $i);
         reminderEntry($u1, $date, 1);
         reminderEntry($u3, $date, 1);
         reminderEntry($u2, $date, 9);

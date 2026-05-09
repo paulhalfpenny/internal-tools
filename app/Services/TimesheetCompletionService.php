@@ -124,7 +124,7 @@ class TimesheetCompletionService
 
     /**
      * @param  array<int>  $userIds
-     * @return array<int, float>  user_id => hours
+     * @return array<int, float> user_id => hours
      */
     private function aggregateHours(array $userIds, CarbonImmutable $start, CarbonImmutable $end): array
     {

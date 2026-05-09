@@ -57,7 +57,7 @@ test('day view lists entries even when spent_on is stored as a full datetime str
     ]);
 
     // Forcefully store the timestamp form to simulate the SQLite-on-DATE behaviour
-    \DB::table('time_entries')->where('id', $entry->id)->update(['spent_on' => '2026-05-04 00:00:00']);
+    DB::table('time_entries')->where('id', $entry->id)->update(['spent_on' => '2026-05-04 00:00:00']);
 
     Livewire::test(DayView::class)
         ->set('selectedDate', '2026-05-04')

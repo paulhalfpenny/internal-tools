@@ -14,7 +14,7 @@ uses(RefreshDatabase::class);
 // Helpers to build lightweight model stubs
 
 /**
- * @param  array<int, int>  $assignedTaskIds — list of task ids that are assigned to the project
+ * @param  array<int, int>  $assignedTaskIds  — list of task ids that are assigned to the project
  * @param  array<int, array{hourly_rate_override: ?float}>  $userPivots
  */
 function makeProject(

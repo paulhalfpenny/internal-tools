@@ -2,6 +2,7 @@
 
 use App\Enums\Role;
 use App\Livewire\Admin\Users\Index;
+use App\Models\Rate;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -28,7 +29,7 @@ test('admin can access users admin screen', function () {
 
 test('edit sets editingId and populates fields', function () {
     $admin = User::factory()->admin()->create();
-    $rate = \App\Models\Rate::create(['name' => 'Designer', 'hourly_rate' => 55.00]);
+    $rate = Rate::create(['name' => 'Designer', 'hourly_rate' => 55.00]);
     $other = User::factory()->create([
         'role' => Role::User,
         'role_title' => 'Designer',

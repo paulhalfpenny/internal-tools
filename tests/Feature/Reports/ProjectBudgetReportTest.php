@@ -1,8 +1,8 @@
 <?php
 
+use App\Domain\Budgeting\ProjectBudgetCalculator;
 use App\Enums\BudgetType;
 use App\Enums\Role;
-use App\Livewire\Reports\ProjectBudget;
 use App\Livewire\Reports\ProjectsReport;
 use App\Models\Project;
 use App\Models\Task;
@@ -32,7 +32,7 @@ test('projects report exposes budget status on rows', function () {
     $task = Task::factory()->create();
 
     $project = Project::factory()->create([
-                'budget_type' => BudgetType::FixedFee,
+        'budget_type' => BudgetType::FixedFee,
         'budget_amount' => 1000.00,
         'starts_on' => '2026-04-01',
     ]);
@@ -44,10 +44,9 @@ test('projects report exposes budget status on rows', function () {
     $component = Livewire::test(ProjectsReport::class)
         ->set('preset', 'this_month')
         ->set('from', '2026-04-01')
-        ->set('to', '2026-04-30')
-        ;
+        ->set('to', '2026-04-30');
 
-    $rows = $component->instance()->rows(app(\App\Domain\Budgeting\ProjectBudgetCalculator::class));
+    $rows = $component->instance()->rows(app(ProjectBudgetCalculator::class));
 
     expect($rows)->toHaveCount(1);
     $row = $rows->first();
@@ -62,7 +61,7 @@ test('drill-down page renders for a budgeted project', function () {
     $task = Task::factory()->create();
 
     $project = Project::factory()->create([
-                'budget_type' => BudgetType::MonthlyCi,
+        'budget_type' => BudgetType::MonthlyCi,
         'budget_amount' => 500.00,
         'budget_starts_on' => '2026-04-01',
     ]);

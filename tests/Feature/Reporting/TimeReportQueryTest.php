@@ -116,8 +116,8 @@ test('totals excludes entries outside the date range', function () {
 test('groupBy Client aggregates correctly', function () {
     $c1 = Client::factory()->create(['name' => 'Acme']);
     $c2 = Client::factory()->create(['name' => 'Zeta']);
-    $p1 = Project::factory()->create(['client_id' => $c1->id, ]);
-    $p2 = Project::factory()->create(['client_id' => $c2->id, ]);
+    $p1 = Project::factory()->create(['client_id' => $c1->id]);
+    $p2 = Project::factory()->create(['client_id' => $c2->id]);
     $task = Task::factory()->create();
     $user = User::factory()->create();
 
@@ -137,8 +137,8 @@ test('groupBy Client aggregates correctly', function () {
 
 test('groupBy Project returns rows ordered by client then project', function () {
     $client = Client::factory()->create(['name' => 'Client A']);
-    $p1 = Project::factory()->create(['client_id' => $client->id, 'name' => 'Alpha', ]);
-    $p2 = Project::factory()->create(['client_id' => $client->id, 'name' => 'Beta', ]);
+    $p1 = Project::factory()->create(['client_id' => $client->id, 'name' => 'Alpha']);
+    $p2 = Project::factory()->create(['client_id' => $client->id, 'name' => 'Beta']);
     $task = Task::factory()->create();
     $user = User::factory()->create();
 

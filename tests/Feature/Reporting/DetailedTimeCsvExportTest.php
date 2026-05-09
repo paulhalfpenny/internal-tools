@@ -28,7 +28,7 @@ function makeExportEntry(array $attrs = []): TimeEntry
         'client_id' => $client->id,
         'name' => 'Website Redesign',
         'code' => 'ACM001',
-            ]);
+    ]);
     $task = Task::factory()->create(['name' => 'Development']);
 
     return TimeEntry::create(array_merge([

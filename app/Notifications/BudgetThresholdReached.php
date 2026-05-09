@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\Project;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -55,7 +56,7 @@ class BudgetThresholdReached extends Notification implements ShouldQueue
                 'periodKey' => $this->periodKey,
                 'periodLabel' => $this->periodKey === 'lifetime'
                     ? 'lifetime'
-                    : \Carbon\CarbonImmutable::createFromFormat('Y-m', $this->periodKey)->format('F Y'),
+                    : CarbonImmutable::createFromFormat('Y-m', $this->periodKey)->format('F Y'),
                 'percentUsed' => $this->percentUsed,
                 'budgetAmount' => $this->budgetAmount,
                 'actualAmount' => $this->actualAmount,

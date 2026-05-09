@@ -52,7 +52,7 @@ class MonthlyTimesheetOverdue extends Notification implements ShouldQueue
         $shortfall = max(0, $this->target - $this->hours);
 
         $text = sprintf(
-            ":calendar: *Monthly timesheet incomplete.* You logged %.1f of %.1f hours for %s (%.1fh missing). <%s|Open your timesheet>.",
+            ':calendar: *Monthly timesheet incomplete.* You logged %.1f of %.1f hours for %s (%.1fh missing). <%s|Open your timesheet>.',
             $this->hours,
             $this->target,
             $this->monthStart->format('F Y'),

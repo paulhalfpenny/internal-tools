@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\TimeTracking\HoursFormatter;
+use App\Domain\TimeTracking\HoursParser;
 
 test('formats decimal hours as h:mm', function () {
     expect(HoursFormatter::asTime(0.0))->toBe('0:00')
@@ -20,7 +21,7 @@ test('round-trips with HoursParser for typical entries', function () {
     $cases = ['0:15', '0:30', '1:00', '1:45', '8:00'];
 
     foreach ($cases as $input) {
-        $hours = \App\Domain\TimeTracking\HoursParser::parse($input);
+        $hours = HoursParser::parse($input);
         expect(HoursFormatter::asTime($hours))->toBe($input);
     }
 });

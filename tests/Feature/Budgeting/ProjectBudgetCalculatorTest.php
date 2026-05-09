@@ -34,7 +34,7 @@ test('fixed-fee budget — actuals are sum of billable time', function () {
     $user = User::factory()->create();
     $task = Task::factory()->create();
     $project = Project::factory()->create([
-                'budget_type' => BudgetType::FixedFee,
+        'budget_type' => BudgetType::FixedFee,
         'budget_amount' => 1000.00,
         'starts_on' => '2026-01-01',
     ]);
@@ -56,7 +56,7 @@ test('fixed-fee budget — over-budget flagged', function () {
     $user = User::factory()->create();
     $task = Task::factory()->create();
     $project = Project::factory()->create([
-                'budget_type' => BudgetType::FixedFee,
+        'budget_type' => BudgetType::FixedFee,
         'budget_amount' => 1000.00,
         'starts_on' => '2026-01-01',
     ]);
@@ -74,7 +74,7 @@ test('monthly CI — cumulative budget rolls over (under then over)', function (
     $user = User::factory()->create();
     $task = Task::factory()->create();
     $project = Project::factory()->create([
-                'budget_type' => BudgetType::MonthlyCi,
+        'budget_type' => BudgetType::MonthlyCi,
         'budget_amount' => 500.00,
         'budget_starts_on' => '2026-04-01',
     ]);
@@ -97,7 +97,7 @@ test('monthly CI — entries before budget start date are excluded', function ()
     $user = User::factory()->create();
     $task = Task::factory()->create();
     $project = Project::factory()->create([
-                'budget_type' => BudgetType::MonthlyCi,
+        'budget_type' => BudgetType::MonthlyCi,
         'budget_amount' => 500.00,
         'budget_starts_on' => '2026-04-01',
     ]);
@@ -115,7 +115,7 @@ test('non-billable time entries are excluded from actuals', function () {
     $user = User::factory()->create();
     $task = Task::factory()->create();
     $project = Project::factory()->create([
-                'budget_type' => BudgetType::FixedFee,
+        'budget_type' => BudgetType::FixedFee,
         'budget_amount' => 1000.00,
         'starts_on' => '2026-01-01',
     ]);
@@ -133,12 +133,12 @@ test('forProjects batches lookups and returns map keyed by id', function () {
     $user = User::factory()->create();
     $task = Task::factory()->create();
     $a = Project::factory()->create([
-                'budget_type' => BudgetType::FixedFee,
+        'budget_type' => BudgetType::FixedFee,
         'budget_amount' => 1000.00,
         'starts_on' => '2026-01-01',
     ]);
     $b = Project::factory()->create([
-                'budget_type' => BudgetType::MonthlyCi,
+        'budget_type' => BudgetType::MonthlyCi,
         'budget_amount' => 200.00,
         'budget_starts_on' => '2026-04-01',
     ]);
@@ -164,7 +164,7 @@ test('monthly breakdown produces one row per month with running totals', functio
     $user = User::factory()->create();
     $task = Task::factory()->create();
     $project = Project::factory()->create([
-                'budget_type' => BudgetType::MonthlyCi,
+        'budget_type' => BudgetType::MonthlyCi,
         'budget_amount' => 500.00,
         'budget_starts_on' => '2026-04-01',
     ]);

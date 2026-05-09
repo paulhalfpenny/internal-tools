@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\BudgetThresholdReached;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 
@@ -112,8 +113,8 @@ class CheckBudgetAlerts extends Command
     /**
      * Admins (always) plus the project's manager (if set and not already an admin).
      *
-     * @param  \Illuminate\Support\Collection<int, User>  $admins
-     * @return \Illuminate\Support\Collection<int, User>
+     * @param  Collection<int, User>  $admins
+     * @return Collection<int, User>
      */
     private function recipients($admins, Project $project)
     {

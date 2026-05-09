@@ -16,7 +16,7 @@ function makeUserWithBillableProject(): array
 {
     $user = User::factory()->create(['default_hourly_rate' => 84.0]);
     $project = Project::factory()->create([
-                'default_hourly_rate' => 84.0,
+        'default_hourly_rate' => 84.0,
     ]);
     $task = Task::factory()->create();
     $project->tasks()->attach($task->id, ['is_billable' => true, 'hourly_rate_override' => null]);
