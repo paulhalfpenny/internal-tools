@@ -211,20 +211,21 @@
                                 <th class="px-2 py-2 w-8"></th>
                                 <th class="text-left px-2 py-2 font-medium">Member</th>
                                 <th class="text-left px-2 py-2 font-medium">Default role &amp; rate</th>
-                                <th class="text-left px-2 py-2 font-medium">Project override (£/hr)</th>
+                                <th class="text-left px-2 py-2 font-medium">Project rate (£/hr)</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-50">
                         @foreach($allUsers as $user)
                             @php
                                 $assigned = isset($userAssignments[$user->id]);
+                                $fallbackLabel = '£'.number_format(\App\Domain\Billing\RateResolver::FALLBACK_HOURLY_RATE, 2).'/hr';
                                 if ($user->rate_id) {
                                     $libRate = $rates->firstWhere('id', $user->rate_id);
                                     $userDefault = $libRate
-                                        ? $libRate->name.' — £'.number_format((float) $libRate->hourly_rate, 2)
-                                        : 'Fallback — £'.number_format(\App\Domain\Billing\RateResolver::FALLBACK_HOURLY_RATE, 2);
+                                        ? $libRate->name.' — £'.number_format((float) $libRate->hourly_rate, 2).'/hr'
+                                        : $fallbackLabel;
                                 } else {
-                                    $userDefault = 'Fallback — £'.number_format(\App\Domain\Billing\RateResolver::FALLBACK_HOURLY_RATE, 2);
+                                    $userDefault = $fallbackLabel;
                                 }
                             @endphp
                             <tr>
