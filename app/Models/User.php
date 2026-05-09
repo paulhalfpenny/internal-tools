@@ -117,6 +117,12 @@ class User extends Authenticatable
         return $this->hasMany(TimeEntry::class);
     }
 
+    /** @return HasMany<PersonalAccessToken, $this> */
+    public function personalAccessTokens(): HasMany
+    {
+        return $this->hasMany(PersonalAccessToken::class);
+    }
+
     /** @return BelongsTo<User, $this> */
     public function manager(): BelongsTo
     {

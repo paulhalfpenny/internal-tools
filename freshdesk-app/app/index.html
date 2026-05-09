@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Log time</title>
+  <link rel="stylesheet" type="text/css" href="https://static.freshdev.io/fdk/2.0/assets/freshworks.css">
+  <link rel="stylesheet" type="text/css" href="styles/style.css">
+</head>
+<body>
+  <div id="root">
+    <div id="loading" class="state">Loading…</div>
+
+    <div id="connect" class="state hidden">
+      <h2>Connect to internal-tools</h2>
+      <p class="muted">Paste a personal access token from your profile page on internal-tools. The widget will store it locally on this Freshdesk account.</p>
+      <a id="token-link" class="muted" href="#" target="_blank">Open the token page →</a>
+      <input id="token-input" type="password" autocomplete="off" placeholder="fit_…">
+      <button id="connect-btn" class="primary">Connect</button>
+      <div id="connect-error" class="error hidden"></div>
+    </div>
+
+    <div id="form" class="state hidden">
+      <div class="who">
+        <span id="agent-name"></span>
+        <a id="disconnect" href="#">Disconnect</a>
+      </div>
+
+      <label>Project</label>
+      <select id="project-select"><option value="">— Select —</option></select>
+
+      <label>Task</label>
+      <select id="task-select" disabled><option value="">— Select project first —</option></select>
+
+      <div id="asana-row" class="hidden">
+        <label>Asana task</label>
+        <select id="asana-select"><option value="">— Select —</option></select>
+      </div>
+
+      <label>HH:MM <span class="muted">(blank starts a timer)</span></label>
+      <input id="hours-input" type="text" placeholder="e.g. 0:30">
+
+      <label>Date</label>
+      <input id="date-input" type="date">
+
+      <label>Note</label>
+      <textarea id="note-input" rows="3"></textarea>
+
+      <div class="actions">
+        <button id="save-btn" class="primary">Start timer</button>
+        <button id="cancel-btn" class="ghost">Reset</button>
+      </div>
+
+      <div id="status" class="status hidden"></div>
+
+      <div id="running-banner" class="running hidden">
+        <span>Timer running for <strong id="running-label"></strong></span>
+        <button id="stop-btn" class="link">Stop &amp; save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://static.freshdev.io/fdk/2.0/assets/fresh_client.js"></script>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

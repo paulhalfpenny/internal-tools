@@ -1,0 +1,12 @@
+{
+  "internal_tools_url": {
+    "display_name": "Internal Tools URL",
+    "description": "Base URL of the internal-tools deployment, e.g. https://internaltools.filteragency.com",
+    "type": "text",
+    "required": true,
+    "default_value": "https://internaltools.filteragency.com",
+    "regex": {
+      "no-trailing-slash": "^https?://[^/]+$"
+    }
+  }
+}

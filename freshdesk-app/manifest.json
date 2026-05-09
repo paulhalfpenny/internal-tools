@@ -1,0 +1,23 @@
+{
+  "platform-version": "2.3",
+  "product": {
+    "freshdesk": {
+      "location": {
+        "ticket_sidebar": {
+          "url": "index.html",
+          "icon": "styles/icon.svg"
+        }
+      },
+      "events": {}
+    }
+  },
+  "engines": {
+    "node": "18.0.0",
+    "fdk": "9.0.0"
+  },
+  "whitelisted-domains": [
+    "https://*.filteragency.com",
+    "http://localhost:*",
+    "http://127.0.0.1:*"
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "getMe": {
+    "schema": {
+      "method": "GET",
+      "host": "<%= iparam.internal_tools_url %>",
+      "path": "/api/me",
+      "headers": {
+        "Authorization": "Bearer <%= context.token %>",
+        "Accept": "application/json"
+      }
+    }
+  },
+  "getProjects": {
+    "schema": {
+      "method": "GET",
+      "host": "<%= iparam.internal_tools_url %>",
+      "path": "/api/projects",
+      "headers": {
+        "Authorization": "Bearer <%= context.token %>",
+        "Accept": "application/json"
+      }
+    }
+  },
+  "createEntry": {
+    "schema": {
+      "method": "POST",
+      "host": "<%= iparam.internal_tools_url %>",
+      "path": "/api/time-entries",
+      "headers": {
+        "Authorization": "Bearer <%= context.token %>",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "body": "<%= context.body %>"
+    }
+  },
+  "startTimer": {
+    "schema": {
+      "method": "POST",
+      "host": "<%= iparam.internal_tools_url %>",
+      "path": "/api/timers/start",
+      "headers": {
+        "Authorization": "Bearer <%= context.token %>",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      "body": "<%= context.body %>"
+    }
+  },
+  "stopTimer": {
+    "schema": {
+      "method": "POST",
+      "host": "<%= iparam.internal_tools_url %>",
+      "path": "/api/timers/stop",
+      "headers": {
+        "Authorization": "Bearer <%= context.token %>",
+        "Accept": "application/json"
+      }
+    }
+  },
+  "getRunningTimer": {
+    "schema": {
+      "method": "GET",
+      "host": "<%= iparam.internal_tools_url %>",
+      "path": "/api/timers/running",
+      "headers": {
+        "Authorization": "Bearer <%= context.token %>",
+        "Accept": "application/json"
+      }
+    }
+  }
+}

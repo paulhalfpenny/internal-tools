@@ -12,6 +12,7 @@ use App\Livewire\Admin\Tasks\Index as AdminTasks;
 use App\Livewire\Admin\TimeEntries\BulkMove as AdminTimeEntriesBulkMove;
 use App\Livewire\Admin\Timesheets\Index as AdminTimesheets;
 use App\Livewire\Admin\Users\Index as AdminUsers;
+use App\Livewire\Profile\ApiTokens as ProfileApiTokens;
 use App\Livewire\Profile\AsanaConnection as ProfileAsanaConnection;
 use App\Livewire\Reports\ClientDetail;
 use App\Livewire\Reports\ClientsReport;
@@ -109,6 +110,7 @@ Route::middleware('auth')->group(function () {
 
     // Profile / personal integrations
     Route::get('/profile/asana', ProfileAsanaConnection::class)->name('profile.asana');
+    Route::get('/profile/api-tokens', ProfileApiTokens::class)->name('profile.api-tokens');
 
     // Asana OAuth
     Route::prefix('integrations/asana')->name('integrations.asana.')->group(function () {
