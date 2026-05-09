@@ -424,10 +424,12 @@ class DayView extends Component
 
         $weekTotal = $weekEntries->sum(fn (TimeEntry $e) => (float) $e->hours);
 
-        // Entries for the selected day
+        // Entries for the selected day. whereDate() instead of where() to keep
+        // matching when spent_on is stored as a full datetime (MySQL DATE columns
+        // truncate to date-only, SQLite stores whatever string Eloquent writes).
         $dayEntries = TimeEntry::with(['project.client', 'task', 'asanaTask'])
             ->where('user_id', $user->id)
-            ->where('spent_on', $this->selectedDate)
+            ->whereDate('spent_on', $this->selectedDate)
             ->orderBy('created_at')
             ->get();
 
