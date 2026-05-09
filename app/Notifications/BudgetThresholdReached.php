@@ -35,28 +35,31 @@ class BudgetThresholdReached extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $verb = $this->threshold >= 100 ? 'over budget' : 'at '.$this->threshold.'%';
         $project = $this->project;
         $client = $project->client?->name;
+        $verb = $this->threshold >= 100 ? 'over budget' : 'at '.$this->threshold.'%';
 
-        $subject = sprintf(
+        $subject = trim(sprintf(
             '[Budget alert] %s — %s %s',
             $client ? $client.' / '.$project->name : $project->name,
             $verb,
             $this->periodKey === 'lifetime' ? '' : '('.$this->periodKey.')'
-        );
+        ));
 
         return (new MailMessage)
-            ->subject(trim($subject))
-            ->greeting('Budget threshold reached')
-            ->line(sprintf(
-                '%s "%s" has reached %.1f%% of budget (%.0f%% threshold crossed).',
-                $client ? $client.' /' : '',
-                $project->name,
-                $this->percentUsed,
-                $this->threshold,
-            ))
-            ->line(sprintf('Budget: £%s — Spent: £%s', number_format($this->budgetAmount, 2), number_format($this->actualAmount, 2)))
-            ->action('Open project budget', route('reports.projects.budget', $project));
+            ->subject($subject)
+            ->view('emails.budgets.threshold-reached', [
+                'projectName' => $project->name,
+                'client' => $client,
+                'threshold' => $this->threshold,
+                'periodKey' => $this->periodKey,
+                'periodLabel' => $this->periodKey === 'lifetime'
+                    ? 'lifetime'
+                    : \Carbon\CarbonImmutable::createFromFormat('Y-m', $this->periodKey)->format('F Y'),
+                'percentUsed' => $this->percentUsed,
+                'budgetAmount' => $this->budgetAmount,
+                'actualAmount' => $this->actualAmount,
+                'projectBudgetUrl' => route('reports.projects.budget', $project),
+            ]);
     }
 }
