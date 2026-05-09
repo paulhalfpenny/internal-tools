@@ -20,10 +20,17 @@
                         @endif
                     </p>
                 </div>
-                <label class="inline-flex items-center cursor-pointer mt-1">
-                    <input wire:model.live="emailEnabled" type="checkbox" class="sr-only peer">
-                    <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#E1236C]"></div>
-                </label>
+                <button type="button"
+                        role="switch"
+                        x-data="{ on: @js($emailEnabled) }"
+                        x-init="$watch('on', v => $wire.set('emailEnabled', v))"
+                        :aria-checked="on.toString()"
+                        @click="on = !on"
+                        :style="{ backgroundColor: on ? '#E1236C' : '#e5e7eb' }"
+                        style="position:relative; display:inline-flex; align-items:center; flex-shrink:0; width:2.75rem; height:1.5rem; border-radius:9999px; transition:background-color .2s; cursor:pointer; border:0; padding:0; margin-top:0.25rem;">
+                    <span :style="{ transform: 'translateX(' + (on ? '1.25rem' : '0.125rem') + ')' }"
+                          style="display:inline-block; width:1.25rem; height:1.25rem; background:white; border:1px solid #d1d5db; border-radius:9999px; transition:transform .2s; pointer-events:none;"></span>
+                </button>
             </div>
 
             <div class="flex items-start justify-between gap-4 pt-5 border-t border-gray-100">
@@ -38,10 +45,17 @@
                         @endif
                     </p>
                 </div>
-                <label class="inline-flex items-center cursor-pointer mt-1">
-                    <input wire:model.live="slackEnabled" type="checkbox" class="sr-only peer">
-                    <div class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#E1236C]"></div>
-                </label>
+                <button type="button"
+                        role="switch"
+                        x-data="{ on: @js($slackEnabled) }"
+                        x-init="$watch('on', v => $wire.set('slackEnabled', v))"
+                        :aria-checked="on.toString()"
+                        @click="on = !on"
+                        :style="{ backgroundColor: on ? '#E1236C' : '#e5e7eb' }"
+                        style="position:relative; display:inline-flex; align-items:center; flex-shrink:0; width:2.75rem; height:1.5rem; border-radius:9999px; transition:background-color .2s; cursor:pointer; border:0; padding:0; margin-top:0.25rem;">
+                    <span :style="{ transform: 'translateX(' + (on ? '1.25rem' : '0.125rem') + ')' }"
+                          style="display:inline-block; width:1.25rem; height:1.25rem; background:white; border:1px solid #d1d5db; border-radius:9999px; transition:transform .2s; pointer-events:none;"></span>
+                </button>
             </div>
         </div>
 
@@ -63,7 +77,9 @@
                 @if ($syncedAt)
                     <span class="text-xs text-green-700" wire:key="synced-{{ $syncedAt }}">Synced at {{ $syncedAt }}.</span>
                 @endif
-                <button wire:click="syncSlack" wire:loading.attr="disabled" class="px-3 py-1.5 text-xs border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50">
+                <button wire:click="syncSlack" wire:loading.attr="disabled"
+                        class="px-3 py-1.5 text-xs border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
+                        style="min-width: 5.5rem;">
                     <span wire:loading.remove wire:target="syncSlack">Re-run</span>
                     <span wire:loading wire:target="syncSlack">Re-running…</span>
                 </button>
