@@ -51,7 +51,7 @@
             x-data
             @keydown.escape.window="$wire.cancel()"
         >
-            <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 px-6 py-8 max-h-[90vh] overflow-y-auto" @click.stop>
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 px-6 pt-6 pb-12 max-h-[90vh] overflow-y-auto" @click.stop>
                 <div class="flex items-center justify-between mb-6">
                     <h2 class="text-base font-semibold text-gray-900">Edit User</h2>
                     <button wire:click="cancel" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
@@ -124,7 +124,7 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</label>
-                        <label class="flex items-center gap-2.5 text-sm h-[38px] {{ $isSelfEdit ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer' }}">
+                        <label class="flex items-center gap-3 text-sm h-[38px] {{ $isSelfEdit ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer' }}">
                             <input
                                 wire:model="editIsActive"
                                 type="checkbox"
@@ -136,7 +136,7 @@
                 </div>
                 @error('editIsActive')<p class="text-red-600 text-xs -mt-4 mb-3">{{ $message }}</p>@enderror
 
-                <div class="border-t border-gray-100 pt-8 mt-2 mb-5">
+                <div class="border-t border-gray-100 pt-6 mt-6 mb-5">
                     <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Notifications & reporting line</h3>
 
                     <div class="mb-4">
@@ -159,10 +159,10 @@
                     </div>
 
                     <div class="flex gap-6 mb-4">
-                        <label class="flex items-center gap-2.5 text-sm cursor-pointer">
+                        <label class="flex items-center gap-3 text-sm cursor-pointer">
                             <input wire:model="editEmailNotificationsEnabled" type="checkbox" class="rounded"> Email reminders
                         </label>
-                        <label class="flex items-center gap-2.5 text-sm cursor-pointer">
+                        <label class="flex items-center gap-3 text-sm cursor-pointer">
                             <input wire:model="editSlackNotificationsEnabled" type="checkbox" class="rounded"> Slack DMs
                         </label>
                     </div>
