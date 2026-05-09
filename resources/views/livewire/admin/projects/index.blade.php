@@ -2,6 +2,8 @@
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-xl font-semibold text-gray-900">Projects</h1>
         <div class="flex items-center gap-4">
+            <input wire:model.live.debounce.300ms="search" type="search" placeholder="Search by name, code or client…"
+                   class="w-72 border border-gray-300 rounded text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
                 <input wire:model.live="showArchived" type="checkbox" class="rounded"> Show archived
             </label>
@@ -127,6 +129,9 @@
                         </td>
                         <td class="px-4 py-3 text-right space-x-3">
                             <a href="{{ route('admin.projects.edit', $project) }}" class="text-sm text-blue-600 hover:underline">Edit</a>
+                            <button wire:click="duplicate({{ $project->id }})"
+                                    wire:confirm="Duplicate '{{ $project->name }}'? Tasks, users, rate and budget settings will be copied; time entries will not."
+                                    class="text-sm text-gray-500 hover:text-gray-700 hover:underline">Duplicate</button>
                             <button wire:click="toggleArchive({{ $project->id }})" class="text-sm text-gray-400 hover:text-gray-600 hover:underline">
                                 {{ $project->is_archived ? 'Unarchive' : 'Archive' }}
                             </button>

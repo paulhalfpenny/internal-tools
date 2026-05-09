@@ -2,6 +2,8 @@
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-xl font-semibold text-gray-900">Clients</h1>
         <div class="flex items-center gap-4">
+            <input wire:model.live.debounce.300ms="search" type="search" placeholder="Search by name or code…"
+                   class="w-64 border border-gray-300 rounded text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
                 <input wire:model.live="showArchived" type="checkbox" class="rounded"> Show archived
             </label>
@@ -61,6 +63,24 @@
                                     <button wire:click="save" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">Save</button>
                                     <button wire:click="cancel" class="px-3 py-2 bg-white border border-gray-300 text-sm rounded hover:bg-gray-50">Cancel</button>
                                 </div>
+                            </td>
+                        </tr>
+                        <tr class="bg-blue-50 border-t border-blue-100">
+                            <td colspan="4" class="px-4 py-3">
+                                <div class="text-xs font-semibold text-gray-700 mb-2">Default tasks for new projects under this client</div>
+                                @if($allTasks->isEmpty())
+                                    <p class="text-xs text-gray-400">No tasks defined yet.</p>
+                                @else
+                                    <div class="grid grid-cols-3 gap-x-4 gap-y-1">
+                                        @foreach($allTasks as $task)
+                                            <label class="flex items-center gap-2 text-sm">
+                                                <input type="checkbox" wire:model="editDefaultTaskIds" value="{{ $task->id }}" class="rounded">
+                                                <span class="w-2.5 h-2.5 rounded-full" style="background: {{ $task->colour }}"></span>
+                                                {{ $task->name }}
+                                            </label>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </td>
                         </tr>
                     @else

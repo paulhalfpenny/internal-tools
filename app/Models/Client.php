@@ -6,6 +6,7 @@ use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -39,5 +40,13 @@ class Client extends Model
     public function activeProjects(): HasMany
     {
         return $this->hasMany(Project::class)->where('is_archived', false);
+    }
+
+    /** @return BelongsToMany<Task, $this> */
+    public function defaultTasks(): BelongsToMany
+    {
+        return $this->belongsToMany(Task::class, 'client_default_tasks')
+            ->withPivot('sort_order')
+            ->orderBy('client_default_tasks.sort_order');
     }
 }

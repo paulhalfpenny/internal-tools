@@ -8,11 +8,15 @@ use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Layout('layouts.app')]
 class Index extends Component
 {
+    #[Url(except: '')]
+    public string $search = '';
+
     #[Locked]
     public ?int $editingId = null;
 
@@ -157,8 +161,18 @@ class Index extends Component
                 ->get();
         }
 
+        $usersQuery = User::orderBy('name');
+        $term = trim($this->search);
+        if ($term !== '') {
+            $usersQuery->where(function ($q) use ($term) {
+                $q->where('name', 'like', "%{$term}%")
+                    ->orWhere('email', 'like', "%{$term}%")
+                    ->orWhere('role_title', 'like', "%{$term}%");
+            });
+        }
+
         return view('livewire.admin.users.index', [
-            'users' => User::orderBy('name')->get(),
+            'users' => $usersQuery->get(),
             'roles' => Role::cases(),
             'managerCandidates' => $managerCandidates,
         ]);

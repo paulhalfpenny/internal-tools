@@ -7,11 +7,15 @@ use App\Models\Client;
 use App\Models\Project;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Layout('layouts.app')]
 class Index extends Component
 {
+    #[Url(except: '')]
+    public string $search = '';
+
     public bool $showArchived = false;
 
     public int|string $clientId = '';
@@ -58,6 +62,12 @@ class Index extends Component
             'budget_starts_on' => $this->budgetType === 'monthly_ci' && $this->budgetStartsOn !== '' ? $this->budgetStartsOn : null,
         ]);
 
+        // Pre-attach the client's default tasks, if any have been set up for this client.
+        $defaults = Client::with('defaultTasks')->find($project->client_id)?->defaultTasks ?? collect();
+        foreach ($defaults as $task) {
+            $project->tasks()->attach($task->id, ['is_billable' => $project->is_billable, 'hourly_rate_override' => null]);
+        }
+
         $this->redirect(route('admin.projects.edit', $project));
     }
 
@@ -67,12 +77,70 @@ class Index extends Component
         $project->update(['is_archived' => ! $project->is_archived]);
     }
 
+    public function duplicate(int $projectId): void
+    {
+        $original = Project::with(['tasks', 'users'])->findOrFail($projectId);
+
+        $newCode = $this->uniqueProjectCode($original->code.'-COPY');
+
+        $copy = Project::create([
+            'client_id' => $original->client_id,
+            'code' => $newCode,
+            'name' => $original->name.' (copy)',
+            'is_billable' => $original->is_billable,
+            'default_hourly_rate' => $original->default_hourly_rate,
+            'budget_type' => $original->budget_type,
+            'budget_amount' => $original->budget_amount,
+            'budget_hours' => $original->budget_hours,
+            'budget_starts_on' => $original->budget_starts_on,
+            'starts_on' => $original->starts_on,
+            'ends_on' => $original->ends_on,
+            'is_archived' => false,
+        ]);
+
+        foreach ($original->tasks as $task) {
+            $copy->tasks()->attach($task->id, [
+                'is_billable' => (bool) $task->pivot->is_billable,
+                'hourly_rate_override' => $task->pivot->hourly_rate_override,
+            ]);
+        }
+
+        foreach ($original->users as $user) {
+            $copy->users()->attach($user->id, [
+                'hourly_rate_override' => $user->pivot->hourly_rate_override,
+            ]);
+        }
+
+        $this->redirect(route('admin.projects.edit', $copy));
+    }
+
+    private function uniqueProjectCode(string $base): string
+    {
+        $code = $base;
+        $i = 2;
+        while (Project::where('code', $code)->exists()) {
+            $code = $base.'-'.$i;
+            $i++;
+        }
+
+        return $code;
+    }
+
     public function render(): View
     {
         $query = Project::with('client')->orderBy('name');
 
         if (! $this->showArchived) {
             $query->where('is_archived', false);
+        }
+
+        $term = trim($this->search);
+        if ($term !== '') {
+            $query->where(function ($q) use ($term) {
+                $q->where('name', 'like', "%{$term}%")
+                    ->orWhere('code', 'like', "%{$term}%")
+                    ->orWhereHas('client', fn ($c) => $c->where('name', 'like', "%{$term}%"));
+            });
         }
 
         return view('livewire.admin.projects.index', [
