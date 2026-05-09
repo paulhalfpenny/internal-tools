@@ -13,21 +13,23 @@ uses(RefreshDatabase::class);
 
 // Helpers to build lightweight model stubs
 
+/**
+ * @param  array<int, int>  $assignedTaskIds — list of task ids that are assigned to the project
+ * @param  array<int, array{hourly_rate_override: ?float}>  $userPivots
+ */
 function makeProject(
     bool $isBillable = true,
-    array $taskPivots = [],  // [task_id => ['is_billable' => bool]]
-    array $userPivots = [],  // [user_id => ['hourly_rate_override' => ?float]]
+    array $assignedTaskIds = [],
+    array $userPivots = [],
 ): Project {
     $project = new Project;
     $project->is_billable = $isBillable;
 
     $tasks = new Collection;
-    foreach ($taskPivots as $taskId => $pivotData) {
+    foreach ($assignedTaskIds as $taskId) {
         $task = new Task;
         $task->id = $taskId;
-        $pivotModel = new Pivot;
-        $pivotModel->forceFill($pivotData);
-        $task->setRelation('pivot', $pivotModel);
+        $task->setRelation('pivot', new Pivot);
         $tasks->push($task);
     }
     $project->setRelation('tasks', $tasks);
@@ -46,10 +48,11 @@ function makeProject(
     return $project;
 }
 
-function makeTask(int $id = 1): Task
+function makeTask(int $id = 1, bool $isDefaultBillable = true): Task
 {
     $task = new Task;
     $task->id = $id;
+    $task->is_default_billable = $isDefaultBillable;
 
     return $task;
 }
@@ -66,8 +69,8 @@ function makeUser(int $id = 1, ?int $rateId = null): User
 // --- is_billable resolution ---
 
 test('non_billable project always returns is_billable false', function () {
-    $project = makeProject(false, [1 => ['is_billable' => true]]);
-    $task = makeTask(1);
+    $project = makeProject(false, [1]);
+    $task = makeTask(1, isDefaultBillable: true);
     $user = makeUser(1);
 
     $result = (new RateResolver)->resolve($project, $task, $user);
@@ -77,7 +80,7 @@ test('non_billable project always returns is_billable false', function () {
 });
 
 test('task not assigned to project returns is_billable false', function () {
-    $project = makeProject(true, []); // no tasks assigned
+    $project = makeProject(true, []);
     $task = makeTask(99);
     $user = makeUser(1);
 
@@ -86,9 +89,9 @@ test('task not assigned to project returns is_billable false', function () {
     expect($result->isBillable)->toBeFalse();
 });
 
-test('project_task.is_billable false returns is_billable false', function () {
-    $project = makeProject(true, [1 => ['is_billable' => false]]);
-    $task = makeTask(1);
+test('task with is_default_billable=false returns is_billable false', function () {
+    $project = makeProject(true, [1]);
+    $task = makeTask(1, isDefaultBillable: false);
     $user = makeUser(1);
 
     $result = (new RateResolver)->resolve($project, $task, $user);
@@ -97,9 +100,9 @@ test('project_task.is_billable false returns is_billable false', function () {
         ->and($result->rateSnapshot)->toBeNull();
 });
 
-test('project_task.is_billable true returns is_billable true', function () {
-    $project = makeProject(true, [1 => ['is_billable' => true]]);
-    $task = makeTask(1);
+test('task with is_default_billable=true returns is_billable true', function () {
+    $project = makeProject(true, [1]);
+    $task = makeTask(1, isDefaultBillable: true);
     $user = makeUser(1);
 
     $result = (new RateResolver)->resolve($project, $task, $user);
@@ -113,7 +116,7 @@ test('project_user override wins over user role rate', function () {
     $rate = Rate::create(['name' => 'Standard', 'hourly_rate' => 60.0]);
     $project = makeProject(
         true,
-        taskPivots: [1 => ['is_billable' => true]],
+        assignedTaskIds: [1],
         userPivots: [1 => ['hourly_rate_override' => 120.0]],
     );
     $task = makeTask(1);
@@ -128,7 +131,7 @@ test("user's library role rate is used when no project override", function () {
     $rate = Rate::create(['name' => 'Senior', 'hourly_rate' => 150.0]);
     $project = makeProject(
         true,
-        taskPivots: [1 => ['is_billable' => true]],
+        assignedTaskIds: [1],
         userPivots: [1 => ['hourly_rate_override' => null]],
     );
     $task = makeTask(1);
@@ -142,7 +145,7 @@ test("user's library role rate is used when no project override", function () {
 test('falls back to FALLBACK_HOURLY_RATE when user has no role and no override', function () {
     $project = makeProject(
         true,
-        taskPivots: [1 => ['is_billable' => true]],
+        assignedTaskIds: [1],
         userPivots: [1 => ['hourly_rate_override' => null]],
     );
     $task = makeTask(1);
@@ -158,8 +161,8 @@ test('falls back to FALLBACK_HOURLY_RATE when user has no role and no override',
 test('falls back to FALLBACK_HOURLY_RATE for user not assigned to project', function () {
     $project = makeProject(
         true,
-        taskPivots: [1 => ['is_billable' => true]],
-        userPivots: [], // user not assigned
+        assignedTaskIds: [1],
+        userPivots: [],
     );
     $task = makeTask(1);
     $user = makeUser(1, rateId: null);
@@ -175,7 +178,7 @@ test('resolveWithHours computes billable_amount using user role rate', function 
     $rate = Rate::create(['name' => 'Std', 'hourly_rate' => 84.0]);
     $project = makeProject(
         true,
-        taskPivots: [1 => ['is_billable' => true]],
+        assignedTaskIds: [1],
         userPivots: [1 => ['hourly_rate_override' => null]],
     );
     $task = makeTask(1);
@@ -200,7 +203,7 @@ test('resolveWithHours rounds to 2 decimal places', function () {
     $rate = Rate::create(['name' => 'Std', 'hourly_rate' => 84.0]);
     $project = makeProject(
         true,
-        taskPivots: [1 => ['is_billable' => true]],
+        assignedTaskIds: [1],
         userPivots: [],
     );
     $task = makeTask(1);
@@ -208,5 +211,5 @@ test('resolveWithHours rounds to 2 decimal places', function () {
 
     $result = (new RateResolver)->resolveWithHours($project, $task, $user, 1.25);
 
-    expect($result->billableAmount)->toBe(105.0); // 1.25 * 84 = 105.00
+    expect($result->billableAmount)->toBe(105.0);
 });

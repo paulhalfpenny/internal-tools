@@ -63,9 +63,14 @@ class Index extends Component
         ]);
 
         // Pre-attach the client's default tasks, if any have been set up for this client.
+        // Pivot is_billable mirrors the task's global default; the resolver reads
+        // task.is_default_billable directly, but the pivot column is non-null.
         $defaults = Client::with('defaultTasks')->find($project->client_id)?->defaultTasks ?? collect();
         foreach ($defaults as $task) {
-            $project->tasks()->attach($task->id, ['is_billable' => $project->is_billable, 'hourly_rate_override' => null]);
+            $project->tasks()->attach($task->id, [
+                'is_billable' => (bool) $task->is_default_billable,
+                'hourly_rate_override' => null,
+            ]);
         }
 
         $this->redirect(route('admin.projects.edit', $project));

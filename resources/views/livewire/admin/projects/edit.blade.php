@@ -175,23 +175,15 @@
                                 type="checkbox"
                                 id="task-{{ $task->id }}"
                                 {{ $assigned ? 'checked' : '' }}
-                                wire:click="toggleTask({{ $task->id }}, {{ $task->is_default_billable ? 'true' : 'false' }})"
+                                wire:click="toggleTask({{ $task->id }})"
                                 class="rounded"
                             >
                             <label for="task-{{ $task->id }}" class="flex-1 text-sm cursor-pointer">
                                 <span class="inline-block w-2.5 h-2.5 rounded-full mr-1.5" style="background-color: {{ $task->colour }}"></span>
-                                {{ $task->name }}
+                                {{ $task->name }}@unless($task->is_default_billable)
+                                    <span class="text-xs text-gray-400 ml-1">(not billable)</span>
+                                @endunless
                             </label>
-                            @if($assigned)
-                                <label class="flex items-center gap-1.5 text-xs text-gray-600">
-                                    <input
-                                        type="checkbox"
-                                        wire:model="taskAssignments.{{ $task->id }}.is_billable"
-                                        class="rounded"
-                                    >
-                                    Billable
-                                </label>
-                            @endif
                         </div>
                     @endforeach
                 </div>

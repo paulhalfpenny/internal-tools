@@ -49,8 +49,8 @@ class Edit extends Component
 
     public string $budgetStartsOn = '';
 
-    // Task assignments: task_id => ['is_billable' => bool]
-    /** @var array<int, array{is_billable: bool}> */
+    // Task assignments: ordered list of assigned task IDs
+    /** @var array<int, int> */
     public array $taskAssignments = [];
 
     // User assignments: user_id => ['hourly_rate_override' => string]
@@ -78,9 +78,7 @@ class Edit extends Component
         $this->asanaProjectGid = $project->asana_project_gid ?? '';
 
         foreach ($project->tasks as $task) {
-            /** @var Pivot $pivot */
-            $pivot = $task->getRelation('pivot');
-            $this->taskAssignments[$task->id] = ['is_billable' => (bool) $pivot->getAttribute('is_billable')];
+            $this->taskAssignments[$task->id] = $task->id;
         }
 
         foreach ($project->users as $user) {
@@ -94,12 +92,12 @@ class Edit extends Component
         }
     }
 
-    public function toggleTask(int $taskId, bool $defaultBillable): void
+    public function toggleTask(int $taskId): void
     {
         if (isset($this->taskAssignments[$taskId])) {
             unset($this->taskAssignments[$taskId]);
         } else {
-            $this->taskAssignments[$taskId] = ['is_billable' => $defaultBillable];
+            $this->taskAssignments[$taskId] = $taskId;
         }
     }
 
@@ -186,10 +184,14 @@ class Edit extends Component
             PullAsanaTasksJob::dispatch($newGid, $authUser->id);
         }
 
-        // Sync tasks
+        // Sync tasks. Billability is now sourced from task.is_default_billable
+        // (managed on the global Tasks admin page); the pivot column is kept in
+        // sync for backward compat but isn't read by the resolver any more.
+        $assignedIds = array_values(array_unique(array_map('intval', $this->taskAssignments)));
+        $defaults = Task::whereIn('id', $assignedIds)->pluck('is_default_billable', 'id');
         $taskSync = [];
-        foreach ($this->taskAssignments as $taskId => $data) {
-            $taskSync[$taskId] = ['is_billable' => $data['is_billable']];
+        foreach ($assignedIds as $taskId) {
+            $taskSync[$taskId] = ['is_billable' => (bool) ($defaults[$taskId] ?? false)];
         }
         $this->project->tasks()->sync($taskSync);
 
