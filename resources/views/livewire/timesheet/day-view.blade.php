@@ -23,32 +23,11 @@
 
     {{-- Day header --}}
     <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-2">
-            <button
-                wire:click="previousWeek"
-                class="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition text-gray-500 hover:text-gray-800 shadow-sm"
-                title="Previous week"
-            >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                </svg>
-            </button>
-            <button
-                wire:click="nextWeek"
-                class="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition text-gray-500 hover:text-gray-800 shadow-sm"
-                title="Next week"
-            >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                </svg>
-            </button>
-            <h2 class="text-lg font-semibold text-gray-800">
-                {{ \Carbon\Carbon::parse($selectedDate)->format('l, j F Y') }}
-            </h2>
+        <div class="flex items-center gap-3">
             @unless($isReadOnly)
                 <button
                     @click="$wire.showModal = true; $wire.openNewModal()"
-                    class="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition ml-3"
+                    class="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
                     title="New entry (N)"
                 >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -57,6 +36,29 @@
                     Track time
                 </button>
             @endunless
+            <div class="inline-flex items-center">
+                <button
+                    wire:click="previousWeek"
+                    class="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition text-gray-500 hover:text-gray-800 shadow-sm"
+                    title="Previous week"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                </button>
+                <button
+                    wire:click="nextWeek"
+                    class="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition text-gray-500 hover:text-gray-800 shadow-sm ml-1"
+                    title="Next week"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </button>
+            </div>
+            <h2 class="text-lg font-semibold text-gray-800">
+                {{ \Carbon\Carbon::parse($selectedDate)->format('l, j F Y') }}
+            </h2>
         </div>
         <div class="flex items-center gap-2">
             {{-- Date picker — calendar icon opens the browser's native date input --}}
@@ -84,12 +86,14 @@
                 />
             </div>
 
-            <button
-                wire:click="selectDate('{{ \Carbon\Carbon::today()->toDateString() }}')"
-                class="inline-flex items-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition {{ $selectedDate === \Carbon\Carbon::today()->toDateString() ? 'invisible' : '' }}"
-            >
-                Today
-            </button>
+            @if($selectedDate !== \Carbon\Carbon::today()->toDateString())
+                <button
+                    wire:click="selectDate('{{ \Carbon\Carbon::today()->toDateString() }}')"
+                    class="inline-flex items-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition"
+                >
+                    Today
+                </button>
+            @endif
 
             {{-- Day / Week toggle --}}
             @php

@@ -24,17 +24,19 @@
 
     {{-- Day header --}}
     <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-2">
-            <button wire:click="previousWeek"
-                    class="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition text-gray-500 hover:text-gray-800 shadow-sm"
-                    title="Previous week">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-            </button>
-            <button wire:click="nextWeek"
-                    class="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition text-gray-500 hover:text-gray-800 shadow-sm"
-                    title="Next week">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-            </button>
+        <div class="flex items-center gap-3">
+            <div class="inline-flex items-center">
+                <button wire:click="previousWeek"
+                        class="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition text-gray-500 hover:text-gray-800 shadow-sm"
+                        title="Previous week">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                </button>
+                <button wire:click="nextWeek"
+                        class="flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 transition text-gray-500 hover:text-gray-800 shadow-sm ml-1"
+                        title="Next week">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
+            </div>
             <h2 class="text-lg font-semibold text-gray-800">
                 {{ $weekStart->format('j M') }} – {{ $weekStart->addDays(6)->format('j M Y') }}
             </h2>
@@ -54,10 +56,12 @@
                        class="absolute inset-0 opacity-0" style="pointer-events:none;" aria-label="Pick a date"/>
             </div>
 
-            <button wire:click="goToToday"
-                    class="inline-flex items-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition {{ \Carbon\Carbon::parse($selectedDate)->isSameWeek(\Carbon\Carbon::today()) ? 'invisible' : '' }}">
-                This week
-            </button>
+            @unless(\Carbon\Carbon::parse($selectedDate)->isSameWeek(\Carbon\Carbon::today()))
+                <button wire:click="goToToday"
+                        class="inline-flex items-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition">
+                    This week
+                </button>
+            @endunless
 
             {{-- Day / Week toggle --}}
             @php
