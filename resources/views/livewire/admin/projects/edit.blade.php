@@ -178,7 +178,7 @@
                 <div class="flex items-center justify-between mb-4">
                     <h2 class="text-sm font-semibold text-gray-700">Team &amp; Rates</h2>
                     <button type="button" wire:click="openAddUserModal"
-                            class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700">
+                            class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50">
                         + Add user
                     </button>
                 </div>
