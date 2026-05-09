@@ -222,11 +222,9 @@
                                     $libRate = $rates->firstWhere('id', $user->rate_id);
                                     $userDefault = $libRate
                                         ? $libRate->name.' — £'.number_format((float) $libRate->hourly_rate, 2)
-                                        : '—';
-                                } elseif ($user->default_hourly_rate !== null) {
-                                    $userDefault = '£'.number_format((float) $user->default_hourly_rate, 2);
+                                        : 'Fallback — £'.number_format(\App\Domain\Billing\RateResolver::FALLBACK_HOURLY_RATE, 2);
                                 } else {
-                                    $userDefault = '—';
+                                    $userDefault = 'Fallback — £'.number_format(\App\Domain\Billing\RateResolver::FALLBACK_HOURLY_RATE, 2);
                                 }
                             @endphp
                             <tr>

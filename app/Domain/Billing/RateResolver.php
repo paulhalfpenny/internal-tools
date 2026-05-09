@@ -11,16 +11,13 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
 /**
  * Resolves billability and rate for a (project, task, user) combination.
  *
- * Resolution order for billable_rate_snapshot (first match wins). At each
- * tier, a populated rate_id (rates library row) takes precedence over the
- * legacy decimal column on the same record:
- *   1. project_user.rate_id  →  project_user.hourly_rate_override
- *   2. project.rate_id       →  project.default_hourly_rate
- *   3. user.rate_id          →  user.default_hourly_rate
- *   4. null → non-billable
+ * Resolution order for billable_rate_snapshot (first match wins):
+ *   1. project_user.hourly_rate_override — the per-project custom rate
+ *   2. user.rate_id → rates library — the user's default role rate
+ *   3. FALLBACK_HOURLY_RATE — last-resort default if neither is set
  *
  * Resolution for is_billable:
- *   1. If project.is_billable = false → false
+ *   1. If project.is_billable = false → false (rate is null, amount is £0)
  *   2. Else project_task.is_billable for this (project, task)
  *
  * Rates and billability are frozen at save time. Changing project/user/task
@@ -28,11 +25,12 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
  */
 final class RateResolver
 {
+    public const FALLBACK_HOURLY_RATE = 100.0;
+
     public function resolve(Project $project, Task $task, User $user): RateResolution
     {
         $isBillable = $this->resolveBillable($project, $task);
         $rate = $isBillable ? $this->resolveRate($project, $user) : null;
-        $amount = ($isBillable && $rate !== null) ? 0.0 : 0.0; // hours applied by caller
 
         return new RateResolution(
             isBillable: $isBillable,
@@ -71,52 +69,28 @@ final class RateResolver
         return (bool) $pivot->getAttribute('is_billable');
     }
 
-    private function resolveRate(Project $project, User $user): ?float
+    private function resolveRate(Project $project, User $user): float
     {
-        // 1. project_user — library rate first, then legacy override
+        // 1. Per-project custom override for this user
         $assignedUser = $project->users->firstWhere('id', $user->id);
         if ($assignedUser !== null) {
             /** @var Pivot $projectUser */
             $projectUser = $assignedUser->getRelation('pivot');
-
-            $rate = $this->resolveLibraryOrLegacy(
-                $projectUser->getAttribute('rate_id'),
-                $projectUser->getAttribute('hourly_rate_override'),
-            );
-            if ($rate !== null) {
-                return $rate;
+            $override = $projectUser->getAttribute('hourly_rate_override');
+            if ($override !== null) {
+                return (float) $override;
             }
         }
 
-        // 2. project — library rate first, then legacy default
-        $rate = $this->resolveLibraryOrLegacy($project->rate_id, $project->default_hourly_rate);
-        if ($rate !== null) {
-            return $rate;
-        }
-
-        // 3. user — library rate first, then legacy default
-        $rate = $this->resolveLibraryOrLegacy($user->rate_id, $user->default_hourly_rate);
-        if ($rate !== null) {
-            return $rate;
-        }
-
-        // 4. no rate → non-billable
-        return null;
-    }
-
-    private function resolveLibraryOrLegacy(mixed $rateId, mixed $legacyDecimal): ?float
-    {
-        if ($rateId !== null) {
-            $rate = Rate::find($rateId);
+        // 2. User's default role rate (rate library)
+        if ($user->rate_id !== null) {
+            $rate = Rate::find($user->rate_id);
             if ($rate !== null) {
                 return (float) $rate->hourly_rate;
             }
         }
 
-        if ($legacyDecimal !== null) {
-            return (float) $legacyDecimal;
-        }
-
-        return null;
+        // 3. Last-resort fallback
+        return self::FALLBACK_HOURLY_RATE;
     }
 }
