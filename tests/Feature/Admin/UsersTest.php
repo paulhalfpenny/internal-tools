@@ -28,10 +28,11 @@ test('admin can access users admin screen', function () {
 
 test('edit sets editingId and populates fields', function () {
     $admin = User::factory()->admin()->create();
+    $rate = \App\Models\Rate::create(['name' => 'Designer', 'hourly_rate' => 55.00]);
     $other = User::factory()->create([
         'role' => Role::User,
         'role_title' => 'Designer',
-        'default_hourly_rate' => 55.00,
+        'rate_id' => $rate->id,
         'weekly_capacity_hours' => 37.5,
         'is_active' => true,
         'is_contractor' => false,
@@ -43,7 +44,7 @@ test('edit sets editingId and populates fields', function () {
         ->assertSet('editingId', $other->id)
         ->assertSet('editRole', 'user')
         ->assertSet('editRoleTitle', 'Designer')
-        ->assertSet('editDefaultRate', '55.00')
+        ->assertSet('editRateId', $rate->id)
         ->assertSet('editWeeklyCapacity', '37.50')
         ->assertSet('editIsActive', true)
         ->assertSet('editIsContractor', false);

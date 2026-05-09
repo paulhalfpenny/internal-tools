@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin\Users;
 
 use App\Enums\Role;
+use App\Models\Rate;
 use App\Models\User;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -29,7 +30,7 @@ class Index extends Component
 
     public string $editRoleTitle = '';
 
-    public string $editDefaultRate = '';
+    public ?int $editRateId = null;
 
     public string $editWeeklyCapacity = '';
 
@@ -55,7 +56,7 @@ class Index extends Component
         $this->editEmail = $user->email;
         $this->editRole = $user->role->value;
         $this->editRoleTitle = $user->role_title ?? '';
-        $this->editDefaultRate = $user->default_hourly_rate !== null ? (string) $user->default_hourly_rate : '';
+        $this->editRateId = $user->rate_id;
         $this->editWeeklyCapacity = (string) $user->weekly_capacity_hours;
         $this->editIsActive = $user->is_active;
         $this->editIsContractor = $user->is_contractor;
@@ -71,7 +72,7 @@ class Index extends Component
         $this->validate([
             'editRole' => 'required|in:user,manager,admin',
             'editRoleTitle' => 'nullable|string|max:255',
-            'editDefaultRate' => 'nullable|numeric|min:0',
+            'editRateId' => 'nullable|exists:rates,id',
             'editWeeklyCapacity' => 'required|numeric|min:0|max:168',
             'editReportsToUserId' => [
                 'nullable',
@@ -110,7 +111,7 @@ class Index extends Component
         User::findOrFail((int) $this->editingId)->update([
             'role' => Role::from($this->editRole),
             'role_title' => $this->editRoleTitle ?: null,
-            'default_hourly_rate' => $this->editDefaultRate !== '' ? (float) $this->editDefaultRate : null,
+            'rate_id' => $this->editRateId,
             'weekly_capacity_hours' => (float) $this->editWeeklyCapacity,
             'is_active' => $this->editIsActive,
             'is_contractor' => $this->editIsContractor,
@@ -172,9 +173,10 @@ class Index extends Component
         }
 
         return view('livewire.admin.users.index', [
-            'users' => $usersQuery->get(),
+            'users' => $usersQuery->with('rate')->get(),
             'roles' => Role::cases(),
             'managerCandidates' => $managerCandidates,
+            'rates' => Rate::where('is_archived', false)->orderBy('name')->get(),
         ]);
     }
 }

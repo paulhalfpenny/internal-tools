@@ -210,26 +210,24 @@
                             <tr class="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
                                 <th class="px-2 py-2 w-8"></th>
                                 <th class="text-left px-2 py-2 font-medium">Member</th>
-                                <th class="text-left px-2 py-2 font-medium">User default</th>
-                                <th class="text-left px-2 py-2 font-medium">Library override</th>
-                                <th class="text-left px-2 py-2 font-medium">Custom override (£/hr)</th>
-                                <th class="text-right px-2 py-2 font-medium">Effective rate</th>
+                                <th class="text-left px-2 py-2 font-medium">Default role &amp; rate</th>
+                                <th class="text-left px-2 py-2 font-medium">Project override (£/hr)</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-50">
                         @foreach($allUsers as $user)
                             @php
                                 $assigned = isset($userAssignments[$user->id]);
-                                $userDefault = $user->default_hourly_rate !== null
-                                    ? '£'.number_format((float) $user->default_hourly_rate, 2)
-                                    : '—';
                                 if ($user->rate_id) {
                                     $libRate = $rates->firstWhere('id', $user->rate_id);
-                                    if ($libRate) {
-                                        $userDefault = '£'.number_format((float) $libRate->hourly_rate, 2).' ('.$libRate->name.')';
-                                    }
+                                    $userDefault = $libRate
+                                        ? $libRate->name.' — £'.number_format((float) $libRate->hourly_rate, 2)
+                                        : '—';
+                                } elseif ($user->default_hourly_rate !== null) {
+                                    $userDefault = '£'.number_format((float) $user->default_hourly_rate, 2);
+                                } else {
+                                    $userDefault = '—';
                                 }
-                                $effective = $effectiveRates[$user->id] ?? null;
                             @endphp
                             <tr>
                                 <td class="px-2 py-2">
@@ -239,36 +237,22 @@
                                 <td class="px-2 py-2">
                                     <label for="user-{{ $user->id }}" class="cursor-pointer">{{ $user->name }}</label>
                                 </td>
-                                <td class="px-2 py-2 text-gray-500 tabular-nums">{{ $userDefault }}</td>
+                                <td class="px-2 py-2 text-gray-500">{{ $userDefault }}</td>
                                 @if($assigned)
-                                    <td class="px-2 py-2">
-                                        <select wire:model="userAssignments.{{ $user->id }}.rate_id"
-                                                class="w-full border border-gray-300 rounded text-sm px-2 py-1.5"
-                                                style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
-                                            <option value="">— None —</option>
-                                            @foreach($rates as $rate)
-                                                <option value="{{ $rate->id }}">{{ $rate->label() }}</option>
-                                            @endforeach
-                                        </select>
-                                    </td>
                                     <td class="px-2 py-2">
                                         <input type="number" step="0.01" min="0"
                                                wire:model="userAssignments.{{ $user->id }}.hourly_rate_override"
                                                placeholder="—"
                                                class="w-28 border border-gray-300 rounded text-sm px-2 py-1.5">
                                     </td>
-                                    <td class="px-2 py-2 text-right tabular-nums font-medium">
-                                        {{ $effective !== null ? '£'.number_format((float) $effective, 2) : '—' }}
-                                    </td>
                                 @else
-                                    <td colspan="3" class="px-2 py-2 text-xs text-gray-300">Not assigned</td>
+                                    <td class="px-2 py-2 text-xs text-gray-300">Not assigned</td>
                                 @endif
                             </tr>
                         @endforeach
                         </tbody>
                     </table>
                 </div>
-                <p class="text-xs text-gray-500 mt-3">Resolution order: project_user library rate → custom override → project library rate → project custom rate → user library rate → user custom rate.</p>
             </div>
         </div>
 

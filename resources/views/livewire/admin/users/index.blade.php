@@ -104,9 +104,14 @@
 
                 <div class="grid grid-cols-2 gap-3 mb-4">
                     <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Rate (£/hr)</label>
-                        <input wire:model="editDefaultRate" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
-                        @error('editDefaultRate')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Role / Rate</label>
+                        <select wire:model="editRateId" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
+                            <option value="">— None —</option>
+                            @foreach($rates as $rate)
+                                <option value="{{ $rate->id }}">{{ $rate->label() }}</option>
+                            @endforeach
+                        </select>
+                        @error('editRateId')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Capacity (hrs/week)</label>

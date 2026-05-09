@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Admin\Projects;
 
-use App\Domain\Billing\RateResolver;
 use App\Domain\Budgeting\ProjectBudgetCalculator;
 use App\Enums\BudgetType;
 use App\Enums\JdwCategory;
@@ -55,8 +54,8 @@ class Edit extends Component
     /** @var array<int, array{is_billable: bool}> */
     public array $taskAssignments = [];
 
-    // User assignments: user_id => ['hourly_rate_override' => string, 'rate_id' => int|null]
-    /** @var array<int, array{hourly_rate_override: string, rate_id: ?int}> */
+    // User assignments: user_id => ['hourly_rate_override' => string]
+    /** @var array<int, array{hourly_rate_override: string}> */
     public array $userAssignments = [];
 
     // JDW fields
@@ -108,7 +107,6 @@ class Edit extends Component
                 'hourly_rate_override' => $pivot->getAttribute('hourly_rate_override') !== null
                     ? (string) $pivot->getAttribute('hourly_rate_override')
                     : '',
-                'rate_id' => $pivot->getAttribute('rate_id'),
             ];
         }
     }
@@ -127,7 +125,7 @@ class Edit extends Component
         if (isset($this->userAssignments[$userId])) {
             unset($this->userAssignments[$userId]);
         } else {
-            $this->userAssignments[$userId] = ['hourly_rate_override' => '', 'rate_id' => null];
+            $this->userAssignments[$userId] = ['hourly_rate_override' => ''];
         }
     }
 
@@ -224,7 +222,7 @@ class Edit extends Component
             $override = $data['hourly_rate_override'] !== '' ? (float) $data['hourly_rate_override'] : null;
             $userSync[$userId] = [
                 'hourly_rate_override' => $override,
-                'rate_id' => $data['rate_id'] ?? null,
+                'rate_id' => null,
             ];
         }
         $this->project->users()->sync($userSync);
@@ -243,7 +241,7 @@ class Edit extends Component
         session()->flash('status', 'Refreshing Asana tasks in the background.');
     }
 
-    public function render(ProjectBudgetCalculator $budgetCalculator, RateResolver $rateResolver): View
+    public function render(ProjectBudgetCalculator $budgetCalculator): View
     {
         $authUser = $this->authUser();
         $workspaceGid = $authUser->asana_workspace_gid;
@@ -255,57 +253,16 @@ class Edit extends Component
                 ->get()
             : collect();
 
-        $rates = Rate::where('is_archived', false)->orderBy('name')->get();
-
-        // Resolved-rate matrix for the team-rates table. Resolution uses *current*
-        // form state (Alpine-bound $this->userAssignments) for the per-user override,
-        // not the saved pivot, so the user sees what their changes will produce.
-        $effectiveRates = [];
-        $allUsers = User::where('is_active', true)->orderBy('name')->get();
-        $usersById = $allUsers->keyBy('id');
-        $tasks = $this->project->tasks; // already loaded
-        $defaultTask = $tasks->first();
-
-        if ($defaultTask !== null) {
-            // Build a transient project clone reflecting unsaved form values for resolution
-            $transient = $this->project->replicate();
-            $transient->setRelations($this->project->getRelations());
-            $transient->is_billable = $this->isBillable;
-            $transient->default_hourly_rate = $this->defaultRate !== '' ? (float) $this->defaultRate : null;
-            $transient->rate_id = $this->defaultRateId;
-
-            foreach ($this->userAssignments as $userId => $data) {
-                $user = $usersById->get($userId);
-                if ($user === null) {
-                    continue;
-                }
-
-                // Build a one-user collection with the unsaved pivot values so RateResolver picks them up.
-                $userClone = $user->replicate();
-                $userClone->id = $user->id;
-                $pivot = new Pivot;
-                $pivot->setAttribute('hourly_rate_override', $data['hourly_rate_override'] !== '' ? (float) $data['hourly_rate_override'] : null);
-                $pivot->setAttribute('rate_id', $data['rate_id'] ?? null);
-                $userClone->setRelation('pivot', $pivot);
-
-                $transient->setRelation('users', collect([$userClone]));
-                $resolution = $rateResolver->resolve($transient, $defaultTask, $user);
-
-                $effectiveRates[$userId] = $resolution->rateSnapshot;
-            }
-        }
-
         return view('livewire.admin.projects.edit', [
             'clients' => Client::where('is_archived', false)->orderBy('name')->get(),
             'allTasks' => Task::where('is_archived', false)->orderBy('sort_order')->orderBy('name')->get(),
-            'allUsers' => $allUsers,
+            'allUsers' => User::where('is_active', true)->orderBy('name')->get(),
             'budgetTypes' => BudgetType::cases(),
             'jdwCategories' => JdwCategory::cases(),
             'budgetStatus' => $this->project->budget_type !== null ? $budgetCalculator->forProject($this->project) : null,
             'asanaProjects' => $asanaProjects,
             'asanaConnected' => $authUser->asanaConnected(),
-            'rates' => $rates,
-            'effectiveRates' => $effectiveRates,
+            'rates' => Rate::where('is_archived', false)->orderBy('name')->get(),
         ]);
     }
 
