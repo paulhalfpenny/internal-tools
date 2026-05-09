@@ -134,6 +134,9 @@
                                 @endif
                             </div>
                             <div class="text-xs text-gray-500 mt-0.5">{{ $row['task_name'] }}</div>
+                            @if(! empty($row['asana_task_name']))
+                                <div class="text-xs text-gray-400 mt-0.5 italic truncate" title="{{ $row['asana_task_name'] }}">↳ {{ $row['asana_task_name'] }}</div>
+                            @endif
                         </td>
                         @for($i = 0; $i < 7; $i++)
                             <td class="px-2 py-2 {{ $weekDays[$i]->isToday() ? 'bg-green-50' : '' }}">
@@ -207,56 +210,319 @@
         </div>
     @endunless
 
-    {{-- Add row modal --}}
-    @if($showAddRowModal)
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
-             wire:click="closeAddRowModal"
-             x-data
-             @keydown.escape.window="$wire.closeAddRowModal()">
-            <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 px-8 py-8" @click.stop>
-                <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-base font-semibold text-gray-900">Add row to this timesheet</h2>
-                    <button wire:click="closeAddRowModal" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    {{-- Add row modal — mirrors the Day view's Track Time modal --}}
+    <div x-show="$wire.showAddRowModal" style="display:none">
+        <div
+            class="fixed inset-0 z-50 flex items-start justify-center bg-black/40"
+            style="padding-top: 22vh"
+            @keydown.escape.window="$wire.closeAddRowModal()"
+        >
+            <div
+                class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4"
+                x-data="{
+                    projectOpen: false,
+                    taskOpen: false,
+                    asanaTaskOpen: false,
+                    asanaTaskSearch: '',
+                    projectSearch: '',
+                    selectedProjectId: $wire.newRowProjectId,
+                    selectedTaskId: $wire.newRowTaskId,
+                    selectedAsanaTaskGid: $wire.newRowAsanaTaskGid ?? '',
+                    projects: {{ Js::from($projectsForPicker) }},
+                    asanaTasksByProject: {{ Js::from($asanaTasksByProject) }},
+                    asanaAvailable: {{ $asanaAvailable ? 'true' : 'false' }},
+                    init() {
+                        this.$watch('$wire.newRowProjectId', v => this.selectedProjectId = v);
+                        this.$watch('$wire.newRowTaskId', v => this.selectedTaskId = v);
+                        this.$watch('$wire.newRowAsanaTaskGid', v => this.selectedAsanaTaskGid = v ?? '');
+
+                        this.$watch('$wire.showAddRowModal', (open) => {
+                            if (open) {
+                                this.projectOpen = false;
+                                this.taskOpen = false;
+                                this.asanaTaskOpen = false;
+                                this.projectSearch = '';
+                                this.asanaTaskSearch = '';
+                            }
+                        });
+                    },
+                    get selectedProject() {
+                        return this.projects.find(p => p.id === this.selectedProjectId) ?? null;
+                    },
+                    get selectedTask() {
+                        return this.selectedProject?.tasks.find(t => t.id === this.selectedTaskId) ?? null;
+                    },
+                    get asanaProjectGid() {
+                        return this.selectedProject?.asana_project_gid ?? null;
+                    },
+                    get asanaRequired() {
+                        return !!this.asanaProjectGid;
+                    },
+                    get asanaTasks() {
+                        if (!this.asanaProjectGid) return [];
+                        return this.asanaTasksByProject[this.asanaProjectGid] ?? [];
+                    },
+                    get filteredAsanaTasks() {
+                        const q = this.asanaTaskSearch.toLowerCase();
+                        if (!q) return this.asanaTasks;
+                        return this.asanaTasks.filter(t => t.name.toLowerCase().includes(q));
+                    },
+                    get selectedAsanaTask() {
+                        return this.asanaTasks.find(t => t.gid === this.selectedAsanaTaskGid) ?? null;
+                    },
+                    get groupedProjects() {
+                        const q = this.projectSearch.toLowerCase();
+                        const filtered = q
+                            ? this.projects.filter(p => p.name.toLowerCase().includes(q) || (p.client_name ?? '').toLowerCase().includes(q))
+                            : this.projects;
+                        const groups = {};
+                        filtered.forEach(p => { (groups[p.client_name || '—'] ??= []).push(p); });
+                        return Object.entries(groups).sort(([a],[b]) => a.localeCompare(b));
+                    },
+                    pickProject(id) {
+                        this.selectedProjectId = id;
+                        this.selectedTaskId = null;
+                        this.selectedAsanaTaskGid = '';
+                        $wire.set('newRowProjectId', id);
+                        $wire.set('newRowTaskId', null);
+                        $wire.set('newRowAsanaTaskGid', '');
+                        this.projectSearch = '';
+                        this.projectOpen = false;
+                    },
+                    pickTask(id) {
+                        this.selectedTaskId = id;
+                        $wire.set('newRowTaskId', id);
+                        this.taskOpen = false;
+                    },
+                    pickAsanaTask(gid) {
+                        this.selectedAsanaTaskGid = gid;
+                        $wire.set('newRowAsanaTaskGid', gid);
+                        this.asanaTaskOpen = false;
+                    },
+                }"
+                @click.stop
+            >
+                {{-- Modal header --}}
+                <div class="px-6 py-4 border-b border-gray-100 text-center relative">
+                    <h3 class="font-semibold text-gray-900 text-base">
+                        Add row to this timesheet
+                    </h3>
                 </div>
 
-                <div class="mb-4">
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Project</label>
-                    <select wire:model.live="newRowProjectId" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
-                        <option value="">— Select a project —</option>
-                        @foreach($projectsForPicker as $project)
-                            <option value="{{ $project['id'] }}">
-                                {{ $project['client_name'] ? $project['client_name'].' — ' : '' }}{{ $project['name'] }}
-                            </option>
-                        @endforeach
-                    </select>
+                <div class="px-6 py-5 space-y-3">
+
+                    {{-- Project / Task label --}}
+                    <div class="text-sm font-semibold text-gray-700">Project / Task</div>
+
+                    {{-- Project dropdown --}}
+                    <div class="relative z-30">
+                        <button
+                            type="button"
+                            @click="projectOpen = !projectOpen; taskOpen = false"
+                            class="w-full flex items-center justify-between border border-gray-300 rounded-lg px-4 py-3 text-left bg-white hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500"
+                        >
+                            <template x-if="selectedProject">
+                                <div class="min-w-0">
+                                    <div class="text-xs text-gray-500 leading-none mb-0.5" x-text="selectedProject.client_name"></div>
+                                    <div class="font-semibold text-gray-900 text-sm leading-none" x-text="selectedProject.name"></div>
+                                </div>
+                            </template>
+                            <template x-if="!selectedProject">
+                                <span class="text-gray-400 text-sm">Select a project…</span>
+                            </template>
+                            <svg class="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+
+                        <div
+                            x-show="projectOpen"
+                            x-transition:enter="transition ease-out duration-100"
+                            x-transition:enter-start="opacity-0 scale-95"
+                            x-transition:enter-end="opacity-100 scale-100"
+                            @click.outside="projectOpen = false"
+                            class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
+                            style="display: none"
+                        >
+                            <div class="p-2 border-b border-gray-100">
+                                <input
+                                    type="text"
+                                    x-model="projectSearch"
+                                    placeholder="Search projects…"
+                                    class="w-full text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    x-init="$el.focus()"
+                                />
+                            </div>
+                            <div class="max-h-60 overflow-y-auto py-1">
+                                <template x-if="groupedProjects.length === 0">
+                                    <p class="text-sm text-gray-400 px-3 py-4 text-center">No projects found.</p>
+                                </template>
+                                <template x-for="[clientName, projects] in groupedProjects" :key="clientName">
+                                    <div>
+                                        <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 py-1.5 mt-1" x-text="clientName"></div>
+                                        <template x-for="project in projects" :key="project.id">
+                                            <button
+                                                type="button"
+                                                @click="pickProject(project.id)"
+                                                class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-green-50 hover:text-green-700 transition"
+                                                x-text="project.name"
+                                            ></button>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{-- Asana task (only when project is linked) --}}
+                    <template x-if="asanaRequired">
+                        <div class="relative z-20">
+                            <template x-if="!asanaAvailable">
+                                <div class="border border-yellow-200 bg-yellow-50 rounded-lg px-3 py-2 text-xs text-yellow-800">
+                                    This project is linked to Asana, but no admin has connected the integration yet. Time can't be logged on it until they do.
+                                </div>
+                            </template>
+
+                            <template x-if="asanaAvailable">
+                                <div>
+                                    <button
+                                        type="button"
+                                        @click="asanaTaskOpen = !asanaTaskOpen"
+                                        class="w-full flex items-center justify-between border border-gray-300 rounded-lg px-4 py-2.5 text-left bg-white hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    >
+                                        <template x-if="selectedAsanaTask">
+                                            <span class="text-sm font-medium text-gray-900 truncate" x-text="selectedAsanaTask.name"></span>
+                                        </template>
+                                        <template x-if="!selectedAsanaTask">
+                                            <span class="text-gray-400 text-sm">Select an Asana task…</span>
+                                        </template>
+                                        <svg class="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                        </svg>
+                                    </button>
+                                    <div
+                                        x-show="asanaTaskOpen"
+                                        @click.outside="asanaTaskOpen = false"
+                                        class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
+                                        style="display: none"
+                                    >
+                                        <div class="p-2 border-b border-gray-100">
+                                            <input
+                                                type="text"
+                                                x-model="asanaTaskSearch"
+                                                placeholder="Search Asana tasks…"
+                                                class="w-full text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                x-init="$el.focus()"
+                                            />
+                                        </div>
+                                        <div class="max-h-60 overflow-y-auto py-1">
+                                            <template x-if="filteredAsanaTasks.length === 0">
+                                                <p class="text-sm text-gray-400 px-3 py-4 text-center">
+                                                    <template x-if="asanaTasks.length === 0">
+                                                        <span>No Asana tasks cached for this project. An admin can refresh tasks on the project edit page.</span>
+                                                    </template>
+                                                    <template x-if="asanaTasks.length > 0">
+                                                        <span>No tasks match.</span>
+                                                    </template>
+                                                </p>
+                                            </template>
+                                            <template x-for="task in filteredAsanaTasks" :key="task.gid">
+                                                <button
+                                                    type="button"
+                                                    @click="pickAsanaTask(task.gid)"
+                                                    class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-green-50 hover:text-green-700 transition truncate"
+                                                    x-text="task.name"
+                                                ></button>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            @error('newRowAsanaTaskGid')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                        </div>
+                    </template>
+
+                    {{-- Task dropdown --}}
+                    <div class="relative z-10">
+                        <button
+                            type="button"
+                            @click="if (selectedProjectId) { taskOpen = !taskOpen; projectOpen = false; }"
+                            :class="selectedProjectId ? 'border-gray-300 bg-white hover:border-gray-400' : 'border-gray-200 bg-gray-50 cursor-not-allowed'"
+                            class="w-full flex items-center justify-between border rounded-lg px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-green-500"
+                        >
+                            <template x-if="selectedTask">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="'background:' + selectedTask.colour"></span>
+                                    <span class="font-medium text-gray-900 text-sm" x-text="selectedTask.name"></span>
+                                </div>
+                            </template>
+                            <template x-if="!selectedTask">
+                                <span class="text-sm" :class="selectedProjectId ? 'text-gray-400' : 'text-gray-300'">Select a task…</span>
+                            </template>
+                            <svg class="w-4 h-4 flex-shrink-0 ml-2" :class="selectedProjectId ? 'text-gray-400' : 'text-gray-300'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </button>
+
+                        <div
+                            x-show="taskOpen"
+                            x-transition:enter="transition ease-out duration-100"
+                            x-transition:enter-start="opacity-0 scale-95"
+                            x-transition:enter-end="opacity-100 scale-100"
+                            @click.outside="taskOpen = false"
+                            class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
+                            style="display: none"
+                        >
+                            <div class="max-h-60 overflow-y-auto py-1">
+                                <template x-if="selectedProject">
+                                    <div>
+                                        <template x-if="selectedProject.tasks.filter(t => t.is_billable).length > 0">
+                                            <div>
+                                                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 py-1.5">Billable</div>
+                                                <template x-for="task in [...selectedProject.tasks].filter(t => t.is_billable).sort((a,b) => a.name.localeCompare(b.name))" :key="task.id">
+                                                    <button type="button" @click="pickTask(task.id)"
+                                                        class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-green-50 hover:text-green-700 transition flex items-center gap-2">
+                                                        <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="'background:' + task.colour"></span>
+                                                        <span x-text="task.name"></span>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template x-if="selectedProject.tasks.filter(t => !t.is_billable).length > 0">
+                                            <div>
+                                                <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 py-1.5">Non-billable</div>
+                                                <template x-for="task in [...selectedProject.tasks].filter(t => !t.is_billable).sort((a,b) => a.name.localeCompare(b.name))" :key="task.id">
+                                                    <button type="button" @click="pickTask(task.id)"
+                                                        class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-50 hover:text-gray-700 transition flex items-center gap-2">
+                                                        <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="'background:' + task.colour"></span>
+                                                        <span x-text="task.name"></span>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template x-if="selectedProject.tasks.length === 0">
+                                            <p class="text-sm text-gray-400 px-3 py-4 text-center">No tasks assigned.</p>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
-                <div class="mb-6">
-                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Task</label>
-                    <select wire:model.live="newRowTaskId" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2"
-                            @if(! $newRowProjectId) disabled @endif>
-                        <option value="">— Select a task —</option>
-                        @if($newRowProjectId)
-                            @php $selectedProject = collect($projectsForPicker)->firstWhere('id', (int) $newRowProjectId); @endphp
-                            @if($selectedProject)
-                                @foreach($selectedProject['tasks'] as $task)
-                                    <option value="{{ $task['id'] }}">{{ $task['name'] }}</option>
-                                @endforeach
-                            @endif
-                        @endif
-                    </select>
-                </div>
-
-                <div class="flex justify-end gap-2">
-                    <button wire:click="closeAddRowModal"
-                            class="px-4 py-2 bg-white border border-gray-300 text-sm rounded-md hover:bg-gray-50">Cancel</button>
-                    <button wire:click="addRow"
-                            @if(! $newRowProjectId || ! $newRowTaskId) disabled @endif
-                            class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md disabled:bg-gray-300 disabled:cursor-not-allowed">
-                        Save row
-                    </button>
+                {{-- Modal footer --}}
+                <div class="flex items-center px-6 py-4 border-t border-gray-100">
+                    <button
+                        wire:click="addRow"
+                        class="px-5 py-2 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white rounded-full transition"
+                    >Save row</button>
+                    <button
+                        wire:click="closeAddRowModal"
+                        class="ml-3 px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-full transition"
+                    >Cancel</button>
                 </div>
             </div>
         </div>
-    @endif
+    </div>
 </div>

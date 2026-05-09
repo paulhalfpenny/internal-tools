@@ -33,7 +33,7 @@ test('week view groups existing entries into rows by (project, task)', function 
     app(TimeEntryService::class)->create($user, ['project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => $monday, 'hours' => 1.0, 'notes' => null]);
     app(TimeEntryService::class)->create($user, ['project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => $wednesday, 'hours' => 2.0, 'notes' => null]);
 
-    $rowKey = $project->id.':'.$task->id;
+    $rowKey = $project->id.':'.$task->id.':';
     Livewire::test(WeekView::class)
         ->assertSet("cellValues.{$rowKey}.0", '1:00')
         ->assertSet("cellValues.{$rowKey}.2", '2:00')
@@ -44,7 +44,7 @@ test('save creates new entries from filled cells', function () {
     [$user, $project, $task] = weekViewSetup();
     $this->actingAs($user);
 
-    $rowKey = $project->id.':'.$task->id;
+    $rowKey = $project->id.':'.$task->id.':';
 
     Livewire::test(WeekView::class)
         ->set('extraRows', [$rowKey])
@@ -66,7 +66,7 @@ test('save deletes entries when their cell is cleared', function () {
 
     expect(TimeEntry::count())->toBe(1);
 
-    $rowKey = $project->id.':'.$task->id;
+    $rowKey = $project->id.':'.$task->id.':';
     Livewire::test(WeekView::class)
         ->set("cellValues.{$rowKey}", ['', '', '', '', '', '', ''])
         ->call('save');
@@ -85,7 +85,7 @@ test('addRow flow appends an empty row to the timesheet', function () {
         ->set('newRowTaskId', $task->id)
         ->call('addRow')
         ->assertSet('showAddRowModal', false)
-        ->assertSet('extraRows.0', $project->id.':'.$task->id);
+        ->assertSet('extraRows.0', $project->id.':'.$task->id.':');
 });
 
 test('removeRow deletes the row plus any of its entries this week', function () {
@@ -95,7 +95,7 @@ test('removeRow deletes the row plus any of its entries this week', function () 
     $monday = now()->startOfWeek()->toDateString();
     app(TimeEntryService::class)->create($user, ['project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => $monday, 'hours' => 1.0, 'notes' => null]);
 
-    $rowKey = $project->id.':'.$task->id;
+    $rowKey = $project->id.':'.$task->id.':';
     Livewire::test(WeekView::class)
         ->call('removeRow', $rowKey);
 
@@ -110,7 +110,7 @@ test('manager viewing direct report week is read-only and cannot save', function
     $monday = now()->startOfWeek()->toDateString();
     app(TimeEntryService::class)->create($report, ['project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => $monday, 'hours' => 5.0, 'notes' => null]);
 
-    $rowKey = $project->id.':'.$task->id;
+    $rowKey = $project->id.':'.$task->id.':';
 
     Livewire::actingAs($manager)
         ->test(WeekView::class, ['user' => $report])
