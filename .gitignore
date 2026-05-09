@@ -32,3 +32,4 @@ yarn-error.log
 /freshdesk-app/.report.json
 /freshdesk-app/dist/
 /freshdesk-app/coverage/
+/.claude
