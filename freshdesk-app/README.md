@@ -74,11 +74,13 @@ internal-tools dev URL (e.g. `http://127.0.0.1:8000`) on the install screen.
 
 ```bash
 fdk validate
-fdk pack
+fdk pack --skip-coverage
 ```
 
 `fdk pack` produces `dist/<account>.zip`. That zip is what the Freshdesk
-admin uploads.
+admin uploads. The `--skip-coverage` flag bypasses the 80% test-coverage
+gate that fdk enforces for Marketplace submissions; we're a private
+custom app, so it doesn't apply.
 
 ## Installing in Freshdesk (custom app, not Marketplace)
 
