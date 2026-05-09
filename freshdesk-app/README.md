@@ -35,11 +35,33 @@ the integration is shared between agents.
 
 ## Local development
 
-```bash
-# 1. Install the Freshworks CLI (one-off, on your machine)
-npm install -g @freshworks/fdk
+fdk requires Node **18.x.x** specifically. If your global Node is newer,
+install Node 18 alongside via Homebrew and put it ahead on PATH for the
+shell session:
 
-# 2. From this directory
+```bash
+brew install node@18
+export PATH="/opt/homebrew/opt/node@18/bin:$PATH"
+```
+
+Or persist as a shell alias:
+
+```bash
+echo 'alias fdk='\''PATH="/opt/homebrew/opt/node@18/bin:$PATH" fdk'\''' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Then install the CLI and disable the global-apps feature flag (it requires
+platform 3.0+; this app runs on 2.3):
+
+```bash
+npm install -g https://cdn.freshdev.io/fdk/latest.tgz
+fdk config set global_apps.enabled false
+```
+
+Run the app locally:
+
+```bash
 fdk run
 ```
 
