@@ -59,6 +59,31 @@
             @endunless
         </div>
         <div class="flex items-center gap-2">
+            {{-- Date picker — calendar icon opens the browser's native date input --}}
+            <div class="relative" x-data>
+                <button
+                    type="button"
+                    @click="$refs.datePicker.showPicker?.() ?? $refs.datePicker.click()"
+                    title="Pick a date"
+                    style="width:2.25rem; height:2.25rem;"
+                    class="inline-flex items-center justify-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-600 rounded-lg transition"
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                </button>
+                <input
+                    x-ref="datePicker"
+                    type="date"
+                    value="{{ $selectedDate }}"
+                    @change="$wire.selectDate($event.target.value)"
+                    class="absolute inset-0 opacity-0"
+                    style="pointer-events:none;"
+                    aria-label="Pick a date"
+                />
+            </div>
+
             <button
                 wire:click="selectDate('{{ \Carbon\Carbon::today()->toDateString() }}')"
                 class="inline-flex items-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition {{ $selectedDate === \Carbon\Carbon::today()->toDateString() ? 'invisible' : '' }}"
