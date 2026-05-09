@@ -44,6 +44,28 @@ test('clients search filters by name', function () {
         ->assertDontSee('Beta');
 });
 
+test('user edit can flip employment between Employee and Contractor via select', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $this->actingAs($admin);
+
+    $target = User::factory()->create(['is_contractor' => false]);
+
+    Livewire::test(AdminUsers::class)
+        ->call('edit', $target->id)
+        ->set('editIsContractor', '1')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($target->fresh()->is_contractor)->toBeTrue();
+
+    Livewire::test(AdminUsers::class)
+        ->call('edit', $target->id)
+        ->set('editIsContractor', '0')
+        ->call('save');
+
+    expect($target->fresh()->is_contractor)->toBeFalse();
+});
+
 test('users search filters by name and email', function () {
     $admin = User::factory()->create(['role' => Role::Admin, 'name' => 'Admin Person', 'email' => 'admin@filter.agency']);
     $this->actingAs($admin);
