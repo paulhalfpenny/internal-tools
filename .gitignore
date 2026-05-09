@@ -25,3 +25,10 @@ yarn-error.log
 /sourcefiles/march26/
 .DS_Store
 .superpowers/
+
+# fdk CLI runtime artefacts (Freshdesk app)
+/.fdk/
+/log/
+/freshdesk-app/.report.json
+/freshdesk-app/dist/
+/freshdesk-app/coverage/
