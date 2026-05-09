@@ -2,7 +2,6 @@
 
 use App\Enums\Role;
 use App\Livewire\Reports\ClientsReport;
-use App\Livewire\Reports\ProjectsReport;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
@@ -58,30 +57,6 @@ test('exportForClient on ClientsReport scopes the CSV to that client only', func
 
     expect($body)->toContain('A entry')->not->toContain('B entry');
     expect($response->headers->get('Content-Disposition'))->toContain('acme-co');
-});
-
-test('exportForProject on ProjectsReport scopes the CSV to that project only', function () {
-    $admin = User::factory()->create(['role' => Role::Admin]);
-    $user = User::factory()->create();
-    $task = Task::factory()->create();
-
-    $project1 = Project::factory()->create(['code' => 'PRJ-1']);
-    $project2 = Project::factory()->create(['code' => 'PRJ-2']);
-
-    scopedExportEntry(['user_id' => $user->id, 'project_id' => $project1->id, 'task_id' => $task->id, 'notes' => 'P1 entry']);
-    scopedExportEntry(['user_id' => $user->id, 'project_id' => $project2->id, 'task_id' => $task->id, 'notes' => 'P2 entry']);
-
-    $this->actingAs($admin);
-
-    $component = Livewire::test(ProjectsReport::class)
-        ->set('from', '2026-04-01')
-        ->set('to', '2026-04-30');
-
-    $response = $component->instance()->exportForProject($project1->id);
-    $body = captureStreamBody($response);
-
-    expect($body)->toContain('P1 entry')->not->toContain('P2 entry');
-    expect($response->headers->get('Content-Disposition'))->toContain('prj-1');
 });
 
 test('top-level export still returns all entries unscoped', function () {

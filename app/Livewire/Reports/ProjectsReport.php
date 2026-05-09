@@ -55,12 +55,6 @@ class ProjectsReport extends Component
         return $this->exportCsv();
     }
 
-    #[Renderless]
-    public function exportForProject(int $projectId): StreamedResponse
-    {
-        return $this->exportCsv(projectId: $projectId);
-    }
-
     public function render(ProjectBudgetCalculator $calculator): View
     {
         return view('livewire.reports.projects-report', [

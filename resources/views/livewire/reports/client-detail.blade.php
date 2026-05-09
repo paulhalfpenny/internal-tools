@@ -17,7 +17,6 @@
                     <th class="text-right px-4 py-3 font-medium">Billable hrs</th>
                     <th class="text-right px-4 py-3 font-medium">Amount</th>
                     <th class="text-right px-4 py-3 font-medium">Budget % used</th>
-                    <th class="text-right px-4 py-3 font-medium"></th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-50">
@@ -41,12 +40,6 @@
                     <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ number_format($row->billable_hours, 1) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->billable_amount, 2) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums {{ $pctClass }}">{{ $pct === null ? '—' : number_format($pct, 1).'%' }}</td>
-                    <td class="px-4 py-3 text-right">
-                        <button wire:click="exportForProject({{ $row->id }})"
-                                class="text-xs text-gray-500 hover:text-blue-600 hover:underline">
-                            Export CSV
-                        </button>
-                    </td>
                 </tr>
                 @endforeach
             </tbody>
@@ -56,7 +49,6 @@
                     <td class="px-4 py-3 text-right tabular-nums">{{ number_format($totals->totalHours, 1) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">{{ number_format($totals->billableHours, 1) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($totals->billableAmount, 2) }}</td>
-                    <td class="px-4 py-3"></td>
                     <td class="px-4 py-3"></td>
                 </tr>
             </tfoot>

@@ -11,7 +11,6 @@
                     <th class="px-4 py-2" colspan="2"></th>
                     <th class="px-4 py-2 text-center font-semibold text-gray-600 border-l border-gray-100" colspan="2">This period</th>
                     <th class="px-4 py-2 text-center font-semibold text-gray-600 border-l border-gray-100" colspan="5">Lifetime / cumulative</th>
-                    <th class="px-4 py-2"></th>
                 </tr>
                 <tr class="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
                     <th class="text-left px-4 py-3 font-medium">Client</th>
@@ -23,7 +22,6 @@
                     <th class="text-right px-4 py-3 font-medium">Budget (hrs)</th>
                     <th class="text-right px-4 py-3 font-medium">Spent (hrs)</th>
                     <th class="text-right px-4 py-3 font-medium">% used</th>
-                    <th class="text-right px-4 py-3 font-medium"></th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-50">
@@ -56,12 +54,6 @@
                     <td class="px-4 py-3 text-right tabular-nums">{{ $b && $b->budgetHours !== null ? number_format($b->budgetHours, 1) : '—' }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">{{ $b ? number_format($b->actualHours, 1) : '—' }}</td>
                     <td class="px-4 py-3 text-right tabular-nums {{ $pctClass }}">{{ $pct === null ? '—' : number_format($pct, 1).'%' }}</td>
-                    <td class="px-4 py-3 text-right">
-                        <button wire:click="exportForProject({{ $row->id }})"
-                                class="text-xs text-gray-500 hover:text-blue-600 hover:underline">
-                            Export CSV
-                        </button>
-                    </td>
                 </tr>
                 @endforeach
             </tbody>
@@ -71,7 +63,6 @@
                     <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ number_format($totals->totalHours, 1) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($totals->billableAmount, 0) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100" colspan="5"></td>
-                    <td class="px-4 py-3"></td>
                 </tr>
             </tfoot>
         </table>
