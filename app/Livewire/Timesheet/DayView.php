@@ -361,7 +361,7 @@ class DayView extends Component
             return;
         }
 
-        $events = $service->getTodayEvents($user);
+        $events = $service->getEventsForDate($user, Carbon::parse($this->selectedDate));
 
         if ($events === []) {
             $this->calendarError = 'empty';

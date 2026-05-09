@@ -223,8 +223,8 @@
         >
             <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
                 <div>
-                    <div class="text-xs text-gray-400 uppercase tracking-wide">Today's events from</div>
-                    <div class="font-semibold text-gray-900 text-sm mt-0.5">Default Calendar</div>
+                    <div class="text-xs text-gray-400 uppercase tracking-wide">Calendar events for</div>
+                    <div class="font-semibold text-gray-900 text-sm mt-0.5">{{ \Carbon\Carbon::parse($selectedDate)->format('l, j M') }}</div>
                 </div>
                 <button wire:click="closeCalendarPanel" class="text-gray-400 hover:text-gray-600 p-1 rounded transition">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -243,7 +243,7 @@
                     </div>
                 @elseif ($calendarError === 'empty' || empty($calendarEvents))
                     <div class="text-center py-8">
-                        <p class="text-sm text-gray-400">No events today.</p>
+                        <p class="text-sm text-gray-400">No events on this day.</p>
                     </div>
                 @else
                     @foreach ($calendarEvents as $event)
