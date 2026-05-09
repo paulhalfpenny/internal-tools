@@ -1,7 +1,17 @@
 {
   "platform-version": "3.0",
-  "product": {
-    "freshdesk": {
+  "modules": {
+    "common": {
+      "requests": {
+        "getMe": {},
+        "getProjects": {},
+        "createEntry": {},
+        "startTimer": {},
+        "stopTimer": {},
+        "getRunningTimer": {}
+      }
+    },
+    "support_ticket": {
       "location": {
         "ticket_sidebar": {
           "url": "index.html",
@@ -11,7 +21,7 @@
     }
   },
   "engines": {
-    "node": "18.0.0",
+    "node": "18.18.0",
     "fdk": "10.0.0"
   }
 }
