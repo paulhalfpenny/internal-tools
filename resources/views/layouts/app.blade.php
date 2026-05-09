@@ -66,7 +66,7 @@
                         <a href="{{ route('admin.projects') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Projects</a>
                         <a href="{{ route('admin.tasks') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Tasks</a>
                         <hr class="my-1 border-gray-100">
-                        <a href="{{ route('admin.rates') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Rates</a>
+                        <a href="{{ route('admin.rates.library') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Rates</a>
                         <a href="{{ route('admin.timesheets') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Timesheets</a>
                         <hr class="my-1 border-gray-100">
                         <a href="{{ route('admin.integrations.asana') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Asana integration</a>

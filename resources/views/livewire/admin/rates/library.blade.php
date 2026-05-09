@@ -1,8 +1,7 @@
 <div x-data="{ showForm: false }">
     <div class="flex items-start justify-between mb-6 gap-4">
         <div>
-            <a href="{{ route('admin.rates') }}" class="text-sm text-gray-500 hover:text-gray-700">← Resolved rates</a>
-            <h1 class="text-xl font-semibold text-gray-900 mt-1">Rate library</h1>
+            <h1 class="text-xl font-semibold text-gray-900">Rate library</h1>
             <p class="text-sm text-gray-500 mt-1">
                 Reusable named rates. Editing a rate here updates the resolved rate on every project, user or override that points at it
                 — historical time entries keep their snapshot.

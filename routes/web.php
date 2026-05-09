@@ -7,7 +7,6 @@ use App\Livewire\Admin\Integrations\AsanaSettings as AdminAsanaSettings;
 use App\Livewire\Admin\Notifications\Index as AdminNotifications;
 use App\Livewire\Admin\Projects\Edit as AdminProjectEdit;
 use App\Livewire\Admin\Projects\Index as AdminProjects;
-use App\Livewire\Admin\Rates\Index as AdminRates;
 use App\Livewire\Admin\Rates\Library as AdminRatesLibrary;
 use App\Livewire\Admin\TimeEntries\BulkMove as AdminTimeEntriesBulkMove;
 use App\Livewire\Admin\Tasks\Index as AdminTasks;
@@ -92,7 +91,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/tasks', AdminTasks::class)->name('tasks');
         Route::get('/projects', AdminProjects::class)->name('projects');
         Route::get('/projects/{project}/edit', AdminProjectEdit::class)->name('projects.edit');
-        Route::get('/rates', AdminRates::class)->name('rates');
+        Route::redirect('/rates', '/admin/rates/library')->name('rates');
         Route::get('/rates/library', AdminRatesLibrary::class)->name('rates.library');
         Route::get('/timesheets', AdminTimesheets::class)->name('timesheets');
         Route::get('/time-entries/bulk-move', AdminTimeEntriesBulkMove::class)->name('time-entries.bulk-move');
