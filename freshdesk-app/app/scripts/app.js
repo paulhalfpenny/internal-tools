@@ -8,7 +8,8 @@
  */
 
 let client;
-let state = {
+const noop = () => null;
+const state = {
   token: null,
   user: null,
   ticket: null,
@@ -98,7 +99,7 @@ async function onConnect() {
 
 async function onDisconnect() {
   state.token = null;
-  await client.db.delete('user_token').catch(() => {});
+  await client.db.delete('user_token').catch(noop);
   resetForm();
   showState('connect');
 }
@@ -223,42 +224,45 @@ function currentProject() {
   return state.projects.find((p) => p.id === state.selectedProjectId) || null;
 }
 
-async function onSave() {
-  if (!state.selectedProjectId) return setStatus('Pick a project first.', 'error');
-  if (!state.selectedTaskId) return setStatus('Pick a task first.', 'error');
+function validateForSubmission() {
+  if (!state.selectedProjectId) return 'Pick a project first.';
+  if (!state.selectedTaskId) return 'Pick a task first.';
   const project = currentProject();
   if (project && project.asana_project_gid && !state.selectedAsanaTaskGid) {
-    return setStatus('This project is Asana-linked — pick an Asana task.', 'error');
+    return 'This project is Asana-linked — pick an Asana task.';
   }
+  return null;
+}
 
-  const hours = $('hours-input').value.trim();
-  const date = $('date-input').value || todayIso();
-  const notes = $('note-input').value.trim() || null;
-  const isTimer = hours === '';
-
+function buildSubmissionBody(isTimer) {
   const body = {
     project_id: state.selectedProjectId,
     task_id: state.selectedTaskId,
-    spent_on: date,
-    notes,
+    spent_on: $('date-input').value || todayIso(),
+    notes: $('note-input').value.trim() || null,
     asana_task_gid: state.selectedAsanaTaskGid || null,
   };
-  if (!isTimer) body.hours = hours;
+  if (!isTimer) body.hours = $('hours-input').value.trim();
+  return body;
+}
+
+async function onSave() {
+  const validationError = validateForSubmission();
+  if (validationError) {
+    setStatus(validationError, 'error');
+    return;
+  }
+
+  const isTimer = $('hours-input').value.trim() === '';
+  const body = buildSubmissionBody(isTimer);
 
   $('save-btn').disabled = true;
   setStatus(null);
   try {
-    const resp = isTimer
-      ? await invoke('startTimer', body)
-      : await invoke('createEntry', body);
-
+    await invoke(isTimer ? 'startTimer' : 'createEntry', body);
     setStatus(isTimer ? 'Timer started.' : 'Entry saved.', 'success');
-
     await refreshRunningTimer();
-
     if (!isTimer) {
-      // Reset the hours input for next round; keep project/task in case they
-      // want to log another quick entry on the same ticket.
       $('hours-input').value = '';
       updateSaveLabel();
     }
