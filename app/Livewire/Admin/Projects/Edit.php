@@ -33,10 +33,6 @@ class Edit extends Component
 
     public bool $isBillable = true;
 
-    public string $defaultRate;
-
-    public ?int $defaultRateId = null;
-
     public string $startsOn;
 
     public string $endsOn;
@@ -67,8 +63,6 @@ class Edit extends Component
         $this->code = $project->code;
         $this->name = $project->name;
         $this->isBillable = (bool) $project->is_billable;
-        $this->defaultRate = $project->default_hourly_rate !== null ? (string) $project->default_hourly_rate : '';
-        $this->defaultRateId = $project->rate_id;
         $this->startsOn = $project->starts_on?->toDateString() ?? '';
         $this->endsOn = $project->ends_on?->toDateString() ?? '';
         $this->budgetType = $project->budget_type?->value ?? '';
@@ -118,8 +112,6 @@ class Edit extends Component
             'code' => 'nullable|string|max:50|unique:projects,code,'.$this->project->id,
             'name' => 'required|string|max:255',
             'isBillable' => 'boolean',
-            'defaultRate' => 'nullable|numeric|min:0',
-            'defaultRateId' => 'nullable|exists:rates,id',
             'startsOn' => 'nullable|date',
             'endsOn' => 'nullable|date',
             'budgetType' => 'nullable|in:fixed_fee,monthly_ci',
@@ -166,8 +158,6 @@ class Edit extends Component
             'code' => $this->code ?: null,
             'name' => $this->name,
             'is_billable' => $this->isBillable,
-            'default_hourly_rate' => $this->defaultRate !== '' ? (float) $this->defaultRate : null,
-            'rate_id' => $this->defaultRateId,
             'starts_on' => $this->startsOn ?: null,
             'ends_on' => $this->endsOn ?: null,
             'budget_type' => $this->budgetType !== '' ? BudgetType::from($this->budgetType) : null,

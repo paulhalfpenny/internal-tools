@@ -45,18 +45,12 @@
         </div>
         <div class="mt-4 grid grid-cols-3 gap-4 items-end">
             <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">Default rate (£/hr)</label>
-                <input wire:model="defaultRate" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
-                @error('defaultRate')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-            </div>
-            <div>
                 <label class="block text-xs font-medium text-gray-600 mb-1">Billable</label>
                 <select wire:model="isBillable" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
                     <option value="1">Billable</option>
                     <option value="0">Non-billable</option>
                 </select>
             </div>
-            <div></div>
         </div>
 
         <div class="mt-4 pt-4 border-t border-gray-100">
@@ -110,7 +104,6 @@
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Project</th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Client</th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Billable</th>
-                    <th class="px-4 py-3 text-right font-medium text-gray-600">Rate</th>
                     <th class="px-4 py-3"></th>
                 </tr>
             </thead>
@@ -125,9 +118,6 @@
                                 {{ $project->is_billable ? 'Billable' : 'Non-billable' }}
                             </span>
                         </td>
-                        <td class="px-4 py-3 text-right text-gray-700">
-                            {{ $project->default_hourly_rate !== null ? '£'.number_format((float)$project->default_hourly_rate, 2) : '—' }}
-                        </td>
                         <td class="px-4 py-3 text-right space-x-3">
                             <a href="{{ route('admin.projects.edit', $project) }}" class="text-sm text-blue-600 hover:underline">Edit</a>
                             <button wire:click="duplicate({{ $project->id }})"
@@ -139,7 +129,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400 text-sm">No projects yet.</td></tr>
+                    <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">No projects yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

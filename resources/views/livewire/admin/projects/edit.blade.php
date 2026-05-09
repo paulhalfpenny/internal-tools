@@ -46,21 +46,7 @@
                         <input wire:model="name" type="text" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
                         @error('name')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                     </div>
-                    <div class="grid grid-cols-4 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Library rate</label>
-                            <select wire:model="defaultRateId" class="w-full border border-gray-300 rounded text-sm px-3 py-2" style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
-                                <option value="">— None —</option>
-                                @foreach($rates as $rate)
-                                    <option value="{{ $rate->id }}">{{ $rate->label() }}</option>
-                                @endforeach
-                            </select>
-                            <p class="text-xs text-gray-500 mt-1">If set, takes precedence over the custom rate.</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Custom rate (£/hr)</label>
-                            <input wire:model="defaultRate" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
-                        </div>
+                    <div class="grid grid-cols-3 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Billable</label>
                             <select wire:model="isBillable" class="w-full border border-gray-300 rounded text-sm px-3 py-2" style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
@@ -72,8 +58,6 @@
                             <label class="block text-sm font-medium text-gray-700 mb-1">Starts on</label>
                             <input wire:model="startsOn" type="date" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
                         </div>
-                    </div>
-                    <div class="grid grid-cols-4 gap-4 mt-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Ends on</label>
                             <input wire:model="endsOn" type="date" class="w-full border border-gray-300 rounded text-sm px-3 py-2">

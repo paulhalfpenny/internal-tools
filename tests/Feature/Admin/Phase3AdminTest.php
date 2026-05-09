@@ -88,7 +88,6 @@ test('duplicate project copies tasks, users, rate and budget but not time entrie
         'client_id' => $client->id,
         'code' => 'AAA-001',
         'name' => 'Original',
-        'default_hourly_rate' => 120.00,
     ]);
     $task1 = Task::factory()->create();
     $task2 = Task::factory()->create();
@@ -103,7 +102,6 @@ test('duplicate project copies tasks, users, rate and budget but not time entrie
 
     $copy = Project::where('code', 'AAA-001-COPY')->firstOrFail();
     expect($copy->name)->toBe('Original (copy)');
-    expect((float) $copy->default_hourly_rate)->toBe(120.00);
     expect($copy->tasks()->count())->toBe(2);
     expect($copy->users()->count())->toBe(1);
 

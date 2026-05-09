@@ -26,8 +26,6 @@ class Index extends Component
 
     public bool $isBillable = true;
 
-    public string $defaultRate = '';
-
     public string $budgetType = '';
 
     public string $budgetAmount = '';
@@ -43,7 +41,6 @@ class Index extends Component
             'code' => 'required|string|max:50|unique:projects,code',
             'name' => 'required|string|max:255',
             'isBillable' => 'boolean',
-            'defaultRate' => 'nullable|numeric|min:0',
             'budgetType' => 'nullable|in:fixed_fee,monthly_ci',
             'budgetAmount' => 'nullable|numeric|min:0|required_with:budgetType',
             'budgetHours' => 'nullable|numeric|min:0',
@@ -55,7 +52,6 @@ class Index extends Component
             'code' => $this->code,
             'name' => $this->name,
             'is_billable' => $this->isBillable,
-            'default_hourly_rate' => $this->defaultRate !== '' ? (float) $this->defaultRate : null,
             'budget_type' => $this->budgetType !== '' ? BudgetType::from($this->budgetType) : null,
             'budget_amount' => $this->budgetType !== '' && $this->budgetAmount !== '' ? (float) $this->budgetAmount : null,
             'budget_hours' => $this->budgetType !== '' && $this->budgetHours !== '' ? (float) $this->budgetHours : null,
@@ -93,7 +89,6 @@ class Index extends Component
             'code' => $newCode,
             'name' => $original->name.' (copy)',
             'is_billable' => $original->is_billable,
-            'default_hourly_rate' => $original->default_hourly_rate,
             'budget_type' => $original->budget_type,
             'budget_amount' => $original->budget_amount,
             'budget_hours' => $original->budget_hours,
