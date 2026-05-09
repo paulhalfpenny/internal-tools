@@ -91,6 +91,20 @@
                 Today
             </button>
 
+            {{-- Day / Week toggle --}}
+            @php
+                $weekUrl = $isImpersonating
+                    ? route('admin.timesheets.user.week', ['user' => $viewedUser, 'date' => $selectedDate])
+                    : ($isReadOnly
+                        ? route('team.timesheet.week', ['user' => $viewedUser, 'date' => $selectedDate])
+                        : route('timesheet.week', ['date' => $selectedDate]));
+            @endphp
+            <div class="inline-flex bg-gray-100 rounded-lg p-1">
+                <span class="px-4 py-1.5 text-sm font-medium bg-white text-gray-900 rounded-md shadow-sm">Day</span>
+                <a href="{{ $weekUrl }}"
+                   class="px-4 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 rounded-md">Week</a>
+            </div>
+
             @if($teamMembers->isNotEmpty())
                 <div class="relative" x-data="{ open: false }" @click.outside="open = false">
                     <button

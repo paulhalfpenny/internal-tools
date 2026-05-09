@@ -22,6 +22,7 @@ use App\Livewire\Reports\TeamOverviewReport;
 use App\Livewire\Reports\TeamReport;
 use App\Livewire\Reports\TimeReport;
 use App\Livewire\Timesheet\DayView;
+use App\Livewire\Timesheet\WeekView;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
@@ -52,8 +53,12 @@ Route::post('/auth/logout', function () {
 Route::middleware('auth')->group(function () {
     Route::get('/', fn () => redirect()->route('timesheet'));
     Route::get('/timesheet', DayView::class)->name('timesheet');
+    Route::get('/timesheet/week', WeekView::class)->name('timesheet.week');
     Route::get('/team/{user}', DayView::class)
         ->name('team.timesheet')
+        ->middleware('can:view-team-timesheet,user');
+    Route::get('/team/{user}/week', WeekView::class)
+        ->name('team.timesheet.week')
         ->middleware('can:view-team-timesheet,user');
     Route::get('/timesheet/song/{date}', function (string $date) {
         $path = base_path('sourcefiles/songs/depeche_mode_song_titles.csv');
@@ -97,6 +102,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/timesheets', AdminTimesheets::class)->name('timesheets');
         Route::get('/time-entries/bulk-move', AdminTimeEntriesBulkMove::class)->name('time-entries.bulk-move');
         Route::get('/timesheets/{user}', DayView::class)->name('timesheets.user');
+        Route::get('/timesheets/{user}/week', WeekView::class)->name('timesheets.user.week');
         Route::get('/integrations/asana', AdminAsanaSettings::class)->name('integrations.asana');
         Route::get('/notifications', AdminNotifications::class)->name('notifications');
     });
