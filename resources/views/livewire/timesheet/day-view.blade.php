@@ -629,24 +629,6 @@
                         wire:click="closeModal"
                         class="ml-3 px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-full transition"
                     >Cancel</button>
-                    @unless($isImpersonating)
-                    <div class="ml-auto">
-                        <button
-                            wire:click="openCalendarPanel"
-                            class="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 transition"
-                        >
-                            {{-- Google Calendar icon --}}
-                            <svg class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="3" y="4" width="18" height="18" rx="2" fill="white" stroke="#dadce0" stroke-width="1.2"/>
-                                <rect x="3" y="9" width="18" height="1.2" fill="#4285F4"/>
-                                <rect x="7.5" y="2" width="1.5" height="4" rx="0.75" fill="#4285F4"/>
-                                <rect x="15" y="2" width="1.5" height="4" rx="0.75" fill="#4285F4"/>
-                                <text x="12" y="18" text-anchor="middle" font-size="7" font-weight="bold" fill="#4285F4" font-family="sans-serif">{{ now()->format('j') }}</text>
-                            </svg>
-                            Pull in a calendar event
-                        </button>
-                    </div>
-                    @endunless
                 </div>
 
             </div>

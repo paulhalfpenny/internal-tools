@@ -64,6 +64,58 @@ test('day view lists entries even when spent_on is stored as a full datetime str
         ->assertSee('should appear in day view');
 });
 
+test('saving a new entry keeps the modal open with a fresh form (quick-add)', function () {
+    $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
+    $this->actingAs($user);
+
+    $project = Project::factory()->create(['default_hourly_rate' => 100]);
+    $task = Task::factory()->create();
+    $project->tasks()->attach($task->id, ['is_billable' => true, 'hourly_rate_override' => null]);
+    $project->users()->attach($user->id, ['hourly_rate_override' => null]);
+
+    Livewire::test(DayView::class)
+        ->call('openNewModal')
+        ->set('selectedProjectId', $project->id)
+        ->set('selectedTaskId', $task->id)
+        ->set('hoursInput', '1.0')
+        ->set('notes', 'first entry')
+        ->set('entryDate', now()->toDateString())
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertSet('showModal', true)               // modal stays open
+        ->assertSet('selectedProjectId', null)        // form cleared
+        ->assertSet('selectedTaskId', null)
+        ->assertSet('hoursInput', '')
+        ->assertSet('notes', '')
+        ->assertSet('editingEntryId', null);
+
+    expect(TimeEntry::count())->toBe(1);
+});
+
+test('saving an edited entry closes the modal (no quick-add)', function () {
+    $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
+    $this->actingAs($user);
+
+    $project = Project::factory()->create(['default_hourly_rate' => 100]);
+    $task = Task::factory()->create();
+    $project->tasks()->attach($task->id, ['is_billable' => true, 'hourly_rate_override' => null]);
+    $project->users()->attach($user->id, ['hourly_rate_override' => null]);
+
+    $entry = app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => now()->toDateString(),
+        'hours' => 1.0,
+        'notes' => 'original',
+    ]);
+
+    Livewire::test(DayView::class)
+        ->call('openEditModal', $entry->id)
+        ->set('notes', 'updated')
+        ->call('save')
+        ->assertSet('showModal', false);             // edit closes as before
+});
+
 test('typing 0:15 saves as 0.25 hours and re-opens as 0:15', function () {
     $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
     $this->actingAs($user);

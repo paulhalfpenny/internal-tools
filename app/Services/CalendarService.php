@@ -25,6 +25,20 @@ final class CalendarService
      */
     public function getEventsForDate(User $user, Carbon $date): array
     {
+        $byDate = $this->getEventsForDateRange($user, $date->copy(), $date->copy());
+
+        return $byDate[$date->toDateString()] ?? [];
+    }
+
+    /**
+     * Fetch events grouped by yyyy-mm-dd for a date range (inclusive on both
+     * ends). Hits Google's API once per accessible calendar across the whole
+     * range — much cheaper than calling getEventsForDate() per day.
+     *
+     * @return array<string, array<int, array{id: string, title: string, start_formatted: string, end_formatted: string, hours: float}>>
+     */
+    public function getEventsForDateRange(User $user, Carbon $from, Carbon $to): array
+    {
         $token = $this->getValidToken($user);
         if ($token === null) {
             return [];
@@ -35,11 +49,12 @@ final class CalendarService
             return [];
         }
 
-        $timeMin = $date->copy()->startOfDay()->toIso8601String();
-        $timeMax = $date->copy()->endOfDay()->toIso8601String();
+        $timeMin = $from->copy()->startOfDay()->toIso8601String();
+        $timeMax = $to->copy()->endOfDay()->toIso8601String();
 
-        // Collect events from every calendar; key by id to drop duplicates
-        // (the same event invitation appears on each invitee's primary calendar).
+        // Pull from every calendar once across the whole range; key by event
+        // id to drop duplicates (the same invitation appears on every
+        // invitee's primary calendar).
         $byId = [];
         foreach ($calendarIds as $calendarId) {
             $response = Http::withToken($token)
@@ -48,7 +63,7 @@ final class CalendarService
                     'timeMax' => $timeMax,
                     'singleEvents' => 'true',
                     'orderBy' => 'startTime',
-                    'maxResults' => 50,
+                    'maxResults' => 250,
                 ]);
 
             if (! $response->successful()) {
@@ -67,29 +82,33 @@ final class CalendarService
             }
         }
 
-        return collect(array_values($byId))
-            ->map(function (array $item): array {
-                $start = Carbon::parse($item['start']['dateTime']);
-                $end = Carbon::parse($item['end']['dateTime']);
-                $hours = round($start->diffInMinutes($end) / 60, 2);
+        // Group by date and shape into the lightweight array structure the UI uses.
+        $grouped = [];
+        foreach ($byId as $item) {
+            $start = Carbon::parse($item['start']['dateTime']);
+            $end = Carbon::parse($item['end']['dateTime']);
+            $dateKey = $start->toDateString();
+            $grouped[$dateKey][] = [
+                'id' => $item['id'],
+                'title' => $item['summary'] ?? 'Untitled event',
+                'start_formatted' => $start->format('H:i'),
+                'end_formatted' => $end->format('H:i'),
+                'hours' => round($start->diffInMinutes($end) / 60, 2),
+                'start_ts' => $start->timestamp,
+            ];
+        }
 
-                return [
-                    'id' => $item['id'],
-                    'title' => $item['summary'] ?? 'Untitled event',
-                    'start_formatted' => $start->format('H:i'),
-                    'end_formatted' => $end->format('H:i'),
-                    'hours' => $hours,
-                    'start_ts' => $start->timestamp,
-                ];
-            })
-            ->sortBy('start_ts')
-            ->map(function (array $event): array {
+        // Sort each day's events chronologically and strip the helper field.
+        foreach ($grouped as $dateKey => $events) {
+            usort($events, fn ($a, $b) => $a['start_ts'] <=> $b['start_ts']);
+            $grouped[$dateKey] = array_map(function (array $event): array {
                 unset($event['start_ts']);
 
                 return $event;
-            })
-            ->values()
-            ->toArray();
+            }, $events);
+        }
+
+        return $grouped;
     }
 
     /**

@@ -49,13 +49,10 @@ class DayView extends Component
 
     public string $hoursError = '';
 
-    // Calendar panel state
+    // Calendar panel state. Events themselves are prefetched per-week in
+    // render() and passed to the view; only the panel toggle and the
+    // 'no_token' error live as Livewire state.
     public bool $showCalendarPanel = false;
-
-    /** @var array<int, array{id: string, title: string, start_formatted: string, end_formatted: string, hours: float}> */
-    public array $calendarEvents = [];
-
-    public bool $calendarLoading = false;
 
     public ?string $calendarError = null;
 
@@ -125,6 +122,14 @@ class DayView extends Component
         $this->resetModal();
         $this->entryDate = $this->selectedDate;
         $this->showModal = true;
+
+        // Auto-open the calendar panel by default when starting a new entry.
+        // The events themselves are already prefetched & cached in render(),
+        // so this is just a UI toggle — no extra API hit.
+        if (! $this->isImpersonating && app(CalendarService::class)->hasToken($this->viewedUser())) {
+            $this->showCalendarPanel = true;
+            $this->calendarError = null;
+        }
     }
 
     public function openEditModal(int $entryId): void
@@ -149,8 +154,6 @@ class DayView extends Component
     {
         $this->showModal = false;
         $this->showCalendarPanel = false;
-        $this->calendarEvents = [];
-        $this->calendarError = null;
         $this->resetModal();
     }
 
@@ -238,7 +241,8 @@ class DayView extends Component
             'asana_task_gid' => $this->selectedAsanaTaskGid !== '' ? $this->selectedAsanaTaskGid : null,
         ];
 
-        if ($this->editingEntryId !== null) {
+        $isEdit = $this->editingEntryId !== null;
+        if ($isEdit) {
             $entry = $this->guardEntry($this->editingEntryId);
             if ($entry) {
                 $service->update($entry, $data);
@@ -252,7 +256,21 @@ class DayView extends Component
                 ->remember($user, $this->lastCalendarPullTitle, $projectId, $taskId);
         }
 
-        $this->closeModal();
+        if ($isEdit) {
+            // Editing: close as before.
+            $this->closeModal();
+
+            return;
+        }
+
+        // Quick-add: clear the form but keep the modal + calendar panel open
+        // so the admin can immediately log the next entry. The day's entry
+        // list re-renders to show what was just saved, and the calendar
+        // sidebar greys out the just-used event.
+        $entryDate = $this->entryDate;
+        $this->resetModal();
+        $this->entryDate = $entryDate;
+        $this->showModal = true;
     }
 
     private function validateAsanaTaskRequirement(): bool
@@ -349,34 +367,15 @@ class DayView extends Component
 
         $this->showCalendarPanel = true;
         $this->calendarError = null;
-        $this->calendarLoading = false;
 
-        /** @var User $user */
-        $user = auth()->user();
-        $service = app(CalendarService::class);
-
-        if (! $service->hasToken($user)) {
-            $this->calendarError = 'no_token';
-
-            return;
-        }
-
-        $events = $service->getEventsForDate($user, Carbon::parse($this->selectedDate));
-
-        if ($events === []) {
-            $this->calendarError = 'empty';
-
-            return;
-        }
-
-        $this->calendarEvents = $events;
+        // Events themselves are prefetched in render(); this just toggles the
+        // panel open. The error state for missing tokens is also computed in
+        // render() so it stays correct after page refreshes.
     }
 
     public function closeCalendarPanel(): void
     {
         $this->showCalendarPanel = false;
-        $this->calendarEvents = [];
-        $this->calendarError = null;
     }
 
     public function pullFromCalendarEvent(string $title, float $hours): void
@@ -481,6 +480,32 @@ class DayView extends Component
         // Track which calendar event titles are already logged today
         $usedEventTitles = $dayEntries->pluck('notes')->filter()->map(fn ($n) => strtolower($n))->all();
 
+        // Prefetch the whole week's calendar events into a 5-min cache. Cache is
+        // keyed on (user, weekStart) so sibling days within the same week reuse
+        // it without re-hitting Google. Entire-week fetch is one API call per
+        // accessible calendar (10x cheaper than per-day).
+        $calendarEvents = [];
+        $calendarHasToken = false;
+        if (! $this->isImpersonating) {
+            $calService = app(CalendarService::class);
+            $calendarHasToken = $calService->hasToken($user);
+            if ($calendarHasToken) {
+                $weekEvents = Cache::remember(
+                    "calendar_events_{$user->id}_{$weekStart->toDateString()}",
+                    now()->addMinutes(5),
+                    fn () => $calService->getEventsForDateRange(
+                        $user,
+                        Carbon::parse($weekStart),
+                        Carbon::parse($weekStart->addDays(6)),
+                    ),
+                );
+                $calendarEvents = $weekEvents[$this->selectedDate] ?? [];
+            }
+        }
+        // Keep the Livewire-state error in sync with what render() decides, so
+        // it stays correct across re-renders (and after the modal closes/reopens).
+        $this->calendarError = ($calendarHasToken || $this->isImpersonating) ? null : 'no_token';
+
         return view('livewire.timesheet.day-view', [
             'weekDays' => $weekDays,
             'dayTotals' => $dayTotals,
@@ -491,6 +516,7 @@ class DayView extends Component
             'asanaTasksByProject' => $asanaTasksByProject,
             'asanaAvailable' => $this->asanaIntegrationAvailable(),
             'usedEventTitles' => $usedEventTitles,
+            'calendarEvents' => $calendarEvents,
             'emptySong' => null,
             'viewedUser' => $user,
         ]);
