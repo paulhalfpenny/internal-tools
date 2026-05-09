@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Timesheet;
 
+use App\Domain\TimeTracking\CalendarEventAssociationService;
+use App\Domain\TimeTracking\HoursFormatter;
 use App\Domain\TimeTracking\HoursParser;
 use App\Domain\TimeTracking\TimeEntryService;
 use App\Models\AsanaTask;
@@ -56,6 +58,10 @@ class DayView extends Component
     public bool $calendarLoading = false;
 
     public ?string $calendarError = null;
+
+    // Title of the calendar event the user pulled in for the current modal session.
+    // When set, save() will upsert a CalendarEventAssociation so the same event auto-fills next time.
+    public ?string $lastCalendarPullTitle = null;
 
     // Admin impersonation: when set, the admin is editing this user's timesheet.
     public ?int $viewedUserId = null;
@@ -133,7 +139,7 @@ class DayView extends Component
         $this->selectedProjectId = $entry->project_id;
         $this->selectedTaskId = $entry->task_id;
         $this->selectedAsanaTaskGid = $entry->asana_task_gid ?? '';
-        $this->hoursInput = (string) $entry->hours;
+        $this->hoursInput = HoursFormatter::asTime((float) $entry->hours);
         $this->notes = $entry->notes ?? '';
         $this->entryDate = $entry->spent_on->toDateString();
         $this->showModal = true;
@@ -239,6 +245,11 @@ class DayView extends Component
             }
         } else {
             $service->create($user, $data);
+        }
+
+        if ($this->lastCalendarPullTitle !== null) {
+            app(CalendarEventAssociationService::class)
+                ->remember($user, $this->lastCalendarPullTitle, $projectId, $taskId);
         }
 
         $this->closeModal();
@@ -375,16 +386,16 @@ class DayView extends Component
         }
 
         $this->notes = $title;
-        $this->hoursInput = $this->formatHoursAsTime($hours);
+        $this->hoursInput = HoursFormatter::asTime($hours);
         $this->showCalendarPanel = false;
-    }
+        $this->lastCalendarPullTitle = $title;
 
-    private function formatHoursAsTime(float $hours): string
-    {
-        $h = (int) $hours;
-        $m = (int) round(($hours - $h) * 60);
-
-        return $h.':'.str_pad((string) $m, 2, '0', STR_PAD_LEFT);
+        // Auto-fill project/task from a previously remembered association for this event title.
+        $assoc = app(CalendarEventAssociationService::class)->lookup($this->viewedUser(), $title);
+        if ($assoc !== null) {
+            $this->selectedProjectId = $assoc['project_id'];
+            $this->selectedTaskId = $assoc['task_id'];
+        }
     }
 
     #[On('timerPoll')]
@@ -493,6 +504,7 @@ class DayView extends Component
         $this->notes = '';
         $this->hoursError = '';
         $this->entryDate = $this->selectedDate;
+        $this->lastCalendarPullTitle = null;
         $this->resetErrorBag();
     }
 

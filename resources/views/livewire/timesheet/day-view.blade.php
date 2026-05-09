@@ -77,7 +77,7 @@
                         {{ $day->format('j') }}
                     </span>
                     <span class="mt-1 text-xs {{ $total > 0 ? 'text-gray-600' : 'text-gray-300' }}">
-                        {{ $total > 0 ? number_format($total, 1) : '–' }}
+                        {{ $total > 0 ? \App\Domain\TimeTracking\HoursFormatter::asTime($total) : '–' }}
                     </span>
                 </button>
             @endforeach
@@ -141,7 +141,7 @@
                                 Running
                             </span>
                         @endif
-                        <span class="text-gray-700 font-medium tabular-nums">{{ number_format((float) $entry->hours, 2) }}h</span>
+                        <span class="text-gray-700 font-medium tabular-nums">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) $entry->hours) }}</span>
                     </div>
 
                     {{-- Actions --}}
@@ -196,8 +196,8 @@
 
     {{-- Day / week totals --}}
     <div class="mt-4 flex justify-end gap-6 text-sm text-gray-500">
-        <span>Day: <strong class="text-gray-800">{{ number_format($dayTotal, 2) }}h</strong></span>
-        <span>Week: <strong class="text-gray-800">{{ number_format($weekTotal, 2) }}h</strong></span>
+        <span>Day: <strong class="text-gray-800">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) $dayTotal) }}</strong></span>
+        <span>Week: <strong class="text-gray-800">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) $weekTotal) }}</strong></span>
     </div>
 
 
@@ -250,7 +250,7 @@
                         @php
                             $used = in_array(strtolower($event['title']), $usedEventTitles, true);
                             $hoursLabel = $event['hours'] == 1.0 ? '1 hour'
-                                : number_format($event['hours'], 2) . ' hours';
+                                : \App\Domain\TimeTracking\HoursFormatter::asTime((float) $event['hours']);
                         @endphp
                         <button
                             @if (! $used) wire:click="pullFromCalendarEvent('{{ addslashes($event['title']) }}', {{ $event['hours'] }})" @endif
@@ -296,20 +296,23 @@
                     asanaTaskOpen: false,
                     asanaTaskSearch: '',
                     projectSearch: '',
-                    selectedProjectId: {{ $selectedProjectId ?? 'null' }},
-                    selectedTaskId: {{ $selectedTaskId ?? 'null' }},
-                    selectedAsanaTaskGid: @js($selectedAsanaTaskGid),
-                    liveHoursInput: @js($hoursInput),
+                    selectedProjectId: $wire.selectedProjectId,
+                    selectedTaskId: $wire.selectedTaskId,
+                    selectedAsanaTaskGid: $wire.selectedAsanaTaskGid ?? '',
+                    liveHoursInput: $wire.hoursInput ?? '',
                     projects: {{ Js::from($projectsForPicker) }},
                     asanaTasksByProject: {{ Js::from($asanaTasksByProject) }},
                     asanaAvailable: {{ $asanaAvailable ? 'true' : 'false' }},
                     init() {
+                        // $wire is the source of truth; mirror it into Alpine state on every Livewire-driven change
+                        // (calendar pull, edit modal, calendar association auto-fill, etc.) so Alpine never clobbers.
+                        this.$watch('$wire.selectedProjectId', v => this.selectedProjectId = v);
+                        this.$watch('$wire.selectedTaskId', v => this.selectedTaskId = v);
+                        this.$watch('$wire.selectedAsanaTaskGid', v => this.selectedAsanaTaskGid = v ?? '');
+                        this.$watch('$wire.hoursInput', v => this.liveHoursInput = v ?? '');
+
                         this.$watch('$wire.showModal', (open) => {
                             if (open) {
-                                this.selectedProjectId = $wire.selectedProjectId;
-                                this.selectedTaskId = $wire.selectedTaskId;
-                                this.selectedAsanaTaskGid = $wire.selectedAsanaTaskGid ?? '';
-                                this.liveHoursInput = $wire.hoursInput ?? '';
                                 this.projectOpen = false;
                                 this.taskOpen = false;
                                 this.asanaTaskOpen = false;
@@ -355,22 +358,23 @@
                         this.selectedProjectId = id;
                         this.selectedTaskId = null;
                         this.selectedAsanaTaskGid = '';
+                        $wire.selectedProjectId = id;
+                        $wire.selectedTaskId = null;
+                        $wire.selectedAsanaTaskGid = '';
                         this.projectSearch = '';
                         this.projectOpen = false;
                     },
                     pickTask(id) {
                         this.selectedTaskId = id;
+                        $wire.selectedTaskId = id;
                         this.taskOpen = false;
                     },
                     pickAsanaTask(gid) {
                         this.selectedAsanaTaskGid = gid;
+                        $wire.selectedAsanaTaskGid = gid;
                         this.asanaTaskOpen = false;
                     },
-                    async doSave(isTimer) {
-                        $wire.selectedProjectId = this.selectedProjectId;
-                        $wire.selectedTaskId = this.selectedTaskId;
-                        $wire.selectedAsanaTaskGid = this.selectedAsanaTaskGid;
-                        await $nextTick();
+                    doSave(isTimer) {
                         isTimer ? $wire.startTimerFromModal() : $wire.save();
                     },
                     get isTimerMode() {
