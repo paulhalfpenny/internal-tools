@@ -27,6 +27,8 @@ class Edit extends Component
 
     public int $clientId;
 
+    public ?int $managerUserId = null;
+
     public ?string $code = null;
 
     public string $name;
@@ -74,6 +76,7 @@ class Edit extends Component
     {
         $this->project = $project->load(['tasks', 'users']);
         $this->clientId = $project->client_id;
+        $this->managerUserId = $project->manager_user_id;
         $this->code = $project->code;
         $this->name = $project->name;
         $this->isBillable = (bool) $project->is_billable;
@@ -132,6 +135,7 @@ class Edit extends Component
     {
         $this->validate([
             'clientId' => 'required|exists:clients,id',
+            'managerUserId' => 'nullable|exists:users,id',
             'code' => 'nullable|string|max:50|unique:projects,code,'.$this->project->id,
             'name' => 'required|string|max:255',
             'isBillable' => 'boolean',
@@ -180,6 +184,7 @@ class Edit extends Component
 
         $this->project->update([
             'client_id' => $this->clientId,
+            'manager_user_id' => $this->managerUserId,
             'code' => $this->code ?: null,
             'name' => $this->name,
             'is_billable' => $this->isBillable,

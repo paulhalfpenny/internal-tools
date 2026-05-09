@@ -22,3 +22,8 @@ Schedule::command('asana:prune-logs')
     ->dailyAt('03:00')
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('app:check-budget-alerts')
+    ->dailyAt('07:00')
+    ->withoutOverlapping()
+    ->onOneServer();

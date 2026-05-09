@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $client_id
+ * @property int|null $manager_user_id
  * @property string $code
  * @property string $name
  * @property bool $is_billable
@@ -46,7 +47,7 @@ class Project extends Model
     use HasFactory;
 
     protected $fillable = [
-        'client_id', 'code', 'name', 'is_billable', 'default_hourly_rate', 'rate_id',
+        'client_id', 'manager_user_id', 'code', 'name', 'is_billable', 'default_hourly_rate', 'rate_id',
         'budget_type', 'budget_amount', 'budget_hours', 'budget_starts_on',
         'starts_on', 'ends_on', 'is_archived',
         'asana_project_gid', 'asana_workspace_gid', 'asana_custom_field_gid',
@@ -94,6 +95,12 @@ class Project extends Model
     public function rate(): BelongsTo
     {
         return $this->belongsTo(Rate::class);
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function manager(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'manager_user_id');
     }
 
     /** @return HasMany<TimeEntry, $this> */
