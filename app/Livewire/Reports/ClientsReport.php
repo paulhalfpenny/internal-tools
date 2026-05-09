@@ -39,6 +39,12 @@ class ClientsReport extends Component
         return $this->exportCsv();
     }
 
+    #[Renderless]
+    public function exportForClient(int $clientId): StreamedResponse
+    {
+        return $this->exportCsv(clientId: $clientId);
+    }
+
     public function render(): View
     {
         return view('livewire.reports.clients-report', [

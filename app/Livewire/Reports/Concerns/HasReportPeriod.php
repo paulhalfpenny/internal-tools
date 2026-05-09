@@ -4,7 +4,10 @@ namespace App\Livewire\Reports\Concerns;
 
 use App\Domain\Reporting\DetailedTimeCsvExport;
 use App\Domain\Reporting\TimeReportQuery;
+use App\Models\Client;
+use App\Models\Project;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 trait HasReportPeriod
@@ -44,11 +47,11 @@ trait HasReportPeriod
         };
     }
 
-    public function exportCsv(?int $userId = null): StreamedResponse
+    public function exportCsv(?int $userId = null, ?int $clientId = null, ?int $projectId = null): StreamedResponse
     {
-        $query = $this->buildQuery($userId);
+        $query = $this->buildQuery($userId, $clientId, $projectId);
         $export = new DetailedTimeCsvExport($query);
-        $filename = 'detailed-time-'.$this->from.'-to-'.$this->to.'.csv';
+        $filename = $this->buildExportFilename($clientId, $projectId);
 
         return response()->streamDownload(function () use ($export): void {
             $handle = fopen('php://output', 'w');
@@ -57,13 +60,33 @@ trait HasReportPeriod
         }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    protected function buildQuery(?int $userId = null): TimeReportQuery
+    protected function buildQuery(?int $userId = null, ?int $clientId = null, ?int $projectId = null): TimeReportQuery
     {
         return new TimeReportQuery(
             from: CarbonImmutable::parse($this->from),
             to: CarbonImmutable::parse($this->to),
             userId: $userId,
+            clientId: $clientId,
+            projectId: $projectId,
             activeProjectsOnly: ! $this->showArchived,
         );
+    }
+
+    private function buildExportFilename(?int $clientId, ?int $projectId): string
+    {
+        $scope = '';
+        if ($projectId !== null) {
+            $project = Project::find($projectId);
+            if ($project !== null) {
+                $scope = '-'.Str::slug($project->code !== '' ? $project->code : $project->name);
+            }
+        } elseif ($clientId !== null) {
+            $client = Client::find($clientId);
+            if ($client !== null) {
+                $scope = '-'.Str::slug($client->name);
+            }
+        }
+
+        return 'detailed-time'.$scope.'-'.$this->from.'-to-'.$this->to.'.csv';
     }
 }

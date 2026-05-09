@@ -12,6 +12,7 @@ use App\Livewire\Admin\Tasks\Index as AdminTasks;
 use App\Livewire\Admin\Timesheets\Index as AdminTimesheets;
 use App\Livewire\Admin\Users\Index as AdminUsers;
 use App\Livewire\Profile\AsanaConnection as ProfileAsanaConnection;
+use App\Livewire\Reports\ClientDetail;
 use App\Livewire\Reports\ClientsReport;
 use App\Livewire\Reports\JdwReport;
 use App\Livewire\Reports\ProjectBudget;
@@ -73,6 +74,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('can:access-reports')->prefix('reports')->name('reports.')->group(function () {
         Route::get('/time', TimeReport::class)->name('time');
         Route::get('/clients', ClientsReport::class)->name('clients');
+        Route::get('/clients/{client}', ClientDetail::class)->name('client-detail');
         Route::get('/projects', ProjectsReport::class)->name('projects');
         Route::get('/projects/{project}/budget', ProjectBudget::class)->name('projects.budget');
         Route::get('/tasks', TasksReport::class)->name('tasks');
