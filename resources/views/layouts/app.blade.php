@@ -59,7 +59,7 @@
                         Admin <span class="text-xs">▾</span>
                     </button>
                     <div x-show="open" x-cloak
-                         class="absolute top-full right-0 mt-1 w-48 bg-white border border-gray-200 rounded shadow-md z-50 py-1">
+                         class="absolute top-full right-0 mt-1 w-40 bg-white border border-gray-200 rounded shadow-md z-50 py-1">
                         <a href="{{ route('admin.users') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Users</a>
                         <a href="{{ route('admin.clients') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Clients</a>
                         <a href="{{ route('admin.projects') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Projects</a>
@@ -67,7 +67,7 @@
                         <hr class="my-1 border-gray-100">
                         <a href="{{ route('admin.rates.library') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Rates</a>
                         <a href="{{ route('admin.timesheets') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Timesheets</a>
-                        <a href="{{ route('admin.time-entries.bulk-move') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Bulk move time entries</a>
+                        <a href="{{ route('admin.time-entries.bulk-move') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Bulk Assign</a>
                         <hr class="my-1 border-gray-100">
                         <a href="{{ route('admin.integrations.asana') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Asana integration</a>
                         <a href="{{ route('admin.notifications') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Notifications</a>
