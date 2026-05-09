@@ -76,6 +76,16 @@ class DayView extends Component
     #[Locked]
     public bool $isReadOnly = false;
 
+    // Where the "← back" link in the impersonation/read-only banner should
+    // point. Set at mount() based on which route the user entered through:
+    // /admin/timesheets/* → admin index; /team/* (or anywhere else) → my
+    // timesheet. Locked so it can't be tampered with.
+    #[Locked]
+    public string $backUrl = '';
+
+    #[Locked]
+    public string $backLabel = '';
+
     private ?User $viewedUserCache = null;
 
     public function mount(?User $user = null): void
@@ -88,15 +98,37 @@ class DayView extends Component
         if ($user !== null && $user->exists && $user->id !== auth()->id()) {
             /** @var User $authUser */
             $authUser = auth()->user();
+            $cameFromAdmin = (bool) (request()->route()?->getName() === 'admin.timesheets.user');
 
-            if ($authUser->isAdmin()) {
-                // Admin viewing anyone — full impersonation (can edit).
+            if ($authUser->isAdmin() && $cameFromAdmin) {
+                // Admin via /admin/timesheets/{user} — full impersonation.
                 $this->viewedUserId = $user->id;
                 $this->isImpersonating = true;
+                $this->backUrl = route('admin.timesheets');
+                $this->backLabel = 'Back to admin index';
+            } elseif ($authUser->isAdmin() && $user->reports_to_user_id === $authUser->id) {
+                // Admin who is also this user's manager, arriving via /team/{user}
+                // — let them edit (admin can always edit), but route the back
+                // link to their own timesheet because that's where they came
+                // from.
+                $this->viewedUserId = $user->id;
+                $this->isImpersonating = true;
+                $this->backUrl = route('timesheet');
+                $this->backLabel = 'Back to my timesheet';
             } elseif ($user->reports_to_user_id === $authUser->id) {
                 // Manager viewing a direct report — read-only.
                 $this->viewedUserId = $user->id;
                 $this->isReadOnly = true;
+                $this->backUrl = route('timesheet');
+                $this->backLabel = 'Back to my timesheet';
+            } elseif ($authUser->isAdmin()) {
+                // Admin viewing someone who isn't their report, but didn't come
+                // through the admin route (e.g. crafted URL). Still allow edit
+                // but back to their own timesheet.
+                $this->viewedUserId = $user->id;
+                $this->isImpersonating = true;
+                $this->backUrl = route('timesheet');
+                $this->backLabel = 'Back to my timesheet';
             } else {
                 abort(403);
             }

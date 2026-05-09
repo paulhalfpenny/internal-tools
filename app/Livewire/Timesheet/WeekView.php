@@ -33,6 +33,12 @@ class WeekView extends Component
     #[Locked]
     public bool $isReadOnly = false;
 
+    #[Locked]
+    public string $backUrl = '';
+
+    #[Locked]
+    public string $backLabel = '';
+
     /**
      * Cell values keyed by "{projectId}:{taskId}" → array of 7 strings (Mon..Sun).
      * Strings so we can hold the user's typed input ("0:30", "1.5", "30m") and only
@@ -71,13 +77,28 @@ class WeekView extends Component
         if ($user !== null && $user->exists && $user->id !== auth()->id()) {
             /** @var User $authUser */
             $authUser = auth()->user();
+            $cameFromAdmin = (bool) (request()->route()?->getName() === 'admin.timesheets.user.week');
 
-            if ($authUser->isAdmin()) {
+            if ($authUser->isAdmin() && $cameFromAdmin) {
                 $this->viewedUserId = $user->id;
                 $this->isImpersonating = true;
+                $this->backUrl = route('admin.timesheets');
+                $this->backLabel = 'Back to admin index';
+            } elseif ($authUser->isAdmin() && $user->reports_to_user_id === $authUser->id) {
+                $this->viewedUserId = $user->id;
+                $this->isImpersonating = true;
+                $this->backUrl = route('timesheet');
+                $this->backLabel = 'Back to my timesheet';
             } elseif ($user->reports_to_user_id === $authUser->id) {
                 $this->viewedUserId = $user->id;
                 $this->isReadOnly = true;
+                $this->backUrl = route('timesheet');
+                $this->backLabel = 'Back to my timesheet';
+            } elseif ($authUser->isAdmin()) {
+                $this->viewedUserId = $user->id;
+                $this->isImpersonating = true;
+                $this->backUrl = route('timesheet');
+                $this->backLabel = 'Back to my timesheet';
             } else {
                 abort(403);
             }

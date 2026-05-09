@@ -5,7 +5,7 @@
                 <span class="font-semibold">Editing timesheet for {{ $viewedUser->name }}</span>
                 <span class="text-amber-700 ml-2">({{ $viewedUser->email }})</span>
             </div>
-            <a href="{{ route('admin.timesheets') }}" class="text-sm text-amber-900 hover:underline">← Back to admin index</a>
+            <a href="{{ $backUrl }}" class="text-sm text-amber-900 hover:underline">← {{ $backLabel }}</a>
         </div>
     @elseif($isReadOnly)
         <div class="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
@@ -14,7 +14,7 @@
                 <span class="text-blue-700 ml-2">({{ $viewedUser->email }})</span>
                 <span class="text-blue-700 ml-2">— read-only</span>
             </div>
-            <a href="{{ route('timesheet') }}" class="text-sm text-blue-900 hover:underline">← Back to my timesheet</a>
+            <a href="{{ $backUrl }}" class="text-sm text-blue-900 hover:underline">← {{ $backLabel }}</a>
         </div>
     @endif
 
