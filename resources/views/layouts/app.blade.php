@@ -45,7 +45,6 @@
                         <a href="{{ route('reports.projects') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Projects</a>
                         <a href="{{ route('reports.tasks') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Tasks</a>
                         <a href="{{ route('reports.team') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Team</a>
-                        <a href="{{ route('reports.jdw') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">JDW Export</a>
                     </div>
                 </div>
                 @endif

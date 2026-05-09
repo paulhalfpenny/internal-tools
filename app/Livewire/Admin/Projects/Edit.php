@@ -4,7 +4,6 @@ namespace App\Livewire\Admin\Projects;
 
 use App\Domain\Budgeting\ProjectBudgetCalculator;
 use App\Enums\BudgetType;
-use App\Enums\JdwCategory;
 use App\Jobs\Asana\PullAsanaTasksJob;
 use App\Models\AsanaProject;
 use App\Models\AsanaSyncLog;
@@ -58,17 +57,6 @@ class Edit extends Component
     /** @var array<int, array{hourly_rate_override: string}> */
     public array $userAssignments = [];
 
-    // JDW fields
-    public string $jdwCategory = '';
-
-    public string $jdwSortOrder = '';
-
-    public string $jdwStatus = '';
-
-    public string $jdwEstimatedLaunch = '';
-
-    public string $jdwDescription = '';
-
     public string $asanaProjectGid = '';
 
     public function mount(Project $project): void
@@ -87,11 +75,6 @@ class Edit extends Component
         $this->budgetAmount = $project->budget_amount !== null ? (string) $project->budget_amount : '';
         $this->budgetHours = $project->budget_hours !== null ? (string) $project->budget_hours : '';
         $this->budgetStartsOn = $project->budget_starts_on?->toDateString() ?? '';
-        $this->jdwCategory = $project->jdw_category?->value ?? '';
-        $this->jdwSortOrder = $project->jdw_sort_order !== null ? (string) $project->jdw_sort_order : '';
-        $this->jdwStatus = $project->jdw_status ?? '';
-        $this->jdwEstimatedLaunch = $project->jdw_estimated_launch ?? '';
-        $this->jdwDescription = $project->jdw_description ?? '';
         $this->asanaProjectGid = $project->asana_project_gid ?? '';
 
         foreach ($project->tasks as $task) {
@@ -141,7 +124,6 @@ class Edit extends Component
             'defaultRateId' => 'nullable|exists:rates,id',
             'startsOn' => 'nullable|date',
             'endsOn' => 'nullable|date',
-            'jdwSortOrder' => 'nullable|integer|min:0',
             'budgetType' => 'nullable|in:fixed_fee,monthly_ci',
             'budgetAmount' => 'nullable|numeric|min:0|required_with:budgetType',
             'budgetHours' => 'nullable|numeric|min:0',
@@ -194,11 +176,6 @@ class Edit extends Component
             'budget_amount' => $this->budgetType !== '' && $this->budgetAmount !== '' ? (float) $this->budgetAmount : null,
             'budget_hours' => $this->budgetType !== '' && $this->budgetHours !== '' ? (float) $this->budgetHours : null,
             'budget_starts_on' => $this->budgetType === 'monthly_ci' && $this->budgetStartsOn !== '' ? $this->budgetStartsOn : null,
-            'jdw_category' => $this->jdwCategory !== '' ? JdwCategory::from($this->jdwCategory) : null,
-            'jdw_sort_order' => $this->jdwSortOrder !== '' ? (int) $this->jdwSortOrder : null,
-            'jdw_status' => $this->jdwStatus ?: null,
-            'jdw_estimated_launch' => $this->jdwEstimatedLaunch ?: null,
-            'jdw_description' => $this->jdwDescription ?: null,
             'asana_project_gid' => $newGid,
             'asana_workspace_gid' => $newWorkspaceGid,
             'asana_custom_field_gid' => $newCustomFieldGid,
@@ -258,7 +235,6 @@ class Edit extends Component
             'allTasks' => Task::where('is_archived', false)->orderBy('sort_order')->orderBy('name')->get(),
             'allUsers' => User::where('is_active', true)->orderBy('name')->get(),
             'budgetTypes' => BudgetType::cases(),
-            'jdwCategories' => JdwCategory::cases(),
             'budgetStatus' => $this->project->budget_type !== null ? $budgetCalculator->forProject($this->project) : null,
             'asanaProjects' => $asanaProjects,
             'asanaConnected' => $authUser->asanaConnected(),

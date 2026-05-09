@@ -11,9 +11,8 @@
         <div class="mb-4 px-4 py-2 bg-yellow-50 border border-yellow-200 text-yellow-700 text-sm rounded">{{ session('asana_warning') }}</div>
     @endif
 
-    <div class="grid grid-cols-3 gap-6">
-        {{-- Main details --}}
-        <div class="col-span-2 space-y-6">
+    <div class="space-y-6">
+        <div class="space-y-6">
             <div class="bg-white rounded-lg border border-gray-200 p-6">
                 <h2 class="text-sm font-semibold text-gray-700 mb-4">Project details</h2>
                 <div class="space-y-4">
@@ -168,7 +167,7 @@
             {{-- Tasks --}}
             <div class="bg-white rounded-lg border border-gray-200 p-6">
                 <h2 class="text-sm font-semibold text-gray-700 mb-4">Tasks</h2>
-                <div class="space-y-2">
+                <div class="grid grid-cols-2 gap-x-6">
                     @foreach($allTasks as $task)
                         @php $assigned = isset($taskAssignments[$task->id]); @endphp
                         <div class="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
@@ -255,40 +254,8 @@
             </div>
         </div>
 
-        {{-- JDW sidebar --}}
-        <div class="space-y-6">
-            <div class="bg-white rounded-lg border border-gray-200 p-6">
-                <h2 class="text-sm font-semibold text-gray-700 mb-4">JDW export</h2>
-                <div class="space-y-3">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Category</label>
-                        <select wire:model="jdwCategory" class="w-full border border-gray-300 rounded text-sm px-3 py-2" style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
-                            <option value="">None</option>
-                            @foreach($jdwCategories as $cat)
-                                <option value="{{ $cat->value }}">{{ ucfirst(str_replace('_', ' ', $cat->value)) }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Sort order</label>
-                        <input wire:model="jdwSortOrder" type="number" min="0" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Status</label>
-                        <input wire:model="jdwStatus" type="text" placeholder="e.g. Live" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Est. launch</label>
-                        <input wire:model="jdwEstimatedLaunch" type="text" placeholder="e.g. Q2 2026, TBC" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1">Description</label>
-                        <textarea wire:model="jdwDescription" rows="4" class="w-full border border-gray-300 rounded text-sm px-3 py-2"></textarea>
-                    </div>
-                </div>
-            </div>
-
-            <button wire:click="save" class="w-full px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700">
+        <div class="flex justify-end">
+            <button wire:click="save" class="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700">
                 Save project
             </button>
         </div>

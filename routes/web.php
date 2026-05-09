@@ -15,7 +15,6 @@ use App\Livewire\Admin\Users\Index as AdminUsers;
 use App\Livewire\Profile\AsanaConnection as ProfileAsanaConnection;
 use App\Livewire\Reports\ClientDetail;
 use App\Livewire\Reports\ClientsReport;
-use App\Livewire\Reports\JdwReport;
 use App\Livewire\Reports\ProjectBudget;
 use App\Livewire\Reports\ProjectsReport;
 use App\Livewire\Reports\TasksReport;
@@ -81,7 +80,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/tasks', TasksReport::class)->name('tasks');
         Route::get('/team', TeamOverviewReport::class)->name('team');
         Route::get('/team/{user}', TeamReport::class)->name('team.member');
-        Route::get('/jdw', JdwReport::class)->name('jdw');
     });
 
     // Admin routes
