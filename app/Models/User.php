@@ -55,6 +55,7 @@ class User extends Authenticatable
         'role_title',
         'is_contractor',
         'default_hourly_rate',
+        'rate_id',
         'weekly_capacity_hours',
         'is_active',
         'last_login_at',
@@ -101,7 +102,13 @@ class User extends Authenticatable
     public function projects(): BelongsToMany
     {
         return $this->belongsToMany(Project::class)
-            ->withPivot(['hourly_rate_override']);
+            ->withPivot(['hourly_rate_override', 'rate_id']);
+    }
+
+    /** @return BelongsTo<Rate, $this> */
+    public function rate(): BelongsTo
+    {
+        return $this->belongsTo(Rate::class);
     }
 
     /** @return HasMany<TimeEntry, $this> */

@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property bool $is_billable
  * @property float|null $default_hourly_rate
+ * @property int|null $rate_id
  * @property BudgetType|null $budget_type
  * @property float|null $budget_amount
  * @property float|null $budget_hours
@@ -45,7 +46,7 @@ class Project extends Model
     use HasFactory;
 
     protected $fillable = [
-        'client_id', 'code', 'name', 'is_billable', 'default_hourly_rate',
+        'client_id', 'code', 'name', 'is_billable', 'default_hourly_rate', 'rate_id',
         'budget_type', 'budget_amount', 'budget_hours', 'budget_starts_on',
         'starts_on', 'ends_on', 'is_archived',
         'asana_project_gid', 'asana_workspace_gid', 'asana_custom_field_gid',
@@ -79,14 +80,20 @@ class Project extends Model
     public function tasks(): BelongsToMany
     {
         return $this->belongsToMany(Task::class)
-            ->withPivot(['is_billable', 'hourly_rate_override']);
+            ->withPivot(['is_billable', 'hourly_rate_override', 'rate_id']);
     }
 
     /** @return BelongsToMany<User, $this> */
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)
-            ->withPivot(['hourly_rate_override']);
+            ->withPivot(['hourly_rate_override', 'rate_id']);
+    }
+
+    /** @return BelongsTo<Rate, $this> */
+    public function rate(): BelongsTo
+    {
+        return $this->belongsTo(Rate::class);
     }
 
     /** @return HasMany<TimeEntry, $this> */

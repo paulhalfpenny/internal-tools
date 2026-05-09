@@ -57,13 +57,24 @@ class Index extends Component
         if ($assignedUser !== null) {
             /** @var Pivot $pivot */
             $pivot = $assignedUser->getRelation('pivot');
+            if ($pivot->getAttribute('rate_id') !== null) {
+                return 'project-user library rate';
+            }
             if ($pivot->getAttribute('hourly_rate_override') !== null) {
                 return 'project-user override';
             }
         }
 
+        if ($project->rate_id !== null) {
+            return 'project library rate';
+        }
+
         if ($project->default_hourly_rate !== null) {
             return 'project default';
+        }
+
+        if ($user->rate_id !== null) {
+            return 'user library rate';
         }
 
         if ($user->default_hourly_rate !== null) {

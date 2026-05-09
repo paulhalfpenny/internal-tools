@@ -1,7 +1,12 @@
 <div>
-    <div class="mb-6">
-        <h1 class="text-xl font-semibold text-gray-900">Effective rates</h1>
-        <p class="text-sm text-gray-500 mt-1">Read-only view of the resolved billable rate per assigned (project, user) combination.</p>
+    <div class="flex items-start justify-between mb-6">
+        <div>
+            <h1 class="text-xl font-semibold text-gray-900">Effective rates</h1>
+            <p class="text-sm text-gray-500 mt-1">Read-only view of the resolved billable rate per assigned (project, user) combination.</p>
+        </div>
+        <a href="{{ route('admin.rates.library') }}" class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+            Manage rate library →
+        </a>
     </div>
 
     <div class="bg-white rounded-lg border border-gray-200 overflow-x-auto">

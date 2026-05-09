@@ -37,7 +37,17 @@
                     </div>
                     <div class="grid grid-cols-4 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Default rate (£/hr)</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Library rate</label>
+                            <select wire:model="defaultRateId" class="w-full border border-gray-300 rounded text-sm px-3 py-2" style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
+                                <option value="">— None —</option>
+                                @foreach($rates as $rate)
+                                    <option value="{{ $rate->id }}">{{ $rate->label() }}</option>
+                                @endforeach
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">If set, takes precedence over the custom rate.</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Custom rate (£/hr)</label>
                             <input wire:model="defaultRate" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
                         </div>
                         <div>
@@ -51,6 +61,8 @@
                             <label class="block text-sm font-medium text-gray-700 mb-1">Starts on</label>
                             <input wire:model="startsOn" type="date" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
                         </div>
+                    </div>
+                    <div class="grid grid-cols-4 gap-4 mt-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Ends on</label>
                             <input wire:model="endsOn" type="date" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
@@ -176,35 +188,75 @@
 
             {{-- Users --}}
             <div class="bg-white rounded-lg border border-gray-200 p-6">
-                <h2 class="text-sm font-semibold text-gray-700 mb-4">Team members</h2>
-                <div class="space-y-2">
-                    @foreach($allUsers as $user)
-                        @php $assigned = isset($userAssignments[$user->id]); @endphp
-                        <div class="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
-                            <input
-                                type="checkbox"
-                                id="user-{{ $user->id }}"
-                                {{ $assigned ? 'checked' : '' }}
-                                wire:click="toggleUser({{ $user->id }})"
-                                class="rounded"
-                            >
-                            <label for="user-{{ $user->id }}" class="flex-1 text-sm cursor-pointer">{{ $user->name }}</label>
-                            @if($assigned)
-                                <div class="flex items-center gap-1.5">
-                                    <span class="text-xs text-gray-500">Rate override (£/hr)</span>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        min="0"
-                                        wire:model="userAssignments.{{ $user->id }}.hourly_rate_override"
-                                        placeholder="—"
-                                        class="w-24 border border-gray-300 rounded text-sm px-3 py-2"
-                                    >
-                                </div>
-                            @endif
-                        </div>
-                    @endforeach
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-sm font-semibold text-gray-700">Team members &amp; rates</h2>
+                    <a href="{{ route('admin.rates.library') }}" class="text-xs text-blue-600 hover:underline">Manage rate library →</a>
                 </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead>
+                            <tr class="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
+                                <th class="px-2 py-2 w-8"></th>
+                                <th class="text-left px-2 py-2 font-medium">Member</th>
+                                <th class="text-left px-2 py-2 font-medium">User default</th>
+                                <th class="text-left px-2 py-2 font-medium">Library override</th>
+                                <th class="text-left px-2 py-2 font-medium">Custom override (£/hr)</th>
+                                <th class="text-right px-2 py-2 font-medium">Effective rate</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-50">
+                        @foreach($allUsers as $user)
+                            @php
+                                $assigned = isset($userAssignments[$user->id]);
+                                $userDefault = $user->default_hourly_rate !== null
+                                    ? '£'.number_format((float) $user->default_hourly_rate, 2)
+                                    : '—';
+                                if ($user->rate_id) {
+                                    $libRate = $rates->firstWhere('id', $user->rate_id);
+                                    if ($libRate) {
+                                        $userDefault = '£'.number_format((float) $libRate->hourly_rate, 2).' ('.$libRate->name.')';
+                                    }
+                                }
+                                $effective = $effectiveRates[$user->id] ?? null;
+                            @endphp
+                            <tr>
+                                <td class="px-2 py-2">
+                                    <input type="checkbox" id="user-{{ $user->id }}" {{ $assigned ? 'checked' : '' }}
+                                           wire:click="toggleUser({{ $user->id }})" class="rounded">
+                                </td>
+                                <td class="px-2 py-2">
+                                    <label for="user-{{ $user->id }}" class="cursor-pointer">{{ $user->name }}</label>
+                                </td>
+                                <td class="px-2 py-2 text-gray-500 tabular-nums">{{ $userDefault }}</td>
+                                @if($assigned)
+                                    <td class="px-2 py-2">
+                                        <select wire:model="userAssignments.{{ $user->id }}.rate_id"
+                                                class="w-full border border-gray-300 rounded text-sm px-2 py-1.5"
+                                                style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
+                                            <option value="">— None —</option>
+                                            @foreach($rates as $rate)
+                                                <option value="{{ $rate->id }}">{{ $rate->label() }}</option>
+                                            @endforeach
+                                        </select>
+                                    </td>
+                                    <td class="px-2 py-2">
+                                        <input type="number" step="0.01" min="0"
+                                               wire:model="userAssignments.{{ $user->id }}.hourly_rate_override"
+                                               placeholder="—"
+                                               class="w-28 border border-gray-300 rounded text-sm px-2 py-1.5">
+                                    </td>
+                                    <td class="px-2 py-2 text-right tabular-nums font-medium">
+                                        {{ $effective !== null ? '£'.number_format((float) $effective, 2) : '—' }}
+                                    </td>
+                                @else
+                                    <td colspan="3" class="px-2 py-2 text-xs text-gray-300">Not assigned</td>
+                                @endif
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-xs text-gray-500 mt-3">Resolution order: project_user library rate → custom override → project library rate → project custom rate → user library rate → user custom rate.</p>
             </div>
         </div>
 
