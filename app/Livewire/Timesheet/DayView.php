@@ -397,6 +397,93 @@ class DayView extends Component
             ->exists();
     }
 
+    public function copyRowsFromMostRecent(): void
+    {
+        if ($this->isReadOnly) {
+            return;
+        }
+
+        $user = $this->viewedUser();
+
+        $alreadyHasEntries = TimeEntry::where('user_id', $user->id)
+            ->whereDate('spent_on', $this->selectedDate)
+            ->exists();
+        if ($alreadyHasEntries) {
+            return;
+        }
+
+        $mostRecentPrior = TimeEntry::where('user_id', $user->id)
+            ->where('spent_on', '<', $this->selectedDate)
+            ->orderByDesc('spent_on')
+            ->value('spent_on');
+
+        if (! $mostRecentPrior) {
+            return;
+        }
+
+        $sourceEntries = TimeEntry::with(['project.tasks', 'project.users', 'project.asanaProjects'])
+            ->where('user_id', $user->id)
+            ->whereDate('spent_on', $mostRecentPrior)
+            ->orderBy('created_at')
+            ->get();
+
+        $service = app(TimeEntryService::class);
+        $copied = 0;
+
+        foreach ($sourceEntries as $source) {
+            $project = $source->project;
+            if ($project->is_archived) {
+                continue;
+            }
+            if (! $project->users->contains('id', $user->id)) {
+                continue;
+            }
+            if (! $project->tasks->contains('id', $source->task_id)) {
+                continue;
+            }
+
+            $asanaGid = $source->asana_task_gid;
+            if ($project->asanaLinked()) {
+                $linkedBoardGids = $project->asanaProjects->pluck('gid')->all();
+
+                if ($asanaGid !== null) {
+                    $stillValid = AsanaTask::where('gid', $asanaGid)
+                        ->whereIn('asana_project_gid', $linkedBoardGids)
+                        ->exists();
+                    if (! $stillValid) {
+                        $asanaGid = null;
+                    }
+                }
+
+                if ($asanaGid === null && (bool) $project->asana_task_required) {
+                    continue;
+                }
+            } else {
+                $asanaGid = null;
+            }
+
+            $service->create($user, [
+                'project_id' => $source->project_id,
+                'task_id' => $source->task_id,
+                'spent_on' => $this->selectedDate,
+                'hours' => 0,
+                'notes' => $source->notes,
+                'asana_task_gid' => $asanaGid,
+            ]);
+            $copied++;
+        }
+
+        $sourceDateLabel = Carbon::parse($mostRecentPrior)->format('l, j F');
+        if ($copied > 0) {
+            session()->flash(
+                'copy_rows_message',
+                'Copied '.$copied.' row'.($copied === 1 ? '' : 's').' from '.$sourceDateLabel.'.'
+            );
+        } else {
+            session()->flash('copy_rows_message', 'No rows could be copied from '.$sourceDateLabel.'.');
+        }
+    }
+
     public function deleteEntry(int $entryId): void
     {
         if ($this->isReadOnly) {
@@ -610,12 +697,19 @@ class DayView extends Component
                 ->get(['id', 'name']);
         }
 
+        $canCopyFromPrior = ! $this->isReadOnly
+            && $dayEntries->isEmpty()
+            && TimeEntry::where('user_id', $user->id)
+                ->where('spent_on', '<', $this->selectedDate)
+                ->exists();
+
         return view('livewire.timesheet.day-view', [
             'weekDays' => $weekDays,
             'dayTotals' => $dayTotals,
             'weekTotal' => $weekTotal,
             'dayEntries' => $dayEntries,
             'dayTotal' => $dayTotal,
+            'canCopyFromPrior' => $canCopyFromPrior,
             'projectsForPicker' => $projectsForPicker,
             'asanaTasksByProject' => $asanaTasksByProject,
             'asanaAvailable' => $this->asanaIntegrationAvailable(),

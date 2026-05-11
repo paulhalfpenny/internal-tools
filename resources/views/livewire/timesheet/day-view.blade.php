@@ -171,6 +171,11 @@
     </div>
 
     {{-- Entries list --}}
+    @if (session('copy_rows_message'))
+        <div class="mb-4 px-4 py-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+            {{ session('copy_rows_message') }}
+        </div>
+    @endif
     @if ($dayEntries->isEmpty())
         <div
             class="rounded-xl bg-gray-100 flex items-center justify-center px-8 text-center"
@@ -283,9 +288,24 @@
     @endif
 
     {{-- Day / week totals --}}
-    <div class="mt-4 flex justify-end gap-6 text-sm text-gray-500">
-        <span>Day: <strong class="text-gray-800">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) $dayTotal) }}</strong></span>
-        <span>Week: <strong class="text-gray-800">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) $weekTotal) }}</strong></span>
+    <div class="mt-4 flex items-center justify-between gap-4 text-sm text-gray-500">
+        <div>
+            @if ($canCopyFromPrior)
+                <button
+                    wire:click="copyRowsFromMostRecent"
+                    class="inline-flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/>
+                    </svg>
+                    Copy rows from most recent timesheet
+                </button>
+            @endif
+        </div>
+        <div class="flex gap-6">
+            <span>Day: <strong class="text-gray-800">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) $dayTotal) }}</strong></span>
+            <span>Week: <strong class="text-gray-800">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) $weekTotal) }}</strong></span>
+        </div>
     </div>
 
 
