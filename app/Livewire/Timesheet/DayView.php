@@ -350,10 +350,12 @@ class DayView extends Component
 
         $taskGidProvided = $this->selectedAsanaTaskGid !== '';
         $required = (bool) $project->asana_task_required;
+        $fromCalendar = $this->lastCalendarPullTitle !== null;
 
-        // If the admin has marked Asana tasks as optional for this project and
-        // the user hasn't picked one, accept the entry as-is.
-        if (! $required && ! $taskGidProvided) {
+        // Accept with no Asana task when either the project allows it, or the
+        // entry was pulled from a calendar invite (meetings like standups get
+        // logged against the project code directly).
+        if ((! $required || $fromCalendar) && ! $taskGidProvided) {
             return true;
         }
 

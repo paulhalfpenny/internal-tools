@@ -421,6 +421,7 @@
                     },
                     get asanaRequired() {
                         if (this.asanaBoardGids.length === 0) return false;
+                        if ($wire.lastCalendarPullTitle) return false;
                         return this.selectedProject?.asana_task_required ?? true;
                     },
                     get asanaTasks() {
