@@ -37,6 +37,6 @@ class Task extends Model
     public function projects(): BelongsToMany
     {
         return $this->belongsToMany(Project::class)
-            ->withPivot(['is_billable', 'hourly_rate_override']);
+            ->withPivot(['is_billable', 'hourly_rate_override', 'rate_id']);
     }
 }

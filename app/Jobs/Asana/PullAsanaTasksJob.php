@@ -61,10 +61,14 @@ class PullAsanaTasksJob implements ShouldQueue
             );
         }
 
-        AsanaTask::query()
-            ->where('asana_project_gid', $this->asanaProjectGid)
-            ->whereNotIn('gid', $seenGids)
-            ->delete();
+        // Only prune when we actually saw tasks — an empty response (transient API blip,
+        // revoked permission, etc.) must not wipe the cache.
+        if ($seenGids !== []) {
+            AsanaTask::query()
+                ->where('asana_project_gid', $this->asanaProjectGid)
+                ->whereNotIn('gid', $seenGids)
+                ->delete();
+        }
 
         AsanaSyncLog::info('asana.pull_tasks.completed', [
             'asana_project_gid' => $this->asanaProjectGid,

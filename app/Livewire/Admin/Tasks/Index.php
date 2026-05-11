@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin\Tasks;
 
 use App\Models\Task;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -28,6 +29,8 @@ class Index extends Component
 
     public function create(): void
     {
+        Gate::authorize('access-admin');
+
         $this->validate([
             'name' => 'required|string|max:255|unique:tasks,name',
             'colour' => 'required|regex:/^#[0-9A-Fa-f]{6}$/',
@@ -49,6 +52,8 @@ class Index extends Component
 
     public function edit(int $taskId): void
     {
+        Gate::authorize('access-admin');
+
         $task = Task::findOrFail($taskId);
         $this->editingId = $taskId;
         $this->editName = $task->name;
@@ -58,6 +63,8 @@ class Index extends Component
 
     public function save(): void
     {
+        Gate::authorize('access-admin');
+
         $this->validate([
             'editName' => 'required|string|max:255|unique:tasks,name,'.$this->editingId,
             'editColour' => 'required|regex:/^#[0-9A-Fa-f]{6}$/',
@@ -79,6 +86,8 @@ class Index extends Component
 
     public function moveUp(int $taskId): void
     {
+        Gate::authorize('access-admin');
+
         $task = Task::findOrFail($taskId);
         $above = Task::where('sort_order', '<', $task->sort_order)
             ->orderByDesc('sort_order')->first();
@@ -92,6 +101,8 @@ class Index extends Component
 
     public function moveDown(int $taskId): void
     {
+        Gate::authorize('access-admin');
+
         $task = Task::findOrFail($taskId);
         $below = Task::where('sort_order', '>', $task->sort_order)
             ->orderBy('sort_order')->first();
@@ -105,6 +116,8 @@ class Index extends Component
 
     public function toggleArchive(int $taskId): void
     {
+        Gate::authorize('access-admin');
+
         $task = Task::findOrFail($taskId);
         $task->update(['is_archived' => ! $task->is_archived]);
     }

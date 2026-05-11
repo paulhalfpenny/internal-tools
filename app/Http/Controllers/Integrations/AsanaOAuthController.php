@@ -112,14 +112,15 @@ class AsanaOAuthController extends Controller
                 ->with('asana_error', 'Connected to Asana but could not fetch your profile. Please try again.');
         }
 
-        $defaultWorkspace = $me['workspaces'][0] ?? null;
+        $workspaces = $me['workspaces'];
+        $defaultWorkspace = $workspaces[0] ?? null;
 
         $user->forceFill([
             'asana_user_gid' => $me['gid'],
             'asana_workspace_gid' => $defaultWorkspace['gid'] ?? null,
         ])->save();
 
-        foreach ($me['workspaces'] as $workspace) {
+        foreach ($workspaces as $workspace) {
             AsanaWorkspace::updateOrCreate(
                 ['gid' => $workspace['gid']],
                 ['name' => $workspace['name'], 'last_synced_at' => now()],
@@ -133,7 +134,7 @@ class AsanaOAuthController extends Controller
         AsanaSyncLog::info('asana.oauth.connected', [
             'user_id' => $user->id,
             'asana_user_gid' => $me['gid'],
-            'workspace_count' => count($me['workspaces']),
+            'workspace_count' => count($workspaces),
         ], $user);
 
         return redirect()->route('profile.asana')

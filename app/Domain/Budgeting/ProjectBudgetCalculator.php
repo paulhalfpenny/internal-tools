@@ -61,41 +61,52 @@ final class ProjectBudgetCalculator
             return [];
         }
 
+        // Aggregate per-project in SQL using a CASE WHEN keyed on per-project
+        // effective_start, so we never materialise individual time entries.
+        $whenHours = [];
+        $whenAmount = [];
+        $hoursBindings = [];
+        $amountBindings = [];
+        foreach ($budgeted as $project) {
+            $start = $this->effectiveStart($project);
+            if ($start === null) {
+                $whenHours[] = 'WHEN project_id = ? THEN hours';
+                $whenAmount[] = 'WHEN project_id = ? THEN billable_amount';
+                $hoursBindings[] = $project->id;
+                $amountBindings[] = $project->id;
+            } else {
+                $whenHours[] = 'WHEN project_id = ? AND spent_on >= ? THEN hours';
+                $whenAmount[] = 'WHEN project_id = ? AND spent_on >= ? THEN billable_amount';
+                $hoursBindings[] = $project->id;
+                $hoursBindings[] = $start->toDateString();
+                $amountBindings[] = $project->id;
+                $amountBindings[] = $start->toDateString();
+            }
+        }
+
+        $hoursCase = 'SUM(CASE '.implode(' ', $whenHours).' ELSE 0 END) as actual_hours';
+        $amountCase = 'SUM(CASE '.implode(' ', $whenAmount).' ELSE 0 END) as actual_amount';
+
+        // Bindings must follow placeholder order in the SELECT: project_id (no
+        // placeholders), then all of hoursCase's, then all of amountCase's.
         $rows = TimeEntry::query()
             ->whereIn('project_id', $budgeted->pluck('id'))
             ->where('is_billable', true)
             ->toBase()
-            ->selectRaw('
-                project_id,
-                spent_on,
-                hours,
-                billable_amount
-            ')
-            ->get();
-
-        $byProject = $rows->groupBy('project_id');
+            ->selectRaw("project_id, {$hoursCase}, {$amountCase}", array_merge($hoursBindings, $amountBindings))
+            ->groupBy('project_id')
+            ->get()
+            ->keyBy('project_id');
 
         $result = [];
         foreach ($budgeted as $project) {
-            $start = $this->effectiveStart($project);
-            $entries = $byProject->get($project->id, collect());
-
-            $actualHours = 0.0;
-            $actualAmount = 0.0;
-            foreach ($entries as $entry) {
-                if ($start !== null && $entry->spent_on < $start->toDateString()) {
-                    continue;
-                }
-                $actualHours += (float) $entry->hours;
-                $actualAmount += (float) $entry->billable_amount;
-            }
-
+            $row = $rows->get($project->id);
             $result[$project->id] = new BudgetStatus(
                 budgetType: $project->budget_type,
                 budgetAmount: $this->effectiveBudgetAmount($project, $asOf),
                 budgetHours: $project->budget_hours !== null ? (float) $project->budget_hours : null,
-                actualAmount: round($actualAmount, 2),
-                actualHours: round($actualHours, 2),
+                actualAmount: round((float) ($row->actual_amount ?? 0), 2),
+                actualHours: round((float) ($row->actual_hours ?? 0), 2),
             );
         }
 

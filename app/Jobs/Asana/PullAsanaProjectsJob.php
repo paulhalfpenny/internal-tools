@@ -60,10 +60,14 @@ class PullAsanaProjectsJob implements ShouldQueue
             );
         }
 
-        AsanaProject::query()
-            ->where('workspace_gid', $this->workspaceGid)
-            ->whereNotIn('gid', $seenGids)
-            ->delete();
+        // Only prune when we actually saw projects — an empty response (transient API blip,
+        // revoked permission, etc.) must not wipe the cache.
+        if ($seenGids !== []) {
+            AsanaProject::query()
+                ->where('workspace_gid', $this->workspaceGid)
+                ->whereNotIn('gid', $seenGids)
+                ->delete();
+        }
 
         AsanaSyncLog::info('asana.pull_projects.completed', [
             'workspace_gid' => $this->workspaceGid,

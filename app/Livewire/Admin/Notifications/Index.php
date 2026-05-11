@@ -5,6 +5,7 @@ namespace App\Livewire\Admin\Notifications;
 use App\Models\User;
 use App\Settings\NotificationSettings;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -22,12 +23,16 @@ class Index extends Component
 
     public function mount(): void
     {
+        Gate::authorize('access-admin');
+
         $this->emailEnabled = NotificationSettings::emailEnabled();
         $this->slackEnabled = NotificationSettings::slackEnabled();
     }
 
     public function save(): void
     {
+        Gate::authorize('access-admin');
+
         NotificationSettings::setEmailEnabled($this->emailEnabled);
         NotificationSettings::setSlackEnabled($this->slackEnabled);
 
@@ -36,6 +41,8 @@ class Index extends Component
 
     public function syncSlack(): void
     {
+        Gate::authorize('access-admin');
+
         Artisan::call('slack:sync-user-ids');
 
         $this->syncedAt = now()->format('H:i:s');

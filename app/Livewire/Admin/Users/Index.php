@@ -5,6 +5,7 @@ namespace App\Livewire\Admin\Users;
 use App\Enums\Role;
 use App\Models\Rate;
 use App\Models\User;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
@@ -50,6 +51,8 @@ class Index extends Component
 
     public function edit(int $userId): void
     {
+        Gate::authorize('access-admin');
+
         $user = User::findOrFail($userId);
         $this->editingId = $userId;
         $this->editName = $user->name;
@@ -69,6 +72,8 @@ class Index extends Component
 
     public function save(): void
     {
+        Gate::authorize('access-admin');
+
         $this->validate([
             'editRole' => 'required|in:user,manager,admin',
             'editRoleTitle' => 'nullable|string|max:255',

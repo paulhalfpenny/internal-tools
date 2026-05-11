@@ -40,9 +40,10 @@ class CheckBudgetAlerts extends Command
 
         $admins = User::where('role', Role::Admin)->where('is_active', true)->get();
         $totalSent = 0;
+        $statuses = $calculator->forProjects($projects, $now);
 
         foreach ($projects as $project) {
-            $status = $calculator->forProject($project, $now);
+            $status = $statuses[$project->id] ?? null;
             if ($status === null || $status->budgetAmount <= 0) {
                 continue;
             }
@@ -52,16 +53,6 @@ class CheckBudgetAlerts extends Command
 
             foreach (self::THRESHOLDS as $threshold) {
                 if ($percent < $threshold) {
-                    continue;
-                }
-
-                $alreadyAlerted = DB::table('project_budget_alerts')
-                    ->where('project_id', $project->id)
-                    ->where('threshold', $threshold)
-                    ->where('period_key', $periodKey)
-                    ->exists();
-
-                if ($alreadyAlerted) {
                     continue;
                 }
 
@@ -80,6 +71,16 @@ class CheckBudgetAlerts extends Command
                 );
 
                 if ($dryRun) {
+                    $alreadyAlerted = DB::table('project_budget_alerts')
+                        ->where('project_id', $project->id)
+                        ->where('threshold', $threshold)
+                        ->where('period_key', $periodKey)
+                        ->exists();
+
+                    if ($alreadyAlerted) {
+                        continue;
+                    }
+
                     $this->line(sprintf(
                         '[dry-run] %s — %d%% threshold (%.1f%% used) → %d recipients (period %s)',
                         $project->name,
@@ -88,20 +89,28 @@ class CheckBudgetAlerts extends Command
                         $recipients->count(),
                         $periodKey,
                     ));
-                } else {
-                    Notification::send($recipients, $notification);
 
-                    DB::table('project_budget_alerts')->insert([
-                        'project_id' => $project->id,
-                        'threshold' => $threshold,
-                        'period_key' => $periodKey,
-                        'alerted_at' => $now->toDateTimeString(),
-                        'created_at' => $now->toDateTimeString(),
-                        'updated_at' => $now->toDateTimeString(),
-                    ]);
-
-                    $totalSent++;
+                    continue;
                 }
+
+                // Reserve the dedupe row first; the unique key (project_id, threshold, period_key)
+                // means insertOrIgnore returns 0 if another worker already claimed it. Only send
+                // notifications when we successfully claimed it.
+                $claimed = DB::table('project_budget_alerts')->insertOrIgnore([
+                    'project_id' => $project->id,
+                    'threshold' => $threshold,
+                    'period_key' => $periodKey,
+                    'alerted_at' => $now->toDateTimeString(),
+                    'created_at' => $now->toDateTimeString(),
+                    'updated_at' => $now->toDateTimeString(),
+                ]);
+
+                if ($claimed === 0) {
+                    continue;
+                }
+
+                Notification::send($recipients, $notification);
+                $totalSent++;
             }
         }
 

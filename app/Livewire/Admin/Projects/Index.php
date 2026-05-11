@@ -5,6 +5,8 @@ namespace App\Livewire\Admin\Projects;
 use App\Enums\BudgetType;
 use App\Models\Client;
 use App\Models\Project;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
@@ -36,6 +38,8 @@ class Index extends Component
 
     public function save(): void
     {
+        Gate::authorize('access-admin');
+
         $this->validate([
             'clientId' => 'required|exists:clients,id',
             'code' => 'required|string|max:50|unique:projects,code',
@@ -74,42 +78,51 @@ class Index extends Component
 
     public function toggleArchive(int $projectId): void
     {
+        Gate::authorize('access-admin');
+
         $project = Project::findOrFail($projectId);
         $project->update(['is_archived' => ! $project->is_archived]);
     }
 
     public function duplicate(int $projectId): void
     {
+        Gate::authorize('access-admin');
+
         $original = Project::with(['tasks', 'users'])->findOrFail($projectId);
 
         $newCode = $this->uniqueProjectCode($original->code.'-COPY');
 
-        $copy = Project::create([
-            'client_id' => $original->client_id,
-            'code' => $newCode,
-            'name' => $original->name.' (copy)',
-            'is_billable' => $original->is_billable,
-            'budget_type' => $original->budget_type,
-            'budget_amount' => $original->budget_amount,
-            'budget_hours' => $original->budget_hours,
-            'budget_starts_on' => $original->budget_starts_on,
-            'starts_on' => $original->starts_on,
-            'ends_on' => $original->ends_on,
-            'is_archived' => false,
-        ]);
-
-        foreach ($original->tasks as $task) {
-            $copy->tasks()->attach($task->id, [
-                'is_billable' => (bool) $task->pivot->is_billable,
-                'hourly_rate_override' => $task->pivot->hourly_rate_override,
+        $copy = DB::transaction(function () use ($original, $newCode) {
+            $copy = Project::create([
+                'client_id' => $original->client_id,
+                'manager_user_id' => $original->manager_user_id,
+                'code' => $newCode,
+                'name' => $original->name.' (copy)',
+                'is_billable' => $original->is_billable,
+                'budget_type' => $original->budget_type,
+                'budget_amount' => $original->budget_amount,
+                'budget_hours' => $original->budget_hours,
+                'budget_starts_on' => $original->budget_starts_on,
+                'starts_on' => $original->starts_on,
+                'ends_on' => $original->ends_on,
+                'is_archived' => false,
             ]);
-        }
 
-        foreach ($original->users as $user) {
-            $copy->users()->attach($user->id, [
-                'hourly_rate_override' => $user->pivot->hourly_rate_override,
-            ]);
-        }
+            foreach ($original->tasks as $task) {
+                $copy->tasks()->attach($task->id, [
+                    'is_billable' => (bool) $task->pivot->is_billable,
+                    'hourly_rate_override' => $task->pivot->hourly_rate_override,
+                ]);
+            }
+
+            foreach ($original->users as $user) {
+                $copy->users()->attach($user->id, [
+                    'hourly_rate_override' => $user->pivot->hourly_rate_override,
+                ]);
+            }
+
+            return $copy;
+        });
 
         $this->redirect(route('admin.projects.edit', $copy));
     }

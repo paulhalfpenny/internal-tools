@@ -31,6 +31,9 @@ class HarvestImport extends Command
     /** @var array<string, int> */
     private array $userCache = [];
 
+    /** @var array<string, true> */
+    private array $userMissCache = [];
+
     private int $imported = 0;
 
     private int $skipped = 0;
@@ -168,9 +171,14 @@ class HarvestImport extends Command
             return $this->userCache[$name];
         }
 
+        if (isset($this->userMissCache[$name])) {
+            throw new \RuntimeException("No user found with name \"{$name}\". Create the user first or check the name matches exactly.");
+        }
+
         $user = User::whereRaw('LOWER(name) = ?', [strtolower($name)])->first();
 
         if ($user === null) {
+            $this->userMissCache[$name] = true;
             throw new \RuntimeException("No user found with name \"{$name}\". Create the user first or check the name matches exactly.");
         }
 

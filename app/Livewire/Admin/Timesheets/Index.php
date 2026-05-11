@@ -6,6 +6,7 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -17,6 +18,8 @@ class Index extends Component
 
     public function mount(): void
     {
+        Gate::authorize('access-admin');
+
         $this->weekStart = CarbonImmutable::now()->startOfWeek()->toDateString();
     }
 

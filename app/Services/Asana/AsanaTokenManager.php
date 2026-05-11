@@ -4,7 +4,9 @@ namespace App\Services\Asana;
 
 use App\Models\AsanaSyncLog;
 use App\Models\User;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Throwable;
 
 final class AsanaTokenManager
 {
@@ -40,13 +42,22 @@ final class AsanaTokenManager
             return null;
         }
 
-        $response = Http::asForm()->post(self::TOKEN_URL, [
-            'grant_type' => 'refresh_token',
-            'client_id' => config('services.asana.client_id'),
-            'client_secret' => config('services.asana.client_secret'),
-            'redirect_uri' => config('services.asana.redirect'),
-            'refresh_token' => $user->asana_refresh_token,
-        ]);
+        try {
+            $response = Http::asForm()->post(self::TOKEN_URL, [
+                'grant_type' => 'refresh_token',
+                'client_id' => config('services.asana.client_id'),
+                'client_secret' => config('services.asana.client_secret'),
+                'redirect_uri' => config('services.asana.redirect'),
+                'refresh_token' => $user->asana_refresh_token,
+            ]);
+        } catch (ConnectionException|Throwable $e) {
+            AsanaSyncLog::error('asana.token.refresh_exception', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ], $user);
+
+            return null;
+        }
 
         if (! $response->successful()) {
             AsanaSyncLog::error('asana.token.refresh_failed', [
