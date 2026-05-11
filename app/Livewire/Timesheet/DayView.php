@@ -550,6 +550,10 @@ class DayView extends Component
             ->values()
             ->all();
 
+        $asanaProjectNames = \App\Models\AsanaProject::query()
+            ->whereIn('gid', $linkedAsanaProjectGids)
+            ->pluck('name', 'gid');
+
         $asanaTasksByProject = AsanaTask::query()
             ->whereIn('asana_project_gid', $linkedAsanaProjectGids)
             ->where('is_completed', false)
@@ -559,6 +563,7 @@ class DayView extends Component
             ->map(fn ($group) => $group->map(fn (AsanaTask $t) => [
                 'gid' => $t->gid,
                 'name' => $t->name,
+                'board_name' => $asanaProjectNames[$t->asana_project_gid] ?? null,
             ])->values()->all())
             ->all();
 
