@@ -112,7 +112,7 @@ class AsanaOAuthController extends Controller
                 ->with('asana_error', 'Connected to Asana but could not fetch your profile. Please try again.');
         }
 
-        $workspaces = $me['workspaces'] ?? [];
+        $workspaces = $me['workspaces'];
         $defaultWorkspace = $workspaces[0] ?? null;
 
         $user->forceFill([
