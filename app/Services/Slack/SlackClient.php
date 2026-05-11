@@ -3,9 +3,12 @@
 namespace App\Services\Slack;
 
 use App\Models\User;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class SlackClient
 {
@@ -33,9 +36,17 @@ class SlackClient
             return null;
         }
 
-        $response = $this->client()->get(self::BASE_URL.'/users.lookupByEmail', [
-            'email' => $user->email,
-        ]);
+        $response = $this->callWithRateLimit(
+            fn () => $this->client()->get(self::BASE_URL.'/users.lookupByEmail', [
+                'email' => $user->email,
+            ]),
+            'users.lookupByEmail',
+            ['user_id' => $user->id, 'email' => $user->email],
+        );
+
+        if ($response === null) {
+            return null;
+        }
 
         $body = $response->json();
 
@@ -76,7 +87,15 @@ class SlackClient
             $payload['blocks'] = $blocks;
         }
 
-        $response = $this->client()->post(self::BASE_URL.'/chat.postMessage', $payload);
+        $response = $this->callWithRateLimit(
+            fn () => $this->client()->post(self::BASE_URL.'/chat.postMessage', $payload),
+            'chat.postMessage',
+            ['user_id' => $user->id, 'slack_user_id' => $slackId],
+        );
+
+        if ($response === null) {
+            return false;
+        }
 
         $body = $response->json();
         if (! ($body['ok'] ?? false)) {
@@ -90,6 +109,43 @@ class SlackClient
         }
 
         return true;
+    }
+
+    /**
+     * Call a Slack endpoint with bounded 429 retry-after handling and connection-error
+     * trapping. Returns null when the request ultimately fails or hits the retry cap.
+     *
+     * @param  callable(): Response  $request
+     * @param  array<string, mixed>  $logContext
+     */
+    private function callWithRateLimit(callable $request, string $endpoint, array $logContext): ?Response
+    {
+        $attempts = 0;
+
+        while ($attempts < 3) {
+            try {
+                $response = $request();
+            } catch (ConnectionException|Throwable $e) {
+                Log::warning('Slack '.$endpoint.' connection failed', $logContext + ['error' => $e->getMessage()]);
+
+                return null;
+            }
+
+            if ($response->status() !== 429) {
+                return $response;
+            }
+
+            $retryAfter = (int) ($response->header('Retry-After') ?: 1);
+            // Cap the wait so a misbehaving server can't pin a long-running command.
+            $retryAfter = min($retryAfter, 30);
+            Log::info('Slack '.$endpoint.' rate-limited; retrying', $logContext + ['retry_after' => $retryAfter]);
+            sleep($retryAfter);
+            $attempts++;
+        }
+
+        Log::warning('Slack '.$endpoint.' gave up after rate-limit retries', $logContext);
+
+        return null;
     }
 
     private function token(): ?string

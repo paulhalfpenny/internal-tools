@@ -2,8 +2,10 @@
 
 use App\Enums\Role;
 use App\Livewire\Admin\Clients\Index as AdminClients;
+use App\Livewire\Admin\Projects\Edit as AdminProjectEdit;
 use App\Livewire\Admin\Projects\Index as AdminProjects;
 use App\Livewire\Admin\Users\Index as AdminUsers;
+use App\Models\AsanaProject;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
@@ -121,6 +123,63 @@ test('duplicate project handles code collisions by appending a counter', functio
         ->call('duplicate', $project->id);
 
     expect(Project::where('code', 'DUP-001-COPY-2')->exists())->toBeTrue();
+});
+
+test('saving a freshly duplicated project does not error', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $this->actingAs($admin);
+
+    $client = Client::factory()->create();
+    $project = Project::factory()->create([
+        'client_id' => $client->id,
+        'code' => 'SAV-001',
+        'name' => 'Original',
+    ]);
+    $task = Task::factory()->create();
+    $project->tasks()->attach($task->id, ['is_billable' => true, 'hourly_rate_override' => null]);
+    $teamMember = User::factory()->create();
+    $project->users()->attach($teamMember->id, ['hourly_rate_override' => 100.00]);
+
+    Livewire::test(AdminProjects::class)->call('duplicate', $project->id);
+
+    $copy = Project::where('code', 'SAV-001-COPY')->firstOrFail();
+
+    Livewire::test(AdminProjectEdit::class, ['project' => $copy])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $copy->refresh();
+    expect($copy->users()->count())->toBe(1);
+    expect($copy->tasks()->count())->toBe(1);
+});
+
+test('saving a project with an Asana gid that another project already uses returns a validation error, not a 500', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $this->actingAs($admin);
+
+    AsanaProject::create([
+        'gid' => 'shared-gid',
+        'workspace_gid' => 'ws-1',
+        'name' => 'Shared',
+        'is_archived' => false,
+    ]);
+
+    $client = Client::factory()->create();
+    $taken = Project::factory()->create([
+        'client_id' => $client->id,
+        'asana_project_gid' => 'shared-gid',
+        'asana_workspace_gid' => 'ws-1',
+    ]);
+    $target = Project::factory()->create(['client_id' => $client->id]);
+
+    Livewire::test(AdminProjectEdit::class, ['project' => $target])
+        ->set('asanaProjectGid', 'shared-gid')
+        ->call('save')
+        ->assertHasErrors(['asanaProjectGid']);
+
+    $target->refresh();
+    expect($target->asana_project_gid)->toBeNull();
+    expect($taken->fresh()->asana_project_gid)->toBe('shared-gid');
 });
 
 test('creating a project for a client pre-attaches the clients default tasks', function () {

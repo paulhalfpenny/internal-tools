@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin\Rates;
 
 use App\Models\Rate;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -24,6 +25,8 @@ class Library extends Component
 
     public function create(): void
     {
+        Gate::authorize('access-admin');
+
         $this->validate([
             'name' => 'required|string|max:255|unique:rates,name',
             'hourlyRate' => 'required|numeric|min:0',
@@ -40,6 +43,8 @@ class Library extends Component
 
     public function edit(int $rateId): void
     {
+        Gate::authorize('access-admin');
+
         $rate = Rate::findOrFail($rateId);
         $this->editingId = $rateId;
         $this->editName = $rate->name;
@@ -48,6 +53,8 @@ class Library extends Component
 
     public function save(): void
     {
+        Gate::authorize('access-admin');
+
         $this->validate([
             'editName' => 'required|string|max:255|unique:rates,name,'.$this->editingId,
             'editHourlyRate' => 'required|numeric|min:0',
@@ -68,6 +75,8 @@ class Library extends Component
 
     public function toggleArchive(int $rateId): void
     {
+        Gate::authorize('access-admin');
+
         $rate = Rate::findOrFail($rateId);
         $rate->update(['is_archived' => ! $rate->is_archived]);
     }

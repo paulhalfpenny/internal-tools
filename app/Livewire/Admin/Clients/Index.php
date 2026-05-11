@@ -4,6 +4,7 @@ namespace App\Livewire\Admin\Clients;
 
 use App\Models\Client;
 use App\Models\Task;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
@@ -32,6 +33,8 @@ class Index extends Component
 
     public function create(): void
     {
+        Gate::authorize('access-admin');
+
         $this->validate([
             'name' => 'required|string|max:255',
             'code' => 'nullable|string|max:20|unique:clients,code',
@@ -48,6 +51,8 @@ class Index extends Component
 
     public function edit(int $clientId): void
     {
+        Gate::authorize('access-admin');
+
         $client = Client::with('defaultTasks')->findOrFail($clientId);
         $this->editingId = $clientId;
         $this->editName = $client->name;
@@ -57,6 +62,8 @@ class Index extends Component
 
     public function save(): void
     {
+        Gate::authorize('access-admin');
+
         $this->validate([
             'editName' => 'required|string|max:255',
             'editCode' => 'nullable|string|max:20|unique:clients,code,'.$this->editingId,
@@ -84,6 +91,8 @@ class Index extends Component
 
     public function toggleArchive(int $clientId): void
     {
+        Gate::authorize('access-admin');
+
         $client = Client::findOrFail($clientId);
         $client->update(['is_archived' => ! $client->is_archived]);
     }

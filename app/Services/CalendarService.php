@@ -3,8 +3,11 @@
 namespace App\Services;
 
 use App\Models\User;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 final class CalendarService
 {
@@ -57,14 +60,24 @@ final class CalendarService
         // invitee's primary calendar).
         $byId = [];
         foreach ($calendarIds as $calendarId) {
-            $response = Http::withToken($token)
-                ->get('https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events', [
-                    'timeMin' => $timeMin,
-                    'timeMax' => $timeMax,
-                    'singleEvents' => 'true',
-                    'orderBy' => 'startTime',
-                    'maxResults' => 250,
+            try {
+                $response = Http::withToken($token)
+                    ->get('https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events', [
+                        'timeMin' => $timeMin,
+                        'timeMax' => $timeMax,
+                        'singleEvents' => 'true',
+                        'orderBy' => 'startTime',
+                        'maxResults' => 250,
+                    ]);
+            } catch (ConnectionException|Throwable $e) {
+                Log::warning('calendar.fetch_events.failed', [
+                    'calendar_id' => $calendarId,
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
                 ]);
+
+                continue;
+            }
 
             if (! $response->successful()) {
                 continue;
@@ -165,12 +178,21 @@ final class CalendarService
             return null;
         }
 
-        $response = Http::asForm()->post('https://oauth2.googleapis.com/token', [
-            'client_id' => config('services.google.client_id'),
-            'client_secret' => config('services.google.client_secret'),
-            'refresh_token' => $user->google_refresh_token,
-            'grant_type' => 'refresh_token',
-        ]);
+        try {
+            $response = Http::asForm()->post('https://oauth2.googleapis.com/token', [
+                'client_id' => config('services.google.client_id'),
+                'client_secret' => config('services.google.client_secret'),
+                'refresh_token' => $user->google_refresh_token,
+                'grant_type' => 'refresh_token',
+            ]);
+        } catch (ConnectionException|Throwable $e) {
+            Log::warning('calendar.token_refresh.failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
 
         if (! $response->successful()) {
             return null;
@@ -182,10 +204,10 @@ final class CalendarService
             return null;
         }
 
-        $user->update([
+        $user->forceFill([
             'google_access_token' => $newToken,
             'google_token_expires_at' => now()->addSeconds(max(0, ($data['expires_in'] ?? 3600) - 60)),
-        ]);
+        ])->save();
 
         return $newToken;
     }

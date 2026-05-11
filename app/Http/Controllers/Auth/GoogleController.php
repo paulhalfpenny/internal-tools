@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\GoogleProvider;
@@ -23,7 +24,7 @@ class GoogleController extends Controller
             ->redirect();
     }
 
-    public function callback(): RedirectResponse
+    public function callback(Request $request): RedirectResponse
     {
         $googleUser = Socialite::driver('google')->user();
 
@@ -41,9 +42,20 @@ class GoogleController extends Controller
                 ->with('error', 'Access is restricted to filteragency.com accounts.');
         }
 
-        $user = User::where('google_sub', $googleUser->getId())
-            ->orWhere('email', $email)
-            ->first();
+        // Match on Google's stable subject ID first. Fall back to email only when no row
+        // with that sub exists AND the matching row has never been bound to a Google
+        // account (google_sub is null) — this prevents account takeover where someone
+        // can claim an imported/seeded row by signing in with a colliding email.
+        $user = User::where('google_sub', $googleUser->getId())->first();
+
+        if ($user === null) {
+            $emailMatch = User::where('email', $email)->first();
+            if ($emailMatch !== null && $emailMatch->google_sub !== null) {
+                return redirect()->route('auth.error')
+                    ->with('error', 'This email is already linked to a different Google account. Contact an administrator.');
+            }
+            $user = $emailMatch;
+        }
 
         if ($user === null) {
             $user = User::create([
@@ -73,6 +85,9 @@ class GoogleController extends Controller
         }
 
         Auth::login($user, remember: true);
+
+        // Rotate the session ID so the pre-auth session can't be replayed.
+        $request->session()->regenerate();
 
         return redirect()->intended(route('timesheet'));
     }

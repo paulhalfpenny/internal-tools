@@ -12,16 +12,17 @@ final class AsanaService
 {
     private const BASE_URL = 'https://app.asana.com/api/1.0';
 
+    private ?User $user = null;
+
     public function __construct(private readonly AsanaTokenManager $tokens) {}
 
     public function forUser(User $user): self
     {
-        $this->user = $user;
+        $clone = new self($this->tokens);
+        $clone->user = $user;
 
-        return $this;
+        return $clone;
     }
-
-    private User $user;
 
     /**
      * @return array{gid: string, name: string, email: string|null, workspaces: list<array{gid: string, name: string}>}
@@ -204,6 +205,10 @@ final class AsanaService
 
     private function client(): PendingRequest
     {
+        if ($this->user === null) {
+            throw new RuntimeException('AsanaService used without calling forUser() first.');
+        }
+
         $token = $this->tokens->getValidToken($this->user);
         if ($token === null) {
             throw new RuntimeException('User is not connected to Asana.');

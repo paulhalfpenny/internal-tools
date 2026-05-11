@@ -45,7 +45,7 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
             return;
         }
 
-        $actor = $this->pickActor();
+        $actor = $this->pickActor($project->asana_workspace_gid);
         if ($actor === null) {
             AsanaSyncLog::warn('asana.sync_hours.no_actor', [
                 'asana_task_gid' => $this->asanaTaskGid,
@@ -67,6 +67,13 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
                 throw $e;
             }
         }
+
+        // Snapshot the latest updated_at among matching entries BEFORE the API call so we
+        // only mark synced rows that haven't been edited since the SUM was computed.
+        $snapshot = TimeEntry::query()
+            ->where('asana_task_gid', $this->asanaTaskGid)
+            ->where('project_id', $this->projectId)
+            ->max('updated_at');
 
         $total = $aggregator->totalHours($this->asanaTaskGid);
 
@@ -99,6 +106,8 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
 
         TimeEntry::query()
             ->where('asana_task_gid', $this->asanaTaskGid)
+            ->where('project_id', $this->projectId)
+            ->when($snapshot !== null, fn ($q) => $q->where('updated_at', '<=', $snapshot))
             ->update([
                 'asana_synced_at' => now(),
                 'asana_sync_error' => null,
@@ -116,11 +125,12 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
         $this->markEntriesError(substr($exception->getMessage(), 0, 500));
     }
 
-    private function pickActor(): ?User
+    private function pickActor(string $workspaceGid): ?User
     {
         return User::query()
             ->whereNotNull('asana_access_token')
             ->whereNotNull('asana_user_gid')
+            ->where('asana_workspace_gid', $workspaceGid)
             ->where('is_active', true)
             ->orderByRaw('CASE WHEN role = "admin" THEN 0 WHEN role = "manager" THEN 1 ELSE 2 END')
             ->first();
@@ -130,6 +140,7 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
     {
         TimeEntry::query()
             ->where('asana_task_gid', $this->asanaTaskGid)
+            ->where('project_id', $this->projectId)
             ->update(['asana_sync_error' => $message]);
     }
 

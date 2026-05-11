@@ -14,6 +14,8 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\Asana\AsanaService;
 use Illuminate\Database\Eloquent\Relations\Pivot;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -57,6 +59,8 @@ class Edit extends Component
 
     public function mount(Project $project): void
     {
+        Gate::authorize('access-admin');
+
         $this->project = $project->load(['tasks', 'users']);
         $this->clientId = $project->client_id;
         $this->managerUserId = $project->manager_user_id;
@@ -141,6 +145,8 @@ class Edit extends Component
 
     public function confirmAddUsers(): void
     {
+        Gate::authorize('access-admin');
+
         // Include the dropdown's current value if the admin hit Save without
         // pressing Add another first.
         if ($this->pendingNewUserDropdown !== null) {
@@ -175,6 +181,8 @@ class Edit extends Component
 
     public function confirmRemoveUser(): void
     {
+        Gate::authorize('access-admin');
+
         if ($this->confirmRemoveUserId === null) {
             return;
         }
@@ -185,6 +193,8 @@ class Edit extends Component
 
     public function removeUser(int $userId): void
     {
+        Gate::authorize('access-admin');
+
         // Used by tests; UI flow goes through openRemoveUserModal → confirmRemoveUser.
         $this->project->users()->detach($userId);
         unset($this->userAssignments[$userId]);
@@ -192,6 +202,8 @@ class Edit extends Component
 
     public function save(AsanaService $asana): void
     {
+        Gate::authorize('access-admin');
+
         $this->validate([
             'clientId' => 'required|exists:clients,id',
             'managerUserId' => 'nullable|exists:users,id',
@@ -204,7 +216,14 @@ class Edit extends Component
             'budgetAmount' => 'nullable|numeric|min:0|required_with:budgetType',
             'budgetHours' => 'nullable|numeric|min:0',
             'budgetStartsOn' => 'nullable|date|required_if:budgetType,monthly_ci',
-            'asanaProjectGid' => 'nullable|string|exists:asana_projects,gid',
+            'asanaProjectGid' => [
+                'nullable',
+                'string',
+                'exists:asana_projects,gid',
+                Rule::unique('projects', 'asana_project_gid')->ignore($this->project->id),
+            ],
+        ], [
+            'asanaProjectGid.unique' => 'Another project is already linked to this Asana project.',
         ]);
 
         $previousGid = $this->project->asana_project_gid;
@@ -287,6 +306,8 @@ class Edit extends Component
 
     public function refreshAsanaTasks(): void
     {
+        Gate::authorize('access-admin');
+
         $authUser = $this->authUser();
         if (! $authUser->asanaConnected() || $this->project->asana_project_gid === null) {
             return;
@@ -300,10 +321,16 @@ class Edit extends Component
     {
         $authUser = $this->authUser();
         $workspaceGid = $authUser->asana_workspace_gid;
+        $linkedGids = Project::query()
+            ->whereNotNull('asana_project_gid')
+            ->where('id', '!=', $this->project->id)
+            ->pluck('asana_project_gid');
+
         $asanaProjects = $workspaceGid !== null
             ? AsanaProject::query()
                 ->where('workspace_gid', $workspaceGid)
                 ->where('is_archived', false)
+                ->whereNotIn('gid', $linkedGids)
                 ->orderBy('name')
                 ->get()
             : collect();

@@ -5,6 +5,7 @@ namespace App\Livewire\Admin\Projects;
 use App\Enums\BudgetType;
 use App\Models\Client;
 use App\Models\Project;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -32,6 +33,8 @@ class Create extends Component
 
     public function save(): void
     {
+        Gate::authorize('access-admin');
+
         $this->validate([
             'clientId' => 'required|exists:clients,id',
             'code' => 'required|string|max:50|unique:projects,code',

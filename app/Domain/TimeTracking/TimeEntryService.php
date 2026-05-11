@@ -117,7 +117,10 @@ final class TimeEntryService
             return;
         }
 
-        $elapsed = $entry->timer_started_at->diffInSeconds(Carbon::now()) / 3600;
+        // Signed diff so clock skew (timer_started_at in the future) yields a negative
+        // elapsed instead of being silently flipped positive.
+        $elapsedSeconds = $entry->timer_started_at->diffInSeconds(Carbon::now(), false);
+        $elapsed = max(0.0, $elapsedSeconds) / 3600;
         $newHours = round((float) $entry->hours + $elapsed, 2);
         $newHours = max(0.01, min(24.0, $newHours));
 
