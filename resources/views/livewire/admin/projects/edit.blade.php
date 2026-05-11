@@ -95,14 +95,14 @@
                             <label class="block text-sm font-medium text-gray-700 mb-1">
                                 {{ $budgetType === 'monthly_ci' ? 'Monthly budget (£/month)' : 'Total fee (£)' }}
                             </label>
-                            <input wire:model="budgetAmount" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded text-sm px-3 py-2" {{ $budgetType === '' ? 'disabled' : '' }}>
+                            <input wire:model="budgetAmount" type="number" step="0.01" min="0" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
                             @error('budgetAmount')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Budget hours (optional)</label>
-                            <input wire:model="budgetHours" type="number" step="0.25" min="0" class="w-full border border-gray-300 rounded text-sm px-3 py-2" {{ $budgetType === '' ? 'disabled' : '' }}>
+                            <input wire:model="budgetHours" type="number" step="0.25" min="0" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
                         </div>
                         @if($budgetType === 'monthly_ci')
                             <div>
@@ -382,6 +382,37 @@
                                     class="px-4 py-2 text-white text-sm font-medium rounded-md"
                                     style="background-color: #DC2626;">
                                 Remove from project
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            @if($showClearBudgetModal)
+                <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+                     wire:click="keepBudgetFields"
+                     x-data
+                     @keydown.escape.window="$wire.keepBudgetFields()">
+                    <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 px-8 py-8" @click.stop>
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-base font-semibold text-gray-900">Clear budget values?</h2>
+                            <button wire:click="keepBudgetFields" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                        </div>
+
+                        <p class="text-sm text-gray-700 mb-2">
+                            You've changed the budget type. Do you want to clear the existing
+                            <strong>Total fee</strong> and <strong>Budget hours</strong> values?
+                        </p>
+                        <p class="text-xs text-gray-500 mb-6">
+                            Choose <strong>Keep values</strong> to leave the fields as they are and edit them yourself.
+                        </p>
+
+                        <div class="flex justify-end gap-2">
+                            <button wire:click="keepBudgetFields" class="px-4 py-2 bg-white border border-gray-300 text-sm rounded-md hover:bg-gray-50">Keep values</button>
+                            <button wire:click="clearBudgetFields"
+                                    class="px-4 py-2 text-white text-sm font-medium rounded-md"
+                                    style="background-color: #DC2626;">
+                                Clear fields
                             </button>
                         </div>
                     </div>

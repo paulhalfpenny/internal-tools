@@ -63,6 +63,8 @@ class Edit extends Component
 
     public bool $asanaTaskRequired = true;
 
+    public bool $showClearBudgetModal = false;
+
     public function mount(Project $project): void
     {
         Gate::authorize('access-admin');
@@ -95,6 +97,26 @@ class Edit extends Component
                     : '',
             ];
         }
+    }
+
+    public function updatedBudgetType(): void
+    {
+        if ($this->budgetAmount !== '' || $this->budgetHours !== '' || $this->budgetStartsOn !== '') {
+            $this->showClearBudgetModal = true;
+        }
+    }
+
+    public function clearBudgetFields(): void
+    {
+        $this->budgetAmount = '';
+        $this->budgetHours = '';
+        $this->budgetStartsOn = '';
+        $this->showClearBudgetModal = false;
+    }
+
+    public function keepBudgetFields(): void
+    {
+        $this->showClearBudgetModal = false;
     }
 
     public function toggleTask(int $taskId): void
@@ -249,9 +271,9 @@ class Edit extends Component
             'starts_on' => $this->startsOn ?: null,
             'ends_on' => $this->endsOn ?: null,
             'budget_type' => $this->budgetType !== '' ? BudgetType::from($this->budgetType) : null,
-            'budget_amount' => $this->budgetType !== '' && $this->budgetAmount !== '' ? (float) $this->budgetAmount : null,
-            'budget_hours' => $this->budgetType !== '' && $this->budgetHours !== '' ? (float) $this->budgetHours : null,
-            'budget_starts_on' => $this->budgetType === 'monthly_ci' && $this->budgetStartsOn !== '' ? $this->budgetStartsOn : null,
+            'budget_amount' => $this->budgetAmount !== '' ? (float) $this->budgetAmount : null,
+            'budget_hours' => $this->budgetHours !== '' ? (float) $this->budgetHours : null,
+            'budget_starts_on' => $this->budgetStartsOn !== '' ? $this->budgetStartsOn : null,
             'asana_task_required' => $this->asanaTaskRequired,
         ]);
 
