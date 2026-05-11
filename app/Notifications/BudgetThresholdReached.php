@@ -23,6 +23,9 @@ class BudgetThresholdReached extends Notification implements ShouldQueue
         public readonly float $actualAmount,
     ) {}
 
+    /**
+     * @return array<int, string>
+     */
     public function via(object $notifiable): array
     {
         // Email is the primary channel per user decision; Slack remains opt-in via existing settings.
@@ -37,15 +40,21 @@ class BudgetThresholdReached extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $project = $this->project;
-        $client = $project->client?->name;
+        $client = $project->client->name;
         $verb = $this->threshold >= 100 ? 'over budget' : 'at '.$this->threshold.'%';
 
         $subject = trim(sprintf(
             '[Budget alert] %s — %s %s',
-            $client ? $client.' / '.$project->name : $project->name,
+            $client.' / '.$project->name,
             $verb,
             $this->periodKey === 'lifetime' ? '' : '('.$this->periodKey.')'
         ));
+
+        $periodLabel = 'lifetime';
+        if ($this->periodKey !== 'lifetime') {
+            $parsed = CarbonImmutable::createFromFormat('Y-m', $this->periodKey);
+            $periodLabel = $parsed !== null ? $parsed->format('F Y') : $this->periodKey;
+        }
 
         return (new MailMessage)
             ->subject($subject)
@@ -54,9 +63,7 @@ class BudgetThresholdReached extends Notification implements ShouldQueue
                 'client' => $client,
                 'threshold' => $this->threshold,
                 'periodKey' => $this->periodKey,
-                'periodLabel' => $this->periodKey === 'lifetime'
-                    ? 'lifetime'
-                    : CarbonImmutable::createFromFormat('Y-m', $this->periodKey)->format('F Y'),
+                'periodLabel' => $periodLabel,
                 'percentUsed' => $this->percentUsed,
                 'budgetAmount' => $this->budgetAmount,
                 'actualAmount' => $this->actualAmount,

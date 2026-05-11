@@ -5,6 +5,7 @@ namespace App\Livewire\Admin\Projects;
 use App\Enums\BudgetType;
 use App\Models\Client;
 use App\Models\Project;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
@@ -109,15 +110,19 @@ class Index extends Component
             ]);
 
             foreach ($original->tasks as $task) {
+                /** @var Pivot $pivot */
+                $pivot = $task->getRelation('pivot');
                 $copy->tasks()->attach($task->id, [
-                    'is_billable' => (bool) $task->pivot->is_billable,
-                    'hourly_rate_override' => $task->pivot->hourly_rate_override,
+                    'is_billable' => (bool) $pivot->getAttribute('is_billable'),
+                    'hourly_rate_override' => $pivot->getAttribute('hourly_rate_override'),
                 ]);
             }
 
             foreach ($original->users as $user) {
+                /** @var Pivot $pivot */
+                $pivot = $user->getRelation('pivot');
                 $copy->users()->attach($user->id, [
-                    'hourly_rate_override' => $user->pivot->hourly_rate_override,
+                    'hourly_rate_override' => $pivot->getAttribute('hourly_rate_override'),
                 ]);
             }
 

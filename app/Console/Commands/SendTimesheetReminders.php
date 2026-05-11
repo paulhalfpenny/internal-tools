@@ -157,11 +157,10 @@ class SendTimesheetReminders extends Command
     }
 
     /**
-     * @template TKey
      * @template TValue of array{user: User}
      *
-     * @param  Collection<TKey, TValue>  $rows
-     * @return Collection<TKey, TValue>
+     * @param  Collection<int, TValue>  $rows
+     * @return Collection<int, TValue>
      */
     private function limitToUser(Collection $rows): Collection
     {
@@ -170,6 +169,9 @@ class SendTimesheetReminders extends Command
             return $rows;
         }
 
-        return $rows->filter(fn (array $row) => $row['user']->id === (int) $userOption)->values();
+        /** @var Collection<int, TValue> $filtered */
+        $filtered = $rows->filter(fn ($row) => $row['user']->id === (int) $userOption)->values();
+
+        return $filtered;
     }
 }

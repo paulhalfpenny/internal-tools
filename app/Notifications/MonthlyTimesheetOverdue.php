@@ -20,6 +20,9 @@ class MonthlyTimesheetOverdue extends Notification implements ShouldQueue
         public readonly CarbonImmutable $monthStart,
     ) {}
 
+    /**
+     * @return array<int, string>
+     */
     public function via(object $notifiable): array
     {
         $channels = [];
@@ -47,6 +50,9 @@ class MonthlyTimesheetOverdue extends Notification implements ShouldQueue
             ]);
     }
 
+    /**
+     * @return array<string, string>
+     */
     public function toSlack(object $notifiable): array
     {
         $shortfall = max(0, $this->target - $this->hours);

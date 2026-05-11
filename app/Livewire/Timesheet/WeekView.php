@@ -378,9 +378,9 @@ class WeekView extends Component
             if (! isset($rowsFromEntries[$key])) {
                 $rowsFromEntries[$key] = [
                     'key' => $key,
-                    'project_name' => $entry->project?->name ?? 'Unknown project',
-                    'client_name' => $entry->project?->client?->name,
-                    'task_name' => $entry->task?->name ?? 'Unknown task',
+                    'project_name' => $entry->project->name,
+                    'client_name' => $entry->project->client->name,
+                    'task_name' => $entry->task->name,
                     'asana_task_name' => $entry->asana_task_gid ? ($asanaTasksByGid[$entry->asana_task_gid]->name ?? null) : null,
                     'cells' => array_fill(0, 7, ''),
                 ];

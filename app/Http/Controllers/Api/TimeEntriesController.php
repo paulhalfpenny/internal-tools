@@ -6,6 +6,7 @@ use App\Domain\TimeTracking\HoursParser;
 use App\Domain\TimeTracking\TimeEntryService;
 use App\Models\AsanaTask;
 use App\Models\Project;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -22,9 +23,11 @@ class TimeEntriesController
             'asana_task_gid' => 'nullable|string',
         ]);
 
+        /** @var User $user */
         $user = $request->user();
 
         // Project access: user must be assigned to the project.
+        /** @var Project $project */
         $project = Project::with(['users', 'tasks'])->findOrFail($data['project_id']);
         if (! $project->users->contains('id', $user->id)) {
             return response()->json(['error' => 'project_not_assigned'], 403);
