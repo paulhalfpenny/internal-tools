@@ -70,6 +70,8 @@ class SlackClient
 
     /**
      * Send a Slack DM to the given user. Returns true on success.
+     *
+     * @param  array<int, array<string, mixed>>  $blocks
      */
     public function sendDirectMessage(User $user, string $text, array $blocks = []): bool
     {
@@ -155,7 +157,9 @@ class SlackClient
 
     private function client(): PendingRequest
     {
-        return Http::withToken($this->token())
+        // Callers only reach client() after isConfigured() returned true, so the
+        // token is guaranteed non-null here.
+        return Http::withToken($this->token() ?? '')
             ->acceptJson()
             ->asJson();
     }

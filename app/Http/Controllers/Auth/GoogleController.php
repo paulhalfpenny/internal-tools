@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\GoogleProvider;
+use Laravel\Socialite\Two\User as SocialiteUser;
 
 class GoogleController extends Controller
 {
@@ -26,6 +27,7 @@ class GoogleController extends Controller
 
     public function callback(Request $request): RedirectResponse
     {
+        /** @var SocialiteUser $googleUser */
         $googleUser = Socialite::driver('google')->user();
 
         // Server-side domain restriction — do not trust the client
@@ -57,6 +59,14 @@ class GoogleController extends Controller
             $user = $emailMatch;
         }
 
+        // Socialite's User docblock declares these as non-null, but Google omits
+        // refresh_token on subsequent logins and may omit expires_in too, so the
+        // defensiveness is intentional. Local nullable copies tell PHPStan.
+        /** @var string|null $newRefreshToken */
+        $newRefreshToken = $googleUser->refreshToken;
+        /** @var int|null $expiresIn */
+        $expiresIn = $googleUser->expiresIn;
+
         if ($user === null) {
             $user = User::create([
                 'google_sub' => $googleUser->getId(),
@@ -65,8 +75,8 @@ class GoogleController extends Controller
                 'role' => Role::User,
                 'is_active' => true,
                 'google_access_token' => $googleUser->token,
-                'google_refresh_token' => $googleUser->refreshToken,
-                'google_token_expires_at' => now()->addSeconds(max(0, ($googleUser->expiresIn ?? 3600) - 60)),
+                'google_refresh_token' => $newRefreshToken,
+                'google_token_expires_at' => now()->addSeconds(max(0, ($expiresIn ?? 3600) - 60)),
             ]);
         } else {
             $user->update([
@@ -74,8 +84,8 @@ class GoogleController extends Controller
                 'name' => $googleUser->getName(),
                 'last_login_at' => now(),
                 'google_access_token' => $googleUser->token,
-                'google_refresh_token' => $googleUser->refreshToken ?? $user->google_refresh_token,
-                'google_token_expires_at' => now()->addSeconds(max(0, ($googleUser->expiresIn ?? 3600) - 60)),
+                'google_refresh_token' => $newRefreshToken ?? $user->google_refresh_token,
+                'google_token_expires_at' => now()->addSeconds(max(0, ($expiresIn ?? 3600) - 60)),
             ]);
         }
 

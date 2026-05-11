@@ -23,7 +23,7 @@ class AuthenticatePersonalAccessToken
         }
 
         $user = $token->user;
-        if ($user === null || ! $user->is_active) {
+        if (! $user->is_active) {
             return response()->json(['error' => 'user_inactive'], 401);
         }
 

@@ -100,6 +100,11 @@ final class ProjectBudgetCalculator
 
         $result = [];
         foreach ($budgeted as $project) {
+            // budget_type non-null is guaranteed by the filter() above; assert it
+            // so PHPStan narrows the type for the BudgetStatus constructor.
+            if ($project->budget_type === null) {
+                continue;
+            }
             $row = $rows->get($project->id);
             $result[$project->id] = new BudgetStatus(
                 budgetType: $project->budget_type,
@@ -220,6 +225,6 @@ final class ProjectBudgetCalculator
             return 0;
         }
 
-        return $startMonth->diffInMonths($asOfMonth) + 1;
+        return (int) $startMonth->diffInMonths($asOfMonth) + 1;
     }
 }

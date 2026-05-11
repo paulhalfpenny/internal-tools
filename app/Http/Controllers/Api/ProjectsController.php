@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\AsanaTask;
 use App\Models\Project;
+use App\Models\Task;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,6 +20,7 @@ class ProjectsController
      */
     public function index(Request $request): JsonResponse
     {
+        /** @var User $user */
         $user = $request->user();
 
         $projects = Project::with(['client', 'tasks'])
@@ -37,15 +41,20 @@ class ProjectsController
             'projects' => $projects->map(fn (Project $p) => [
                 'id' => $p->id,
                 'name' => $p->name,
-                'client_name' => $p->client?->name ?? '',
+                'client_name' => $p->client->name,
                 'asana_project_gid' => $p->asana_project_gid,
-                'tasks' => $p->tasks->map(fn ($t) => [
-                    'id' => $t->id,
-                    'name' => $t->name,
-                    'colour' => $t->colour,
-                    'is_billable' => (bool) $t->pivot->getAttribute('is_billable'),
-                ])->values()->all(),
-                'asana_tasks' => $asanaTasksByProject->get($p->asana_project_gid, collect())
+                'tasks' => $p->tasks->map(function (Task $t) {
+                    /** @var Pivot $pivot */
+                    $pivot = $t->getRelation('pivot');
+
+                    return [
+                        'id' => $t->id,
+                        'name' => $t->name,
+                        'colour' => $t->colour,
+                        'is_billable' => (bool) $pivot->getAttribute('is_billable'),
+                    ];
+                })->values()->all(),
+                'asana_tasks' => $asanaTasksByProject->get($p->asana_project_gid ?? '', collect())
                     ->map(fn (AsanaTask $t) => ['gid' => $t->gid, 'name' => $t->name])
                     ->values()
                     ->all(),

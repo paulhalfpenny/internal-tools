@@ -8,10 +8,12 @@ use App\Domain\TimeTracking\HoursParser;
 use App\Domain\TimeTracking\TimeEntryService;
 use App\Models\AsanaTask;
 use App\Models\Project;
+use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Services\CalendarService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -304,7 +306,7 @@ class DayView extends Component
         ];
 
         $isEdit = $this->editingEntryId !== null;
-        if ($isEdit) {
+        if ($isEdit && $this->editingEntryId !== null) {
             $entry = $this->guardEntry($this->editingEntryId);
             if ($entry) {
                 $service->update($entry, $data);
@@ -499,6 +501,7 @@ class DayView extends Component
 
         $dayTotal = $dayEntries->sum(fn (TimeEntry $e) => (float) $e->hours);
 
+        /** @var array<int, array{id: int, name: string, client_name: string, asana_project_gid: ?string, tasks: array<int, array{id: int, name: string, colour: string, is_billable: bool}>}> $projectsForPicker */
         $projectsForPicker = Cache::remember(
             "projects_picker_{$user->id}",
             now()->addMinutes(10),
@@ -507,17 +510,22 @@ class DayView extends Component
                 ->whereHas('users', fn ($q) => $q->where('users.id', $user->id))
                 ->orderBy('name')
                 ->get()
-                ->map(fn ($p) => [
+                ->map(fn (Project $p) => [
                     'id' => $p->id,
                     'name' => $p->name,
                     'client_name' => $p->client->name,
                     'asana_project_gid' => $p->asana_project_gid,
-                    'tasks' => $p->tasks->map(fn ($t) => [
-                        'id' => $t->id,
-                        'name' => $t->name,
-                        'colour' => $t->colour,
-                        'is_billable' => (bool) $t->pivot->getAttribute('is_billable'),
-                    ])->values()->all(),
+                    'tasks' => $p->tasks->map(function (Task $t) {
+                        /** @var Pivot $pivot */
+                        $pivot = $t->getRelation('pivot');
+
+                        return [
+                            'id' => $t->id,
+                            'name' => $t->name,
+                            'colour' => $t->colour,
+                            'is_billable' => (bool) $pivot->getAttribute('is_billable'),
+                        ];
+                    })->values()->all(),
                 ])
                 ->values()
                 ->all()

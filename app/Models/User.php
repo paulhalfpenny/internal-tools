@@ -16,6 +16,9 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property Role $role
+ * @property string|null $google_access_token
+ * @property string|null $google_refresh_token
+ * @property Carbon|null $google_token_expires_at
  * @property string|null $asana_access_token
  * @property string|null $asana_refresh_token
  * @property Carbon|null $asana_token_expires_at

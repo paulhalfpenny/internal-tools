@@ -23,6 +23,9 @@ class ManagerWeeklyDigest extends Notification implements ShouldQueue
         public readonly bool $isAdminDigest = false,
     ) {}
 
+    /**
+     * @return array<int, string>
+     */
     public function via(object $notifiable): array
     {
         if (! NotificationSettings::emailEnabled()) {

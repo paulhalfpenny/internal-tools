@@ -144,7 +144,9 @@ final class CalendarService
             return ['primary'];
         }
 
-        $ids = collect($response->json('items', []))
+        /** @var array<int, array{id?: string, deleted?: bool, hidden?: bool}> $items */
+        $items = $response->json('items', []);
+        $ids = collect($items)
             ->filter(fn (array $cal) => ! ($cal['deleted'] ?? false) && ! ($cal['hidden'] ?? false))
             ->pluck('id')
             ->filter()
