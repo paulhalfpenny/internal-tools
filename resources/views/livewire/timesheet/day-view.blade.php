@@ -435,7 +435,13 @@
                     get filteredAsanaTasks() {
                         const q = this.asanaTaskSearch.toLowerCase();
                         if (!q) return this.asanaTasks;
-                        return this.asanaTasks.filter(t => t.name.toLowerCase().includes(q));
+                        return this.asanaTasks.filter(t =>
+                            t.name.toLowerCase().includes(q) ||
+                            (t.board_name ?? '').toLowerCase().includes(q)
+                        );
+                    },
+                    get showAsanaBoardLabel() {
+                        return this.asanaBoardGids.length > 1;
                     },
                     get selectedAsanaTask() {
                         return this.asanaTasks.find(t => t.gid === this.selectedAsanaTaskGid) ?? null;
@@ -586,7 +592,12 @@
                                         class="w-full flex items-center justify-between border border-gray-300 rounded-lg px-4 py-2.5 text-left bg-white hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500"
                                     >
                                         <template x-if="selectedAsanaTask">
-                                            <span class="text-sm font-medium text-gray-900 truncate" x-text="selectedAsanaTask.name"></span>
+                                            <div class="min-w-0">
+                                                <div class="text-sm font-medium text-gray-900 truncate" x-text="selectedAsanaTask.name"></div>
+                                                <template x-if="showAsanaBoardLabel && selectedAsanaTask.board_name">
+                                                    <div class="text-xs text-gray-500 truncate" x-text="selectedAsanaTask.board_name"></div>
+                                                </template>
+                                            </div>
                                         </template>
                                         <template x-if="!selectedAsanaTask">
                                             <span class="text-gray-400 text-sm" x-text="asanaRequired ? 'Select an Asana task…' : 'No Asana task'"></span>
@@ -632,9 +643,13 @@
                                                 <button
                                                     type="button"
                                                     @click="pickAsanaTask(task.gid)"
-                                                    class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-green-50 hover:text-green-700 transition truncate"
-                                                    x-text="task.name"
-                                                ></button>
+                                                    class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-green-50 hover:text-green-700 transition"
+                                                >
+                                                    <div class="truncate" x-text="task.name"></div>
+                                                    <template x-if="showAsanaBoardLabel && task.board_name">
+                                                        <div class="text-xs text-gray-500 truncate" x-text="task.board_name"></div>
+                                                    </template>
+                                                </button>
                                             </template>
                                         </div>
                                     </div>
