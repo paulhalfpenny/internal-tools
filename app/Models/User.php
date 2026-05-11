@@ -29,6 +29,8 @@ use Illuminate\Support\Carbon;
  * @property bool $email_notifications_enabled
  * @property bool $slack_notifications_enabled
  * @property int|null $reports_to_user_id
+ * @property bool $is_active
+ * @property Carbon|null $archived_at
  * @property Collection<int, Project> $projects
  * @property Collection<int, TimeEntry> $timeEntries
  * @property ?User $manager
@@ -61,6 +63,7 @@ class User extends Authenticatable
         'rate_id',
         'weekly_capacity_hours',
         'is_active',
+        'archived_at',
         'last_login_at',
         'notifications_paused_until',
         'email_notifications_enabled',
@@ -81,6 +84,7 @@ class User extends Authenticatable
             'role' => Role::class,
             'is_contractor' => 'boolean',
             'is_active' => 'boolean',
+            'archived_at' => 'datetime',
             'default_hourly_rate' => 'decimal:2',
             'weekly_capacity_hours' => 'decimal:2',
             'last_login_at' => 'datetime',
@@ -164,6 +168,36 @@ class User extends Authenticatable
         $reference = $on === null ? today()->toDateString() : Carbon::instance($on)->toDateString();
 
         return $this->notifications_paused_until->toDateString() >= $reference;
+    }
+
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
+    }
+
+    public function archive(): void
+    {
+        $this->forceFill([
+            'is_active' => false,
+            'archived_at' => now(),
+        ])->save();
+    }
+
+    public function unarchive(): void
+    {
+        $this->forceFill([
+            'is_active' => true,
+            'archived_at' => null,
+        ])->save();
+    }
+
+    /**
+     * @param  Builder<User>  $query
+     * @return Builder<User>
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
     }
 
     /**

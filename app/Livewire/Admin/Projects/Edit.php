@@ -14,6 +14,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\Asana\AsanaService;
 use Illuminate\Database\Eloquent\Relations\Pivot;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -55,13 +56,16 @@ class Edit extends Component
     /** @var array<int, array{hourly_rate_override: string}> */
     public array $userAssignments = [];
 
-    public string $asanaProjectGid = '';
+    /** @var array<int, string> Asana board gids linked to this project */
+    public array $asanaProjectGids = [];
+
+    public string $pendingAsanaProjectGid = '';
 
     public function mount(Project $project): void
     {
         Gate::authorize('access-admin');
 
-        $this->project = $project->load(['tasks', 'users']);
+        $this->project = $project->load(['tasks', 'users', 'asanaProjects']);
         $this->clientId = $project->client_id;
         $this->managerUserId = $project->manager_user_id;
         $this->code = $project->code;
@@ -73,7 +77,7 @@ class Edit extends Component
         $this->budgetAmount = $project->budget_amount !== null ? (string) $project->budget_amount : '';
         $this->budgetHours = $project->budget_hours !== null ? (string) $project->budget_hours : '';
         $this->budgetStartsOn = $project->budget_starts_on?->toDateString() ?? '';
-        $this->asanaProjectGid = $project->asana_project_gid ?? '';
+        $this->asanaProjectGids = $project->asanaProjects->pluck('gid')->values()->all();
 
         foreach ($project->tasks as $task) {
             $this->taskAssignments[$task->id] = $task->id;
@@ -216,46 +220,22 @@ class Edit extends Component
             'budgetAmount' => 'nullable|numeric|min:0|required_with:budgetType',
             'budgetHours' => 'nullable|numeric|min:0',
             'budgetStartsOn' => 'nullable|date|required_if:budgetType,monthly_ci',
-            'asanaProjectGid' => [
-                'nullable',
+            'asanaProjectGids' => 'array',
+            'asanaProjectGids.*' => [
                 'string',
+                'distinct',
                 'exists:asana_projects,gid',
-                Rule::unique('projects', 'asana_project_gid')->ignore($this->project->id),
+                Rule::unique('project_asana_links', 'asana_project_gid')
+                    ->where(fn ($q) => $q->where('project_id', '!=', $this->project->id)),
             ],
         ], [
-            'asanaProjectGid.unique' => 'Another project is already linked to this Asana project.',
+            'asanaProjectGids.*.unique' => 'One of the selected Asana boards is already linked to another project.',
         ]);
 
-        $previousGid = $this->project->asana_project_gid;
-        $newGid = $this->asanaProjectGid !== '' ? $this->asanaProjectGid : null;
-        $newWorkspaceGid = null;
-        $newCustomFieldGid = $this->project->asana_custom_field_gid;
-
-        if ($newGid !== null && $newGid !== $previousGid) {
-            $cached = AsanaProject::find($newGid);
-            $newWorkspaceGid = $cached?->workspace_gid;
-            $newCustomFieldGid = null;
-
-            $authUser = $this->authUser();
-            if ($newWorkspaceGid !== null && $authUser->asanaConnected()) {
-                try {
-                    $newCustomFieldGid = $asana->forUser($authUser)
-                        ->ensureHoursCustomField($newGid, $newWorkspaceGid);
-                } catch (\Throwable $e) {
-                    AsanaSyncLog::error('asana.project_link.custom_field_failed', [
-                        'asana_project_gid' => $newGid,
-                        'error' => $e->getMessage(),
-                    ], $this->project);
-                    session()->flash('asana_warning', 'Project linked, but the cumulative-hours custom field could not be set up. It will be retried on the first time entry sync.');
-                }
-            }
-        } elseif ($newGid === null) {
-            $newWorkspaceGid = null;
-            $newCustomFieldGid = null;
-        } else {
-            // unchanged
-            $newWorkspaceGid = $this->project->asana_workspace_gid;
-        }
+        $previousGids = $this->project->asanaProjects()->pluck('gid')->all();
+        $selectedGids = array_values(array_unique($this->asanaProjectGids));
+        $addedGids = array_values(array_diff($selectedGids, $previousGids));
+        $removedGids = array_values(array_diff($previousGids, $selectedGids));
 
         $this->project->update([
             'client_id' => $this->clientId,
@@ -269,14 +249,46 @@ class Edit extends Component
             'budget_amount' => $this->budgetType !== '' && $this->budgetAmount !== '' ? (float) $this->budgetAmount : null,
             'budget_hours' => $this->budgetType !== '' && $this->budgetHours !== '' ? (float) $this->budgetHours : null,
             'budget_starts_on' => $this->budgetType === 'monthly_ci' && $this->budgetStartsOn !== '' ? $this->budgetStartsOn : null,
-            'asana_project_gid' => $newGid,
-            'asana_workspace_gid' => $newWorkspaceGid,
-            'asana_custom_field_gid' => $newCustomFieldGid,
         ]);
 
         $authUser = $this->authUser();
-        if ($newGid !== null && $newGid !== $previousGid && $authUser->asanaConnected()) {
-            PullAsanaTasksJob::dispatch($newGid, $authUser->id);
+        $customFieldFailures = false;
+
+        foreach ($addedGids as $gid) {
+            $cached = AsanaProject::find($gid);
+            $workspaceGid = $cached?->workspace_gid;
+            $customFieldGid = null;
+
+            if ($workspaceGid !== null && $authUser->asanaConnected()) {
+                try {
+                    $customFieldGid = $asana->forUser($authUser)
+                        ->ensureHoursCustomField($gid, $workspaceGid);
+                } catch (\Throwable $e) {
+                    AsanaSyncLog::error('asana.project_link.custom_field_failed', [
+                        'asana_project_gid' => $gid,
+                        'error' => $e->getMessage(),
+                    ], $this->project);
+                    $customFieldFailures = true;
+                }
+            }
+
+            $this->project->asanaProjects()->attach($gid, [
+                'asana_custom_field_gid' => $customFieldGid,
+            ]);
+
+            if ($authUser->asanaConnected()) {
+                PullAsanaTasksJob::dispatch($gid, $authUser->id);
+            }
+        }
+
+        if ($removedGids !== []) {
+            // Detach unlinked boards. Cached AsanaTask rows remain so historic
+            // time entries that reference them keep their task names visible.
+            $this->project->asanaProjects()->detach($removedGids);
+        }
+
+        if ($customFieldFailures) {
+            session()->flash('asana_warning', 'One or more Asana boards were linked, but the cumulative-hours custom field could not be set up. It will be retried on the first time entry sync.');
         }
 
         // Sync tasks. Billability is now sourced from task.is_default_billable
@@ -304,33 +316,69 @@ class Edit extends Component
         session()->flash('status', 'Project saved.');
     }
 
+    public function addAsanaBoard(): void
+    {
+        Gate::authorize('access-admin');
+
+        $gid = trim($this->pendingAsanaProjectGid);
+        if ($gid === '') {
+            return;
+        }
+        if (in_array($gid, $this->asanaProjectGids, true)) {
+            $this->pendingAsanaProjectGid = '';
+
+            return;
+        }
+        $this->asanaProjectGids[] = $gid;
+        $this->pendingAsanaProjectGid = '';
+    }
+
+    public function removeAsanaBoard(string $gid): void
+    {
+        Gate::authorize('access-admin');
+
+        $this->asanaProjectGids = array_values(array_filter(
+            $this->asanaProjectGids,
+            fn (string $existing) => $existing !== $gid,
+        ));
+    }
+
     public function refreshAsanaTasks(): void
     {
         Gate::authorize('access-admin');
 
         $authUser = $this->authUser();
-        if (! $authUser->asanaConnected() || $this->project->asana_project_gid === null) {
+        if (! $authUser->asanaConnected()) {
             return;
         }
 
-        PullAsanaTasksJob::dispatch($this->project->asana_project_gid, $authUser->id);
-        session()->flash('status', 'Refreshing Asana tasks in the background.');
+        $linkedGids = $this->project->asanaProjects()->pluck('gid');
+        foreach ($linkedGids as $gid) {
+            PullAsanaTasksJob::dispatch($gid, $authUser->id);
+        }
+
+        if ($linkedGids->isNotEmpty()) {
+            session()->flash('status', 'Refreshing Asana tasks in the background.');
+        }
     }
 
     public function render(ProjectBudgetCalculator $budgetCalculator): View
     {
         $authUser = $this->authUser();
         $workspaceGid = $authUser->asana_workspace_gid;
-        $linkedGids = Project::query()
-            ->whereNotNull('asana_project_gid')
-            ->where('id', '!=', $this->project->id)
+
+        // Boards already linked to *another* project should be hidden from the picker;
+        // boards linked to this project must still appear so the current selection
+        // can be re-rendered.
+        $linkedToOtherGids = DB::table('project_asana_links')
+            ->where('project_id', '!=', $this->project->id)
             ->pluck('asana_project_gid');
 
         $asanaProjects = $workspaceGid !== null
             ? AsanaProject::query()
                 ->where('workspace_gid', $workspaceGid)
                 ->where('is_archived', false)
-                ->whereNotIn('gid', $linkedGids)
+                ->whereNotIn('gid', $linkedToOtherGids)
                 ->orderBy('name')
                 ->get()
             : collect();

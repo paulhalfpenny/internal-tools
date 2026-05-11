@@ -3,6 +3,7 @@
 use App\Enums\Role;
 use App\Jobs\Asana\SyncAsanaTaskHoursJob;
 use App\Livewire\Timesheet\DayView;
+use App\Models\AsanaProject;
 use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\Task;
@@ -35,8 +36,6 @@ function asanaTestDayViewSetup(bool $adminConnected = true, bool $projectLinked 
 
     $project = Project::factory()->create([
         'default_hourly_rate' => 100,
-        'asana_project_gid' => $projectLinked ? 'AP1' : null,
-        'asana_workspace_gid' => $projectLinked ? 'WS1' : null,
     ]);
 
     $task = Task::factory()->create();
@@ -44,6 +43,8 @@ function asanaTestDayViewSetup(bool $adminConnected = true, bool $projectLinked 
     $project->users()->attach($user->id, ['hourly_rate_override' => null]);
 
     if ($projectLinked) {
+        AsanaProject::create(['gid' => 'AP1', 'workspace_gid' => 'WS1', 'name' => 'Asana AP1', 'is_archived' => false]);
+        $project->asanaProjects()->attach('AP1', ['asana_custom_field_gid' => null]);
         AsanaTask::create(['gid' => 'AT1', 'asana_project_gid' => 'AP1', 'name' => 'Real Asana Task', 'is_completed' => false]);
     }
 

@@ -363,8 +363,9 @@ class DayView extends Component
             return false;
         }
 
+        $linkedBoardGids = $project->asanaProjects()->pluck('gid')->all();
         $exists = AsanaTask::where('gid', $this->selectedAsanaTaskGid)
-            ->where('asana_project_gid', $project->asana_project_gid)
+            ->whereIn('asana_project_gid', $linkedBoardGids)
             ->exists();
 
         if (! $exists) {
@@ -501,11 +502,11 @@ class DayView extends Component
 
         $dayTotal = $dayEntries->sum(fn (TimeEntry $e) => (float) $e->hours);
 
-        /** @var array<int, array{id: int, name: string, client_name: string, asana_project_gid: ?string, tasks: array<int, array{id: int, name: string, colour: string, is_billable: bool}>}> $projectsForPicker */
+        /** @var array<int, array{id: int, name: string, client_name: string, asana_project_gids: array<int, string>, tasks: array<int, array{id: int, name: string, colour: string, is_billable: bool}>}> $projectsForPicker */
         $projectsForPicker = Cache::remember(
             "projects_picker_{$user->id}",
             now()->addMinutes(10),
-            fn () => Project::with(['client', 'tasks'])
+            fn () => Project::with(['client', 'tasks', 'asanaProjects'])
                 ->where('is_archived', false)
                 ->whereHas('users', fn ($q) => $q->where('users.id', $user->id))
                 ->orderBy('name')
@@ -514,7 +515,7 @@ class DayView extends Component
                     'id' => $p->id,
                     'name' => $p->name,
                     'client_name' => $p->client->name,
-                    'asana_project_gid' => $p->asana_project_gid,
+                    'asana_project_gids' => $p->asanaProjects->pluck('gid')->values()->all(),
                     'tasks' => $p->tasks->map(function (Task $t) {
                         /** @var Pivot $pivot */
                         $pivot = $t->getRelation('pivot');
@@ -532,8 +533,7 @@ class DayView extends Component
         );
 
         $linkedAsanaProjectGids = collect($projectsForPicker)
-            ->pluck('asana_project_gid')
-            ->filter()
+            ->flatMap(fn ($p) => $p['asana_project_gids'])
             ->unique()
             ->values()
             ->all();

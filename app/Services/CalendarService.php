@@ -21,8 +21,8 @@ final class CalendarService
 
     /**
      * Fetch the user's timed events for a specific date, across every calendar
-     * they have read access to (not just `primary`). De-duplicates events that
-     * appear on multiple calendars (e.g. invitations).
+     * the user owns (not just `primary`). De-duplicates events that appear on
+     * multiple owned calendars.
      *
      * @return array<int, array{id: string, title: string, start_formatted: string, end_formatted: string, hours: float}>
      */
@@ -35,8 +35,11 @@ final class CalendarService
 
     /**
      * Fetch events grouped by yyyy-mm-dd for a date range (inclusive on both
-     * ends). Hits Google's API once per accessible calendar across the whole
-     * range — much cheaper than calling getEventsForDate() per day.
+     * ends). Hits Google's API once per calendar the user **owns** — we
+     * deliberately skip calendars the user is only a reader on (team / shared /
+     * subscribed calendars), because those show events the user wasn't invited
+     * to. Events the user is invited to land on their own primary calendar by
+     * default, so they're still picked up.
      *
      * @return array<string, array<int, array{id: string, title: string, start_formatted: string, end_formatted: string, hours: float}>>
      */
@@ -125,7 +128,10 @@ final class CalendarService
     }
 
     /**
-     * List every calendar the authenticated user has access to.
+     * List every calendar the authenticated user owns. We intentionally use
+     * minAccessRole=owner instead of reader so that shared/team/subscribed
+     * calendars (where the user is not an attendee) don't leak into their
+     * timesheet calendar tab.
      *
      * @return array<int, string>
      */
@@ -133,7 +139,7 @@ final class CalendarService
     {
         $response = Http::withToken($token)
             ->get('https://www.googleapis.com/calendar/v3/users/me/calendarList', [
-                'minAccessRole' => 'reader',
+                'minAccessRole' => 'owner',
                 'showHidden' => 'true',
                 'maxResults' => 250,
             ]);

@@ -2,6 +2,7 @@
 
 use App\Jobs\Asana\PullAsanaProjectsJob;
 use App\Jobs\Asana\PullAsanaTasksJob;
+use App\Models\AsanaProject;
 use App\Models\AsanaSyncLog;
 use App\Models\Project;
 use App\Models\User;
@@ -9,6 +10,15 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 
 uses(RefreshDatabase::class);
+
+function linkBoardToProject(Project $project, string $boardGid, string $workspaceGid): void
+{
+    AsanaProject::firstOrCreate(
+        ['gid' => $boardGid],
+        ['workspace_gid' => $workspaceGid, 'name' => 'Asana '.$boardGid, 'is_archived' => false],
+    );
+    $project->asanaProjects()->attach($boardGid, ['asana_custom_field_gid' => null]);
+}
 
 test('asana:refresh-projects dispatches one workspace pull per connected workspace', function () {
     Bus::fake([PullAsanaProjectsJob::class]);
@@ -56,23 +66,14 @@ test('asana:refresh-tasks dispatches a pull for each linked, non-archived projec
         'asana_workspace_gid' => 'WS2',
     ]);
 
-    Project::factory()->create([
-        'asana_project_gid' => 'AP1',
-        'asana_workspace_gid' => 'WS1',
-    ]);
-    Project::factory()->create([
-        'asana_project_gid' => 'AP2',
-        'asana_workspace_gid' => 'WS2',
-    ]);
-    Project::factory()->create([
-        'asana_project_gid' => 'AP-archived',
-        'asana_workspace_gid' => 'WS1',
-        'is_archived' => true,
-    ]);
-    Project::factory()->create([
-        'asana_project_gid' => 'AP-no-actor',
-        'asana_workspace_gid' => 'WS-OTHER', // no connected user in this workspace
-    ]);
+    $p1 = Project::factory()->create();
+    linkBoardToProject($p1, 'AP1', 'WS1');
+    $p2 = Project::factory()->create();
+    linkBoardToProject($p2, 'AP2', 'WS2');
+    $pArchived = Project::factory()->create(['is_archived' => true]);
+    linkBoardToProject($pArchived, 'AP-archived', 'WS1');
+    $pNoActor = Project::factory()->create();
+    linkBoardToProject($pNoActor, 'AP-no-actor', 'WS-OTHER');
 
     $this->artisan('asana:refresh-tasks')->assertExitCode(0);
 
@@ -86,10 +87,8 @@ test('asana:refresh-tasks dispatches a pull for each linked, non-archived projec
 test('asana:refresh-tasks no-ops when no users connected', function () {
     Bus::fake([PullAsanaTasksJob::class]);
 
-    Project::factory()->create([
-        'asana_project_gid' => 'AP1',
-        'asana_workspace_gid' => 'WS1',
-    ]);
+    $p = Project::factory()->create();
+    linkBoardToProject($p, 'AP1', 'WS1');
 
     $this->artisan('asana:refresh-tasks')->assertExitCode(0);
 

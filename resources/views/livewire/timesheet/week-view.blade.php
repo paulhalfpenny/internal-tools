@@ -215,6 +215,7 @@
         <div
             class="fixed inset-0 z-50 flex items-start justify-center bg-black/40"
             style="padding-top: 22vh"
+            @click.self="$wire.closeAddRowModal()"
             @keydown.escape.window="$wire.closeAddRowModal()"
         >
             <div
@@ -252,15 +253,19 @@
                     get selectedTask() {
                         return this.selectedProject?.tasks.find(t => t.id === this.selectedTaskId) ?? null;
                     },
-                    get asanaProjectGid() {
-                        return this.selectedProject?.asana_project_gid ?? null;
+                    get asanaBoardGids() {
+                        return this.selectedProject?.asana_project_gids ?? [];
                     },
                     get asanaRequired() {
-                        return !!this.asanaProjectGid;
+                        return this.asanaBoardGids.length > 0;
                     },
                     get asanaTasks() {
-                        if (!this.asanaProjectGid) return [];
-                        return this.asanaTasksByProject[this.asanaProjectGid] ?? [];
+                        if (this.asanaBoardGids.length === 0) return [];
+                        const out = [];
+                        for (const gid of this.asanaBoardGids) {
+                            for (const t of (this.asanaTasksByProject[gid] ?? [])) out.push(t);
+                        }
+                        return out;
                     },
                     get filteredAsanaTasks() {
                         const q = this.asanaTaskSearch.toLowerCase();
@@ -307,6 +312,16 @@
                     <h3 class="font-semibold text-gray-900 text-base">
                         Add row to this timesheet
                     </h3>
+                    <button
+                        type="button"
+                        wire:click="closeAddRowModal"
+                        aria-label="Close"
+                        class="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
                 </div>
 
                 <div class="px-6 py-5 space-y-3">

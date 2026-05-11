@@ -19,8 +19,14 @@ class Index extends Component
     #[Url(except: '')]
     public string $search = '';
 
+    #[Url(except: false)]
+    public bool $showArchived = false;
+
     #[Locked]
     public ?int $editingId = null;
+
+    #[Locked]
+    public ?int $confirmingArchiveId = null;
 
     public string $editName = ''; // display only — name is sourced from Google OAuth, not editable
 
@@ -34,8 +40,6 @@ class Index extends Component
     public ?int $editRateId = null;
 
     public string $editWeeklyCapacity = '';
-
-    public bool $editIsActive = true;
 
     public bool $editIsContractor = false;
 
@@ -61,7 +65,6 @@ class Index extends Component
         $this->editRoleTitle = $user->role_title ?? '';
         $this->editRateId = $user->rate_id;
         $this->editWeeklyCapacity = (string) $user->weekly_capacity_hours;
-        $this->editIsActive = $user->is_active;
         $this->editIsContractor = $user->is_contractor;
         $this->editReportsToUserId = $user->reports_to_user_id;
         $this->editNotificationsPausedUntil = $user->notifications_paused_until?->toDateString() ?? '';
@@ -90,11 +93,7 @@ class Index extends Component
         if ((int) $this->editingId === auth()->id()) {
             if ($this->editRole !== Role::Admin->value) {
                 $this->addError('editRole', 'You cannot change your own role.');
-            }
-            if (! $this->editIsActive) {
-                $this->addError('editIsActive', 'You cannot deactivate yourself.');
-            }
-            if ($this->getErrorBag()->isNotEmpty()) {
+
                 return;
             }
         }
@@ -118,7 +117,6 @@ class Index extends Component
             'role_title' => $this->editRoleTitle ?: null,
             'rate_id' => $this->editRateId,
             'weekly_capacity_hours' => (float) $this->editWeeklyCapacity,
-            'is_active' => $this->editIsActive,
             'is_contractor' => $this->editIsContractor,
             'reports_to_user_id' => $this->editReportsToUserId,
             'notifications_paused_until' => $this->editNotificationsPausedUntil !== '' ? $this->editNotificationsPausedUntil : null,
@@ -127,6 +125,54 @@ class Index extends Component
         ]);
 
         $this->editingId = null;
+    }
+
+    public function confirmArchive(int $userId): void
+    {
+        Gate::authorize('access-admin');
+
+        if ($userId === auth()->id()) {
+            session()->flash('users.error', 'You cannot archive yourself.');
+
+            return;
+        }
+
+        $this->confirmingArchiveId = $userId;
+    }
+
+    public function cancelArchive(): void
+    {
+        $this->confirmingArchiveId = null;
+    }
+
+    public function archive(): void
+    {
+        Gate::authorize('access-admin');
+
+        if ($this->confirmingArchiveId === null) {
+            return;
+        }
+
+        if ($this->confirmingArchiveId === auth()->id()) {
+            $this->confirmingArchiveId = null;
+            session()->flash('users.error', 'You cannot archive yourself.');
+
+            return;
+        }
+
+        $user = User::findOrFail($this->confirmingArchiveId);
+        $user->archive();
+        $this->confirmingArchiveId = null;
+        session()->flash('users.flash', "{$user->name} has been archived. Their time entries are preserved.");
+    }
+
+    public function unarchive(int $userId): void
+    {
+        Gate::authorize('access-admin');
+
+        $user = User::findOrFail($userId);
+        $user->unarchive();
+        session()->flash('users.flash', "{$user->name} has been reactivated.");
     }
 
     /**
@@ -167,7 +213,12 @@ class Index extends Component
                 ->get();
         }
 
-        $usersQuery = User::orderBy('name');
+        $usersQuery = User::orderBy('archived_at')->orderBy('name');
+
+        if (! $this->showArchived) {
+            $usersQuery->whereNull('archived_at');
+        }
+
         $term = trim($this->search);
         if ($term !== '') {
             $usersQuery->where(function ($q) use ($term) {
@@ -177,11 +228,14 @@ class Index extends Component
             });
         }
 
+        $archivedCount = User::query()->whereNotNull('archived_at')->count();
+
         return view('livewire.admin.users.index', [
             'users' => $usersQuery->with('rate')->get(),
             'roles' => Role::cases(),
             'managerCandidates' => $managerCandidates,
             'rates' => Rate::where('is_archived', false)->orderBy('name')->get(),
+            'archivedCount' => $archivedCount,
         ]);
     }
 }

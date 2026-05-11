@@ -1,7 +1,12 @@
 <div>
-    <div class="mb-6">
-        <a href="{{ route('admin.projects') }}" class="text-sm text-gray-500 hover:text-gray-700">← Projects</a>
-        <h1 class="text-xl font-semibold text-gray-900 mt-1">{{ $project->name }}</h1>
+    <div class="mb-6 flex items-end justify-between gap-4">
+        <div>
+            <a href="{{ route('admin.projects') }}" class="text-sm text-gray-500 hover:text-gray-700">← Projects</a>
+            <h1 class="text-xl font-semibold text-gray-900 mt-1">{{ $project->name }}</h1>
+        </div>
+        <button wire:click="save" class="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 shrink-0">
+            Save project
+        </button>
     </div>
 
     @if(session('status'))
@@ -113,8 +118,8 @@
             {{-- Asana --}}
             <div class="bg-white rounded-lg border border-gray-200 p-6">
                 <div class="flex items-start justify-between mb-4">
-                    <h2 class="text-sm font-semibold text-gray-700">Asana</h2>
-                    @if($project->asana_project_gid)
+                    <h2 class="text-sm font-semibold text-gray-700">Asana boards</h2>
+                    @if(count($asanaProjectGids) > 0)
                         <button type="button" wire:click="refreshAsanaTasks" class="px-3 py-1 text-xs font-medium text-blue-700 border border-blue-200 rounded hover:bg-blue-50">
                             Refresh tasks
                         </button>
@@ -125,26 +130,68 @@
                     <p class="text-sm text-gray-500">
                         Connect your Asana account on
                         <a href="{{ route('profile.asana') }}" class="text-blue-700 underline">your profile</a>
-                        to link projects.
+                        to link boards.
                     </p>
-                @elseif($asanaProjects->isEmpty())
+                @elseif($asanaProjects->isEmpty() && count($asanaProjectGids) === 0)
                     <p class="text-sm text-gray-500">
                         No cached Asana projects yet. Visit
                         <a href="{{ route('admin.integrations.asana') }}" class="text-blue-700 underline">Asana integration</a>
                         and click "Pull projects from my workspace".
                     </p>
                 @else
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Linked Asana project</label>
-                    <select wire:model="asanaProjectGid" class="w-full border border-gray-300 rounded text-sm px-3 py-2" style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
-                        <option value="">Not linked</option>
-                        @foreach($asanaProjects as $ap)
-                            <option value="{{ $ap->gid }}">{{ $ap->name }}</option>
-                        @endforeach
-                    </select>
-                    @error('asanaProjectGid')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                    <p class="text-xs text-gray-500 mt-2">
-                        When linked, time entries on this project must pick an Asana task. Cumulative hours are pushed to a custom field on each task.
+                    @php
+                        $linkedBoards = $asanaProjects->whereIn('gid', $asanaProjectGids)->values();
+                        $availableBoards = $asanaProjects->whereNotIn('gid', $asanaProjectGids)->values();
+                    @endphp
+
+                    <p class="text-xs text-gray-500 mb-3">
+                        Add every Asana board whose tasks this project should pull. Time entries can be logged against tasks from any linked board, and cumulative hours sync back to whichever board the task lives on.
                     </p>
+
+                    @if($linkedBoards->isEmpty())
+                        <p class="text-sm text-gray-400 py-4 text-center mb-3">No Asana boards linked yet.</p>
+                    @else
+                        <ul class="space-y-2 mb-4">
+                            @foreach($linkedBoards as $board)
+                                <li class="flex items-center justify-between bg-blue-50 border border-blue-100 rounded px-3 py-2 text-sm">
+                                    <span class="font-medium text-gray-800">{{ $board->name }}</span>
+                                    <button type="button"
+                                            wire:click="removeAsanaBoard('{{ $board->gid }}')"
+                                            class="text-xs text-gray-400 hover:text-red-600 hover:underline">
+                                        Remove
+                                    </button>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+
+                    <div class="flex items-end gap-2">
+                        <div class="flex-1">
+                            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                                {{ $linkedBoards->isEmpty() ? 'Asana board' : 'Add another board' }}
+                            </label>
+                            <select wire:model.live="pendingAsanaProjectGid"
+                                    class="w-full border border-gray-300 rounded text-sm px-3 py-2"
+                                    style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
+                                <option value="">— Select a board —</option>
+                                @foreach($availableBoards as $ap)
+                                    <option value="{{ $ap->gid }}">{{ $ap->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <button type="button"
+                                wire:click="addAsanaBoard"
+                                @disabled($pendingAsanaProjectGid === '')
+                                class="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                            + Add to Project
+                        </button>
+                    </div>
+                    @if($availableBoards->isEmpty() && $linkedBoards->isNotEmpty())
+                        <p class="text-xs text-gray-400 mt-2">All available Asana boards in your workspace are already linked.</p>
+                    @endif
+
+                    @error('asanaProjectGids.*')<p class="text-red-600 text-xs mt-2">{{ $message }}</p>@enderror
+                    @error('asanaProjectGids')<p class="text-red-600 text-xs mt-2">{{ $message }}</p>@enderror
                 @endif
             </div>
 
@@ -326,12 +373,6 @@
                     </div>
                 </div>
             @endif
-        </div>
-
-        <div class="flex justify-end">
-            <button wire:click="save" class="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700">
-                Save project
-            </button>
         </div>
     </div>
 </div>

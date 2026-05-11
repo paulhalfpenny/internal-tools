@@ -1,6 +1,7 @@
 <?php
 
 use App\Jobs\Asana\SyncAsanaTaskHoursJob;
+use App\Models\AsanaProject;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
@@ -9,6 +10,18 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 
 uses(RefreshDatabase::class);
+
+function asanaTestObserverLinkedProject(string $boardGid = 'P1', string $workspaceGid = 'WS1'): Project
+{
+    $project = Project::factory()->create();
+    AsanaProject::firstOrCreate(
+        ['gid' => $boardGid],
+        ['workspace_gid' => $workspaceGid, 'name' => 'Asana board '.$boardGid, 'is_archived' => false],
+    );
+    $project->asanaProjects()->attach($boardGid, ['asana_custom_field_gid' => null]);
+
+    return $project;
+}
 
 function asanaTestObserverEntry(string $gid, Project $project, User $user, Task $task): TimeEntry
 {
@@ -29,7 +42,7 @@ function asanaTestObserverEntry(string $gid, Project $project, User $user, Task 
 test('saving entry with asana_task_gid dispatches sync job', function () {
     Bus::fake([SyncAsanaTaskHoursJob::class]);
 
-    $project = Project::factory()->create(['asana_project_gid' => 'P1', 'asana_workspace_gid' => 'WS1']);
+    $project = asanaTestObserverLinkedProject();
     $task = Task::factory()->create();
     $user = User::factory()->create();
 
@@ -39,7 +52,7 @@ test('saving entry with asana_task_gid dispatches sync job', function () {
 });
 
 test('changing asana_task_gid dispatches for both old and new', function () {
-    $project = Project::factory()->create(['asana_project_gid' => 'P1', 'asana_workspace_gid' => 'WS1']);
+    $project = asanaTestObserverLinkedProject();
     $task = Task::factory()->create();
     $user = User::factory()->create();
 
@@ -54,7 +67,7 @@ test('changing asana_task_gid dispatches for both old and new', function () {
 });
 
 test('deleting entry dispatches sync to recompute total', function () {
-    $project = Project::factory()->create(['asana_project_gid' => 'P1', 'asana_workspace_gid' => 'WS1']);
+    $project = asanaTestObserverLinkedProject();
     $task = Task::factory()->create();
     $user = User::factory()->create();
     $entry = asanaTestObserverEntry('Tdel', $project, $user, $task);

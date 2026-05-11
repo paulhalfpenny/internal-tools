@@ -165,21 +165,17 @@ test('saving a project with an Asana gid that another project already uses retur
     ]);
 
     $client = Client::factory()->create();
-    $taken = Project::factory()->create([
-        'client_id' => $client->id,
-        'asana_project_gid' => 'shared-gid',
-        'asana_workspace_gid' => 'ws-1',
-    ]);
+    $taken = Project::factory()->create(['client_id' => $client->id]);
+    $taken->asanaProjects()->attach('shared-gid', ['asana_custom_field_gid' => null]);
     $target = Project::factory()->create(['client_id' => $client->id]);
 
     Livewire::test(AdminProjectEdit::class, ['project' => $target])
-        ->set('asanaProjectGid', 'shared-gid')
+        ->set('asanaProjectGids', ['shared-gid'])
         ->call('save')
-        ->assertHasErrors(['asanaProjectGid']);
+        ->assertHasErrors(['asanaProjectGids.0']);
 
-    $target->refresh();
-    expect($target->asana_project_gid)->toBeNull();
-    expect($taken->fresh()->asana_project_gid)->toBe('shared-gid');
+    expect($target->fresh()->asanaProjects()->count())->toBe(0);
+    expect($taken->fresh()->asanaProjects()->pluck('gid')->all())->toBe(['shared-gid']);
 });
 
 test('creating a project for a client pre-attaches the clients default tasks', function () {

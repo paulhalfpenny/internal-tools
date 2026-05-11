@@ -1,10 +1,30 @@
 <div>
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-6 gap-4">
         <h1 class="text-xl font-semibold text-gray-900">Users</h1>
-        <input wire:model.live.debounce.300ms="search" type="search" placeholder="Search by name, email or title…"
-               class="w-72 border border-gray-300 rounded text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-               style="min-width: 250px">
+        <div class="flex items-center gap-4">
+            <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+                <input wire:model.live="showArchived" type="checkbox" class="rounded">
+                Show archived
+                @if($archivedCount > 0)
+                    <span class="text-xs text-gray-400">({{ $archivedCount }})</span>
+                @endif
+            </label>
+            <input wire:model.live.debounce.300ms="search" type="search" placeholder="Search by name, email or title…"
+                   class="w-72 border border-gray-300 rounded text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   style="min-width: 250px">
+        </div>
     </div>
+
+    @if(session('users.flash'))
+        <div class="mb-4 px-4 py-3 bg-green-50 border border-green-200 text-sm text-green-800 rounded-md">
+            {{ session('users.flash') }}
+        </div>
+    @endif
+    @if(session('users.error'))
+        <div class="mb-4 px-4 py-3 bg-red-50 border border-red-200 text-sm text-red-800 rounded-md">
+            {{ session('users.error') }}
+        </div>
+    @endif
 
     <div class="bg-white rounded-lg border border-gray-200 overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -13,14 +33,20 @@
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Name</th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Email</th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Role</th>
-                    <th class="px-4 py-3 text-center font-medium text-gray-600">Active</th>
+                    <th class="px-4 py-3 text-center font-medium text-gray-600">Status</th>
                     <th class="px-4 py-3"></th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-gray-100">
                 @foreach($users as $user)
-                    <tr class="{{ $user->is_active ? '' : 'opacity-50' }}">
-                        <td class="px-4 py-3 font-medium text-gray-900">{{ $user->name }}</td>
+                    @php $isArchived = $user->archived_at !== null; @endphp
+                    <tr class="{{ $isArchived ? 'opacity-60 bg-gray-50' : '' }}">
+                        <td class="px-4 py-3 font-medium text-gray-900">
+                            {{ $user->name }}
+                            @if($isArchived)
+                                <span class="ml-2 text-xs font-normal text-gray-500">(archived {{ $user->archived_at->format('j M Y') }})</span>
+                            @endif
+                        </td>
                         <td class="px-4 py-3 text-gray-500">{{ $user->email }}</td>
                         <td class="px-4 py-3">
                             <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium
@@ -29,14 +55,27 @@
                             </span>
                         </td>
                         <td class="px-4 py-3 text-center">
-                            @if($user->is_active)
-                                <span class="inline-block w-2 h-2 rounded-full bg-green-500"></span>
+                            @if($isArchived)
+                                <span class="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                                    <span class="inline-block w-2 h-2 rounded-full bg-gray-400"></span>
+                                    Archived
+                                </span>
                             @else
-                                <span class="inline-block w-2 h-2 rounded-full bg-gray-300"></span>
+                                <span class="inline-flex items-center gap-1.5 text-xs text-green-700">
+                                    <span class="inline-block w-2 h-2 rounded-full bg-green-500"></span>
+                                    Active
+                                </span>
                             @endif
                         </td>
-                        <td class="px-4 py-3 text-right">
-                            <button wire:click="edit({{ $user->id }})" class="text-sm text-blue-600 hover:underline">Edit</button>
+                        <td class="px-4 py-3 text-right space-x-3 whitespace-nowrap">
+                            @if($isArchived)
+                                <button wire:click="unarchive({{ $user->id }})" class="text-sm text-blue-600 hover:underline">Unarchive</button>
+                            @else
+                                <button wire:click="edit({{ $user->id }})" class="text-sm text-blue-600 hover:underline">Edit</button>
+                                @if($user->id !== auth()->id())
+                                    <button wire:click="confirmArchive({{ $user->id }})" class="text-sm text-red-600 hover:underline">Archive</button>
+                                @endif
+                            @endif
                         </td>
                     </tr>
                 @endforeach
@@ -93,7 +132,7 @@
                     <p class="text-red-600 text-xs mb-1">{{ $message }}</p>
                 @enderror
                 @if($isSelfEdit)
-                    <p class="text-xs text-amber-600 mt-1 mb-4">You cannot change your own role or deactivate yourself.</p>
+                    <p class="text-xs text-amber-600 mt-1 mb-4">You cannot change your own role or archive yourself.</p>
                 @endif
                 <div class="mb-4"></div>
 
@@ -121,25 +160,11 @@
                     @error('editRateId')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
 
-                <div class="grid grid-cols-2 gap-3 mb-6">
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Capacity (hrs/week)</label>
-                        <input wire:model="editWeeklyCapacity" type="number" step="0.5" min="0" max="168" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
-                        @error('editWeeklyCapacity')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
-                    </div>
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Status</label>
-                        <label class="flex items-center gap-3 text-sm h-[38px] {{ $isSelfEdit ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer' }}">
-                            <input
-                                wire:model="editIsActive"
-                                type="checkbox"
-                                class="rounded"
-                                @disabled($isSelfEdit)
-                            > Active
-                        </label>
-                    </div>
+                <div class="mb-6">
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Capacity (hrs/week)</label>
+                    <input wire:model="editWeeklyCapacity" type="number" step="0.5" min="0" max="168" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
+                    @error('editWeeklyCapacity')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
-                @error('editIsActive')<p class="text-red-600 text-xs -mt-4 mb-3">{{ $message }}</p>@enderror
 
                 <div class="border-t border-gray-100 pt-6 mt-6 mb-6">
                     <h3 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Notifications & reporting line</h3>
@@ -182,6 +207,30 @@
                 <div class="flex gap-2 mt-6">
                     <button wire:click="save" class="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">Save changes</button>
                     <button wire:click="cancel" class="px-4 py-2 bg-white border border-gray-300 text-sm rounded-md hover:bg-gray-50">Cancel</button>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @if($confirmingArchiveId !== null)
+        @php $archiveTarget = $users->firstWhere('id', $confirmingArchiveId); @endphp
+        <div
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+            wire:click="cancelArchive"
+            x-data
+            @keydown.escape.window="$wire.cancelArchive()"
+        >
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6" @click.stop>
+                <h2 class="text-base font-semibold text-gray-900 mb-3">Archive {{ $archiveTarget?->name ?? 'user' }}?</h2>
+                <p class="text-sm text-gray-600 mb-2">
+                    They will be signed out and removed from all assignee, manager and reporting dropdowns.
+                </p>
+                <p class="text-sm text-gray-600 mb-6">
+                    <strong>Their recorded time entries are preserved</strong> and will continue to appear in historic reports. You can unarchive them later if they return.
+                </p>
+                <div class="flex gap-2 justify-end">
+                    <button wire:click="cancelArchive" class="px-4 py-2 bg-white border border-gray-300 text-sm rounded-md hover:bg-gray-50">Cancel</button>
+                    <button wire:click="archive" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700">Archive user</button>
                 </div>
             </div>
         </div>

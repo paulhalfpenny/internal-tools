@@ -190,8 +190,9 @@ class WeekView extends Component
 
                 return;
             }
+            $linkedBoardGids = $project->asanaProjects()->pluck('gid')->all();
             $exists = AsanaTask::where('gid', $this->newRowAsanaTaskGid)
-                ->where('asana_project_gid', $project->asana_project_gid)
+                ->whereIn('asana_project_gid', $linkedBoardGids)
                 ->exists();
             if (! $exists) {
                 $this->addError('newRowAsanaTaskGid', 'That Asana task is no longer in this project. Refresh tasks and try again.');
@@ -354,7 +355,7 @@ class WeekView extends Component
         $projects = Cache::remember(
             "projects_picker_eloquent_{$user->id}",
             now()->addMinutes(10),
-            fn () => Project::with(['client', 'tasks'])
+            fn () => Project::with(['client', 'tasks', 'asanaProjects'])
                 ->where('is_archived', false)
                 ->whereHas('users', fn ($q) => $q->where('users.id', $user->id))
                 ->orderBy('name')
@@ -363,7 +364,7 @@ class WeekView extends Component
 
         // Asana task name lookup, keyed by gid, scoped to projects on this week
         // (so we can label rows that have an Asana task attached).
-        $linkedAsanaProjectGids = $projects->pluck('asana_project_gid')->filter()->unique()->values()->all();
+        $linkedAsanaProjectGids = $projects->flatMap(fn ($p) => $p->asanaProjects->pluck('gid'))->unique()->values()->all();
         $asanaTasksByGid = AsanaTask::query()
             ->whereIn('asana_project_gid', $linkedAsanaProjectGids)
             ->orderBy('name')
@@ -489,7 +490,7 @@ class WeekView extends Component
                 'id' => $p->id,
                 'name' => $p->name,
                 'client_name' => $p->client?->name ?? '',
-                'asana_project_gid' => $p->asana_project_gid,
+                'asana_project_gids' => $p->asanaProjects->pluck('gid')->values()->all(),
                 'tasks' => $p->tasks->map(fn ($t) => [
                     'id' => $t->id,
                     'name' => $t->name,

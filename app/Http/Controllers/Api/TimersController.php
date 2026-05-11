@@ -38,13 +38,14 @@ class TimersController
         if (! $project->tasks->contains('id', $data['task_id'])) {
             return response()->json(['error' => 'task_not_on_project'], 422);
         }
-        if ($project->asana_project_gid !== null) {
+        $linkedBoardGids = $project->asanaProjects()->pluck('gid')->all();
+        if ($linkedBoardGids !== []) {
             $gid = $data['asana_task_gid'] ?? null;
             if ($gid === null || $gid === '') {
                 return response()->json(['error' => 'asana_task_required'], 422);
             }
             $valid = AsanaTask::where('gid', $gid)
-                ->where('asana_project_gid', $project->asana_project_gid)
+                ->whereIn('asana_project_gid', $linkedBoardGids)
                 ->exists();
             if (! $valid) {
                 return response()->json(['error' => 'asana_task_invalid'], 422);

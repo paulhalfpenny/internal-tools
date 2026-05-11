@@ -3,9 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Jobs\Asana\PullAsanaTasksJob;
-use App\Models\Project;
 use App\Models\User;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 class AsanaRefreshTasksCommand extends Command
 {
@@ -28,24 +28,28 @@ class AsanaRefreshTasksCommand extends Command
             return self::SUCCESS;
         }
 
-        $linkedProjects = Project::query()
-            ->whereNotNull('asana_project_gid')
-            ->whereNotNull('asana_workspace_gid')
-            ->where('is_archived', false)
+        $links = DB::table('project_asana_links')
+            ->join('projects', 'project_asana_links.project_id', '=', 'projects.id')
+            ->join('asana_projects', 'project_asana_links.asana_project_gid', '=', 'asana_projects.gid')
+            ->where('projects.is_archived', false)
+            ->select(
+                'project_asana_links.asana_project_gid as board_gid',
+                'asana_projects.workspace_gid as workspace_gid',
+            )
             ->get();
 
         $dispatched = 0;
-        foreach ($linkedProjects as $project) {
+        foreach ($links as $link) {
             /** @var User|null $actor */
-            $actor = $connectedUsers->firstWhere('asana_workspace_gid', $project->asana_workspace_gid);
-            if ($actor === null || $project->asana_project_gid === null) {
+            $actor = $connectedUsers->firstWhere('asana_workspace_gid', $link->workspace_gid);
+            if ($actor === null) {
                 continue;
             }
-            PullAsanaTasksJob::dispatch($project->asana_project_gid, $actor->id);
+            PullAsanaTasksJob::dispatch($link->board_gid, $actor->id);
             $dispatched++;
         }
 
-        $this->info(sprintf('Dispatched %d task pull(s) across %d linked project(s).', $dispatched, $linkedProjects->count()));
+        $this->info(sprintf('Dispatched %d task pull(s) across %d linked board(s).', $dispatched, $links->count()));
 
         return self::SUCCESS;
     }

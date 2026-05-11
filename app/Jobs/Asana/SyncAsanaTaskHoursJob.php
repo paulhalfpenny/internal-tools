@@ -3,6 +3,7 @@
 namespace App\Jobs\Asana;
 
 use App\Models\AsanaSyncLog;
+use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
@@ -10,10 +11,12 @@ use App\Services\Asana\AsanaService;
 use App\Services\Asana\AsanaTaskHoursAggregator;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class SyncAsanaTaskHoursJob implements ShouldQueue
@@ -36,16 +39,38 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
     public function handle(AsanaService $service, AsanaTaskHoursAggregator $aggregator): void
     {
         $project = Project::find($this->projectId);
-        if ($project === null
-            || ! $project->asanaLinked()
-            || $project->asana_workspace_gid === null
-            || $project->asana_project_gid === null) {
+        if ($project === null) {
             $this->markEntriesError('Project is no longer linked to Asana.');
 
             return;
         }
 
-        $actor = $this->pickActor($project->asana_workspace_gid);
+        $asanaTask = AsanaTask::find($this->asanaTaskGid);
+        if ($asanaTask === null) {
+            $this->markEntriesError('Asana task '.$this->asanaTaskGid.' is no longer cached locally.');
+
+            return;
+        }
+
+        $boardGid = $asanaTask->asana_project_gid;
+        $linkedBoard = $project->asanaProjects()->where('gid', $boardGid)->first();
+
+        if ($linkedBoard === null) {
+            // The board has been unlinked from this project since the entry was logged.
+            // Mark the entries with a soft error so the sync isn't retried, but don't fail the job.
+            $this->markEntriesError('Project is no longer linked to the Asana board for this task.');
+            AsanaSyncLog::warn('asana.sync_hours.board_unlinked', [
+                'asana_task_gid' => $this->asanaTaskGid,
+                'project_id' => $this->projectId,
+                'board_gid' => $boardGid,
+            ], $project);
+
+            return;
+        }
+
+        $workspaceGid = $linkedBoard->workspace_gid;
+
+        $actor = $this->pickActor($workspaceGid);
         if ($actor === null) {
             AsanaSyncLog::warn('asana.sync_hours.no_actor', [
                 'asana_task_gid' => $this->asanaTaskGid,
@@ -57,11 +82,16 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
 
         $svc = $service->forUser($actor);
 
-        $fieldGid = $project->asana_custom_field_gid;
+        /** @var Pivot $pivot */
+        $pivot = $linkedBoard->getRelation('pivot');
+        $fieldGid = $pivot->getAttribute('asana_custom_field_gid');
         if ($fieldGid === null) {
             try {
-                $fieldGid = $svc->ensureHoursCustomField($project->asana_project_gid, $project->asana_workspace_gid);
-                $project->forceFill(['asana_custom_field_gid' => $fieldGid])->save();
+                $fieldGid = $svc->ensureHoursCustomField($boardGid, $workspaceGid);
+                DB::table('project_asana_links')
+                    ->where('project_id', $this->projectId)
+                    ->where('asana_project_gid', $boardGid)
+                    ->update(['asana_custom_field_gid' => $fieldGid, 'updated_at' => now()]);
             } catch (Throwable $e) {
                 $this->logFailure($e, $project, 'ensure_field');
                 throw $e;
