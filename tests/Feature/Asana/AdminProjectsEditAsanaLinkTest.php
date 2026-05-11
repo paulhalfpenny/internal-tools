@@ -110,6 +110,28 @@ test('linking to multiple Asana boards persists every link and dispatches a pull
     Bus::assertDispatched(PullAsanaTasksJob::class, fn ($j) => $j->asanaProjectGid === 'AP2');
 });
 
+test('asana_task_required toggle persists from the project edit form', function () {
+    config(['services.asana.custom_field_name' => 'Hours tracked (Internal Tools)']);
+
+    $admin = asanaTestAdminWithAsana();
+    AsanaProject::create(['gid' => 'AP1', 'workspace_gid' => 'WS1', 'name' => 'Asana A', 'is_archived' => false]);
+    $project = Project::factory()->create();
+    $project->asanaProjects()->attach('AP1', ['asana_custom_field_gid' => 'CF1']);
+
+    $this->actingAs($admin);
+
+    // Defaults to true after the migration's column default.
+    expect($project->fresh()->asana_task_required)->toBeTrue();
+
+    Livewire::test(Edit::class, ['project' => $project])
+        ->assertSet('asanaTaskRequired', true)
+        ->set('asanaTaskRequired', false)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($project->fresh()->asana_task_required)->toBeFalse();
+});
+
 test('unselecting a previously linked board detaches the pivot row', function () {
     config(['services.asana.custom_field_name' => 'Hours tracked (Internal Tools)']);
 

@@ -50,6 +50,7 @@ class ProjectsController
                     'name' => $p->name,
                     'client_name' => $p->client->name,
                     'asana_project_gids' => $boardGids,
+                    'asana_task_required' => (bool) $p->asana_task_required,
                     'tasks' => $p->tasks->map(function (Task $t) {
                         /** @var Pivot $pivot */
                         $pivot = $t->getRelation('pivot');

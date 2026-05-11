@@ -192,6 +192,20 @@
 
                     @error('asanaProjectGids.*')<p class="text-red-600 text-xs mt-2">{{ $message }}</p>@enderror
                     @error('asanaProjectGids')<p class="text-red-600 text-xs mt-2">{{ $message }}</p>@enderror
+
+                    @if($linkedBoards->isNotEmpty())
+                        <div class="mt-5 pt-4 border-t border-gray-100">
+                            <label class="flex items-start gap-3 text-sm cursor-pointer">
+                                <input wire:model="asanaTaskRequired" type="checkbox" class="rounded mt-0.5">
+                                <span>
+                                    <span class="font-medium text-gray-800">Require an Asana task on every time entry</span>
+                                    <span class="block text-xs text-gray-500 mt-0.5">
+                                        Recommended. Untick for projects where these boards are linked for reference only and not every entry needs to push hours back to a specific task.
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+                    @endif
                 @endif
             </div>
 

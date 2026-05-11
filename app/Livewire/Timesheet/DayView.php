@@ -348,6 +348,15 @@ class DayView extends Component
             return true;
         }
 
+        $taskGidProvided = $this->selectedAsanaTaskGid !== '';
+        $required = (bool) $project->asana_task_required;
+
+        // If the admin has marked Asana tasks as optional for this project and
+        // the user hasn't picked one, accept the entry as-is.
+        if (! $required && ! $taskGidProvided) {
+            return true;
+        }
+
         if (! $this->asanaIntegrationAvailable()) {
             $this->addError(
                 'selectedAsanaTaskGid',
@@ -357,7 +366,7 @@ class DayView extends Component
             return false;
         }
 
-        if ($this->selectedAsanaTaskGid === '') {
+        if ($required && ! $taskGidProvided) {
             $this->addError('selectedAsanaTaskGid', 'Pick the Asana task this time relates to.');
 
             return false;
@@ -502,7 +511,7 @@ class DayView extends Component
 
         $dayTotal = $dayEntries->sum(fn (TimeEntry $e) => (float) $e->hours);
 
-        /** @var array<int, array{id: int, name: string, client_name: string, asana_project_gids: array<int, string>, tasks: array<int, array{id: int, name: string, colour: string, is_billable: bool}>}> $projectsForPicker */
+        /** @var array<int, array{id: int, name: string, client_name: string, asana_project_gids: array<int, string>, asana_task_required: bool, tasks: array<int, array{id: int, name: string, colour: string, is_billable: bool}>}> $projectsForPicker */
         $projectsForPicker = Cache::remember(
             "projects_picker_{$user->id}",
             now()->addMinutes(10),
@@ -516,6 +525,7 @@ class DayView extends Component
                     'name' => $p->name,
                     'client_name' => $p->client->name,
                     'asana_project_gids' => $p->asanaProjects->pluck('gid')->values()->all(),
+                    'asana_task_required' => (bool) $p->asana_task_required,
                     'tasks' => $p->tasks->map(function (Task $t) {
                         /** @var Pivot $pivot */
                         $pivot = $t->getRelation('pivot');

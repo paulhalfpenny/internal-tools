@@ -178,26 +178,33 @@ class WeekView extends Component
         // Asana validation — mirrors DayView::validateAsanaTaskRequirement().
         $project = Project::find($this->newRowProjectId);
         if ($project && $project->asanaLinked()) {
-            if (! $this->asanaIntegrationAvailable()) {
-                $this->addError('newRowAsanaTaskGid',
-                    'Asana integration is not active. An admin needs to connect Asana before time can be logged on linked projects.'
-                );
+            $taskGidProvided = $this->newRowAsanaTaskGid !== '';
+            $required = (bool) $project->asana_task_required;
 
-                return;
-            }
-            if ($this->newRowAsanaTaskGid === '') {
-                $this->addError('newRowAsanaTaskGid', 'Pick the Asana task this row relates to.');
+            if ($required || $taskGidProvided) {
+                if (! $this->asanaIntegrationAvailable()) {
+                    $this->addError('newRowAsanaTaskGid',
+                        'Asana integration is not active. An admin needs to connect Asana before time can be logged on linked projects.'
+                    );
 
-                return;
-            }
-            $linkedBoardGids = $project->asanaProjects()->pluck('gid')->all();
-            $exists = AsanaTask::where('gid', $this->newRowAsanaTaskGid)
-                ->whereIn('asana_project_gid', $linkedBoardGids)
-                ->exists();
-            if (! $exists) {
-                $this->addError('newRowAsanaTaskGid', 'That Asana task is no longer in this project. Refresh tasks and try again.');
+                    return;
+                }
+                if ($required && ! $taskGidProvided) {
+                    $this->addError('newRowAsanaTaskGid', 'Pick the Asana task this row relates to.');
 
-                return;
+                    return;
+                }
+                if ($taskGidProvided) {
+                    $linkedBoardGids = $project->asanaProjects()->pluck('gid')->all();
+                    $exists = AsanaTask::where('gid', $this->newRowAsanaTaskGid)
+                        ->whereIn('asana_project_gid', $linkedBoardGids)
+                        ->exists();
+                    if (! $exists) {
+                        $this->addError('newRowAsanaTaskGid', 'That Asana task is no longer in this project. Refresh tasks and try again.');
+
+                        return;
+                    }
+                }
             }
         }
 
@@ -491,6 +498,7 @@ class WeekView extends Component
                 'name' => $p->name,
                 'client_name' => $p->client?->name ?? '',
                 'asana_project_gids' => $p->asanaProjects->pluck('gid')->values()->all(),
+                'asana_task_required' => (bool) $p->asana_task_required,
                 'tasks' => $p->tasks->map(fn ($t) => [
                     'id' => $t->id,
                     'name' => $t->name,

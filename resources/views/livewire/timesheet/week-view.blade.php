@@ -257,7 +257,8 @@
                         return this.selectedProject?.asana_project_gids ?? [];
                     },
                     get asanaRequired() {
-                        return this.asanaBoardGids.length > 0;
+                        if (this.asanaBoardGids.length === 0) return false;
+                        return this.selectedProject?.asana_task_required ?? true;
                     },
                     get asanaTasks() {
                         if (this.asanaBoardGids.length === 0) return [];
@@ -389,9 +390,14 @@
                         </div>
                     </div>
 
-                    {{-- Asana task (only when project is linked) --}}
-                    <template x-if="asanaRequired">
+                    {{-- Asana task picker — shown whenever the project has linked boards.
+                         Required vs optional is gated by selectedProject.asana_task_required. --}}
+                    <template x-if="asanaBoardGids.length > 0">
                         <div class="relative z-20">
+                            <template x-if="!asanaRequired">
+                                <p class="text-xs text-gray-500 mb-1">Asana task (optional)</p>
+                            </template>
+
                             <template x-if="!asanaAvailable">
                                 <div class="border border-yellow-200 bg-yellow-50 rounded-lg px-3 py-2 text-xs text-yellow-800">
                                     This project is linked to Asana, but no admin has connected the integration yet. Time can't be logged on it until they do.
@@ -409,7 +415,7 @@
                                             <span class="text-sm font-medium text-gray-900 truncate" x-text="selectedAsanaTask.name"></span>
                                         </template>
                                         <template x-if="!selectedAsanaTask">
-                                            <span class="text-gray-400 text-sm">Select an Asana task…</span>
+                                            <span class="text-gray-400 text-sm" x-text="asanaRequired ? 'Select an Asana task…' : 'No Asana task'"></span>
                                         </template>
                                         <svg class="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
@@ -431,6 +437,13 @@
                                             />
                                         </div>
                                         <div class="max-h-60 overflow-y-auto py-1">
+                                            <template x-if="!asanaRequired">
+                                                <button
+                                                    type="button"
+                                                    @click="pickAsanaTask('')"
+                                                    class="w-full text-left px-4 py-2 text-sm text-gray-500 italic hover:bg-gray-50 transition"
+                                                >— No Asana task —</button>
+                                            </template>
                                             <template x-if="filteredAsanaTasks.length === 0">
                                                 <p class="text-sm text-gray-400 px-3 py-4 text-center">
                                                     <template x-if="asanaTasks.length === 0">

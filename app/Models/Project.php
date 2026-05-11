@@ -29,6 +29,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $starts_on
  * @property Carbon|null $ends_on
  * @property bool $is_archived
+ * @property bool $asana_task_required
  * @property JdwCategory|null $jdw_category
  * @property int|null $jdw_sort_order
  * @property string|null $jdw_status
@@ -47,8 +48,19 @@ class Project extends Model
     protected $fillable = [
         'client_id', 'manager_user_id', 'code', 'name', 'is_billable', 'default_hourly_rate', 'rate_id',
         'budget_type', 'budget_amount', 'budget_hours', 'budget_starts_on',
-        'starts_on', 'ends_on', 'is_archived',
+        'starts_on', 'ends_on', 'is_archived', 'asana_task_required',
         'jdw_category', 'jdw_sort_order', 'jdw_status', 'jdw_estimated_launch', 'jdw_description',
+    ];
+
+    /**
+     * Defaults applied to newly-constructed (un-saved or freshly inserted)
+     * instances. Mirrors the DB-level defaults so reading $project->asana_task_required
+     * after a Project::factory()->create() doesn't return null.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'asana_task_required' => true,
     ];
 
     protected function casts(): array
@@ -64,6 +76,7 @@ class Project extends Model
             'starts_on' => 'date',
             'ends_on' => 'date',
             'is_archived' => 'boolean',
+            'asana_task_required' => 'boolean',
             'jdw_sort_order' => 'integer',
         ];
     }

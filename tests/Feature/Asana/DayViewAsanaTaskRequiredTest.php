@@ -129,3 +129,37 @@ test('save rejects an Asana task gid that belongs to a different project', funct
         ->call('save')
         ->assertHasErrors(['selectedAsanaTaskGid']);
 });
+
+test('save succeeds without an Asana task when the project marks Asana tasks as optional', function () {
+    [$user, $project, $task] = asanaTestDayViewSetup();
+    $project->forceFill(['asana_task_required' => false])->save();
+    $this->actingAs($user);
+
+    Livewire::test(DayView::class)
+        ->set('selectedProjectId', $project->id)
+        ->set('selectedTaskId', $task->id)
+        ->set('hoursInput', '1.0')
+        ->set('entryDate', now()->toDateString())
+        ->set('selectedAsanaTaskGid', '')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(TimeEntry::count())->toBe(1);
+    expect(TimeEntry::first()->asana_task_gid)->toBeNull();
+});
+
+test('save still validates a provided Asana task gid even when optional', function () {
+    [$user, $project, $task] = asanaTestDayViewSetup();
+    $project->forceFill(['asana_task_required' => false])->save();
+    AsanaTask::create(['gid' => 'OUTSIDER', 'asana_project_gid' => 'OUTSIDE', 'name' => 'Foreign', 'is_completed' => false]);
+    $this->actingAs($user);
+
+    Livewire::test(DayView::class)
+        ->set('selectedProjectId', $project->id)
+        ->set('selectedTaskId', $task->id)
+        ->set('hoursInput', '1.0')
+        ->set('entryDate', now()->toDateString())
+        ->set('selectedAsanaTaskGid', 'OUTSIDER')
+        ->call('save')
+        ->assertHasErrors(['selectedAsanaTaskGid']);
+});

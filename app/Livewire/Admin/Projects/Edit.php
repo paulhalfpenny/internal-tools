@@ -61,6 +61,8 @@ class Edit extends Component
 
     public string $pendingAsanaProjectGid = '';
 
+    public bool $asanaTaskRequired = true;
+
     public function mount(Project $project): void
     {
         Gate::authorize('access-admin');
@@ -78,6 +80,7 @@ class Edit extends Component
         $this->budgetHours = $project->budget_hours !== null ? (string) $project->budget_hours : '';
         $this->budgetStartsOn = $project->budget_starts_on?->toDateString() ?? '';
         $this->asanaProjectGids = $project->asanaProjects->pluck('gid')->values()->all();
+        $this->asanaTaskRequired = (bool) $project->asana_task_required;
 
         foreach ($project->tasks as $task) {
             $this->taskAssignments[$task->id] = $task->id;
@@ -249,6 +252,7 @@ class Edit extends Component
             'budget_amount' => $this->budgetType !== '' && $this->budgetAmount !== '' ? (float) $this->budgetAmount : null,
             'budget_hours' => $this->budgetType !== '' && $this->budgetHours !== '' ? (float) $this->budgetHours : null,
             'budget_starts_on' => $this->budgetType === 'monthly_ci' && $this->budgetStartsOn !== '' ? $this->budgetStartsOn : null,
+            'asana_task_required' => $this->asanaTaskRequired,
         ]);
 
         $authUser = $this->authUser();
