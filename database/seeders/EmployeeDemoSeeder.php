@@ -21,9 +21,9 @@ class EmployeeDemoSeeder extends Seeder
     public function run(): void
     {
         $employees = [
-            ['name' => 'Sarah Chen', 'email' => 'sarah@filter.agency', 'rate' => 90],
-            ['name' => 'Marcus Patel', 'email' => 'marcus@filter.agency', 'rate' => 75],
-            ['name' => 'Lena Brooks', 'email' => 'lena@filter.agency', 'rate' => 110],
+            ['name' => 'Sarah Chen', 'email' => 'sarah@filteragency.com', 'rate' => 90],
+            ['name' => 'Marcus Patel', 'email' => 'marcus@filteragency.com', 'rate' => 75],
+            ['name' => 'Lena Brooks', 'email' => 'lena@filteragency.com', 'rate' => 110],
         ];
 
         $projects = Project::whereNotNull('budget_type')->get();

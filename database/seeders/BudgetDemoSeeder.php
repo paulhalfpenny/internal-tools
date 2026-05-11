@@ -23,7 +23,7 @@ class BudgetDemoSeeder extends Seeder
     public function run(): void
     {
         $user = User::first() ?? User::factory()->create([
-            'email' => 'demo@filter.agency',
+            'email' => 'demo@filteragency.com',
             'name' => 'Demo User',
             'default_hourly_rate' => 100,
         ]);

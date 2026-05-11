@@ -53,7 +53,7 @@ class PhaseFeedbackDemoSeeder extends Seeder
 
         // 4. Assign Sarah Chen as the manager on the over-budget CI project so she
         //    gets budget alerts (in addition to admins).
-        $sarah = User::where('email', 'sarah@filter.agency')->first();
+        $sarah = User::where('email', 'sarah@filteragency.com')->first();
         $ciOver = Project::where('code', 'ABC-CI-02')->first();
         if ($sarah && $ciOver) {
             $ciOver->update(['manager_user_id' => $sarah->id]);
