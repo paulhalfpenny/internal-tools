@@ -1,6 +1,9 @@
 <div
     x-data="{}"
-    @keydown.n.window="$wire.openNewModal()"
+    {{-- Global 'n' shortcut opens a new time entry. Guard against firing while
+         the user is typing into a form field — otherwise typing the letter 'n'
+         in the notes textarea (etc.) re-opens the modal and resets the form. --}}
+    @keydown.n.window="if (!['INPUT','TEXTAREA','SELECT'].includes($event.target.tagName) && !$event.target.isContentEditable) $wire.openNewModal()"
 >
     @if($isImpersonating)
         <div class="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
