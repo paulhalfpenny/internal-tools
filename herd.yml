@@ -1,0 +1,10 @@
+name: internal-tools
+php: '8.3'
+secured: true
+services:
+  mysql:
+    version: 8.4.9
+    port: '${DB_PORT}'
+  redis:
+    version: 7.4.9
+    port: '${REDIS_PORT}'
