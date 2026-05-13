@@ -116,6 +116,85 @@ test('skips cancelled events and all-day events', function () {
     expect($events[0]['title'])->toBe('Real meeting');
 });
 
+test('skips events the user has declined', function () {
+    $user = User::factory()->create([
+        'google_access_token' => 'tok',
+        'google_token_expires_at' => now()->addHour(),
+    ]);
+
+    Http::fake([
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events*' => Http::response([
+            'items' => [
+                [
+                    'id' => 'evt-declined',
+                    'summary' => 'Meeting I declined',
+                    'start' => ['dateTime' => '2026-05-06T09:00:00+01:00'],
+                    'end' => ['dateTime' => '2026-05-06T09:30:00+01:00'],
+                    'attendees' => [
+                        ['email' => 'organiser@filter.agency', 'responseStatus' => 'accepted'],
+                        ['self' => true, 'email' => 'me@filter.agency', 'responseStatus' => 'declined'],
+                    ],
+                ],
+                [
+                    'id' => 'evt-accepted',
+                    'summary' => 'Meeting I accepted',
+                    'start' => ['dateTime' => '2026-05-06T10:00:00+01:00'],
+                    'end' => ['dateTime' => '2026-05-06T10:30:00+01:00'],
+                    'attendees' => [
+                        ['self' => true, 'email' => 'me@filter.agency', 'responseStatus' => 'accepted'],
+                    ],
+                ],
+                [
+                    'id' => 'evt-tentative',
+                    'summary' => 'Meeting I might attend',
+                    'start' => ['dateTime' => '2026-05-06T11:00:00+01:00'],
+                    'end' => ['dateTime' => '2026-05-06T11:30:00+01:00'],
+                    'attendees' => [
+                        ['self' => true, 'email' => 'me@filter.agency', 'responseStatus' => 'tentative'],
+                    ],
+                ],
+                [
+                    'id' => 'evt-not-responded',
+                    'summary' => 'Invite I have not actioned',
+                    'start' => ['dateTime' => '2026-05-06T12:00:00+01:00'],
+                    'end' => ['dateTime' => '2026-05-06T12:30:00+01:00'],
+                    'attendees' => [
+                        ['self' => true, 'email' => 'me@filter.agency', 'responseStatus' => 'needsAction'],
+                    ],
+                ],
+                [
+                    'id' => 'evt-solo',
+                    'summary' => 'Solo focus block (no attendees array)',
+                    'start' => ['dateTime' => '2026-05-06T13:00:00+01:00'],
+                    'end' => ['dateTime' => '2026-05-06T13:30:00+01:00'],
+                ],
+                [
+                    'id' => 'evt-someone-else-declined',
+                    'summary' => 'Meeting where someone else declined',
+                    'start' => ['dateTime' => '2026-05-06T14:00:00+01:00'],
+                    'end' => ['dateTime' => '2026-05-06T14:30:00+01:00'],
+                    'attendees' => [
+                        ['email' => 'colleague@filter.agency', 'responseStatus' => 'declined'],
+                        ['self' => true, 'email' => 'me@filter.agency', 'responseStatus' => 'accepted'],
+                    ],
+                ],
+            ],
+        ]),
+    ]);
+
+    $events = (new CalendarService)->getEventsForDate($user, Carbon::parse('2026-05-06'));
+
+    $titles = collect($events)->pluck('title')->all();
+    expect($titles)->not->toContain('Meeting I declined');
+    expect($titles)->toContain(
+        'Meeting I accepted',
+        'Meeting I might attend',
+        'Invite I have not actioned',
+        'Solo focus block (no attendees array)',
+        'Meeting where someone else declined',
+    );
+});
+
 test('returns no events if the primary calendar endpoint fails', function () {
     $user = User::factory()->create([
         'google_access_token' => 'tok',

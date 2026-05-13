@@ -81,6 +81,9 @@ final class CalendarService
             if (($item['status'] ?? null) === 'cancelled') {
                 continue;
             }
+            if ($this->userDeclined($item)) {
+                continue;
+            }
             $items[] = $item;
         }
 
@@ -110,6 +113,36 @@ final class CalendarService
         }
 
         return $grouped;
+    }
+
+    /**
+     * Google sets `self: true` on the attendee entry that represents the
+     * authenticated user. If that entry's responseStatus is "declined", the
+     * user actively said no to the meeting — skip it so it doesn't clutter
+     * their time-tracking sidebar.
+     *
+     * Events without an attendees array (e.g. solo blocks the user created
+     * for themselves) are kept; there's no decline to read.
+     *
+     * @param  array<string, mixed>  $item
+     */
+    private function userDeclined(array $item): bool
+    {
+        $attendees = $item['attendees'] ?? null;
+        if (! is_array($attendees)) {
+            return false;
+        }
+
+        foreach ($attendees as $attendee) {
+            if (! is_array($attendee)) {
+                continue;
+            }
+            if (($attendee['self'] ?? false) === true) {
+                return ($attendee['responseStatus'] ?? null) === 'declined';
+            }
+        }
+
+        return false;
     }
 
     public function hasToken(User $user): bool
