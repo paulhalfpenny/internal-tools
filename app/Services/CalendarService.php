@@ -20,9 +20,8 @@ final class CalendarService
     }
 
     /**
-     * Fetch the user's timed events for a specific date, across every calendar
-     * the user owns (not just `primary`). De-duplicates events that appear on
-     * multiple owned calendars.
+     * Fetch the user's timed events for a specific date from their primary
+     * calendar.
      *
      * @return array<int, array{id: string, title: string, start_formatted: string, end_formatted: string, hours: float}>
      */
@@ -35,11 +34,10 @@ final class CalendarService
 
     /**
      * Fetch events grouped by yyyy-mm-dd for a date range (inclusive on both
-     * ends). Hits Google's API once per calendar the user **owns** — we
-     * deliberately skip calendars the user is only a reader on (team / shared /
-     * subscribed calendars), because those show events the user wasn't invited
-     * to. Events the user is invited to land on their own primary calendar by
-     * default, so they're still picked up.
+     * ends). Only queries the user's primary calendar — events from
+     * subscribed or shared calendars (even ones Google reports as owner-role
+     * because of "manage sharing" permission) would leak other people's time
+     * into the user's timesheet.
      *
      * @return array<string, array<int, array{id: string, title: string, start_formatted: string, end_formatted: string, hours: float}>>
      */
@@ -50,57 +48,44 @@ final class CalendarService
             return [];
         }
 
-        $calendarIds = $this->fetchCalendarIds($token);
-        if ($calendarIds === []) {
-            return [];
-        }
-
         $timeMin = $from->copy()->startOfDay()->toIso8601String();
         $timeMax = $to->copy()->endOfDay()->toIso8601String();
 
-        // Pull from every calendar once across the whole range; key by event
-        // id to drop duplicates (the same invitation appears on every
-        // invitee's primary calendar).
-        $byId = [];
-        foreach ($calendarIds as $calendarId) {
-            try {
-                $response = Http::withToken($token)
-                    ->get('https://www.googleapis.com/calendar/v3/calendars/'.rawurlencode($calendarId).'/events', [
-                        'timeMin' => $timeMin,
-                        'timeMax' => $timeMax,
-                        'singleEvents' => 'true',
-                        'orderBy' => 'startTime',
-                        'maxResults' => 250,
-                    ]);
-            } catch (ConnectionException|Throwable $e) {
-                Log::warning('calendar.fetch_events.failed', [
-                    'calendar_id' => $calendarId,
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
+        try {
+            $response = Http::withToken($token)
+                ->get('https://www.googleapis.com/calendar/v3/calendars/primary/events', [
+                    'timeMin' => $timeMin,
+                    'timeMax' => $timeMax,
+                    'singleEvents' => 'true',
+                    'orderBy' => 'startTime',
+                    'maxResults' => 250,
                 ]);
+        } catch (ConnectionException|Throwable $e) {
+            Log::warning('calendar.fetch_events.failed', [
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
 
-                continue;
-            }
-
-            if (! $response->successful()) {
-                continue;
-            }
-
-            foreach ($response->json('items', []) as $item) {
-                if (! isset($item['start']['dateTime'], $item['end']['dateTime'])) {
-                    continue;
-                }
-                if (($item['status'] ?? null) === 'cancelled') {
-                    continue;
-                }
-
-                $byId[$item['id']] = $item;
-            }
+            return [];
         }
 
-        // Group by date and shape into the lightweight array structure the UI uses.
+        if (! $response->successful()) {
+            return [];
+        }
+
+        $items = [];
+        foreach ($response->json('items', []) as $item) {
+            if (! isset($item['start']['dateTime'], $item['end']['dateTime'])) {
+                continue;
+            }
+            if (($item['status'] ?? null) === 'cancelled') {
+                continue;
+            }
+            $items[] = $item;
+        }
+
         $grouped = [];
-        foreach ($byId as $item) {
+        foreach ($items as $item) {
             $start = Carbon::parse($item['start']['dateTime']);
             $end = Carbon::parse($item['end']['dateTime']);
             $dateKey = $start->toDateString();
@@ -125,41 +110,6 @@ final class CalendarService
         }
 
         return $grouped;
-    }
-
-    /**
-     * List every calendar the authenticated user owns. We intentionally use
-     * minAccessRole=owner instead of reader so that shared/team/subscribed
-     * calendars (where the user is not an attendee) don't leak into their
-     * timesheet calendar tab.
-     *
-     * @return array<int, string>
-     */
-    private function fetchCalendarIds(string $token): array
-    {
-        $response = Http::withToken($token)
-            ->get('https://www.googleapis.com/calendar/v3/users/me/calendarList', [
-                'minAccessRole' => 'owner',
-                'showHidden' => 'true',
-                'maxResults' => 250,
-            ]);
-
-        if (! $response->successful()) {
-            // Fall back to primary so the feature degrades gracefully rather than
-            // returning nothing if the calendarList endpoint hiccups.
-            return ['primary'];
-        }
-
-        /** @var array<int, array{id?: string, deleted?: bool, hidden?: bool}> $items */
-        $items = $response->json('items', []);
-        $ids = collect($items)
-            ->filter(fn (array $cal) => ! ($cal['deleted'] ?? false) && ! ($cal['hidden'] ?? false))
-            ->pluck('id')
-            ->filter()
-            ->values()
-            ->all();
-
-        return $ids === [] ? ['primary'] : $ids;
     }
 
     public function hasToken(User $user): bool
