@@ -552,7 +552,6 @@ class DayView extends Component
 
         $this->notes = $title;
         $this->hoursInput = HoursFormatter::asTime($hours);
-        $this->showCalendarPanel = false;
         $this->lastCalendarPullTitle = $title;
 
         // Auto-fill project/task from a previously remembered association for this event title.
