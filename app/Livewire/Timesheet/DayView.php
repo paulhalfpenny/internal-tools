@@ -429,6 +429,7 @@ class DayView extends Component
 
         $service = app(TimeEntryService::class);
         $copied = 0;
+        $needsAsanaTask = 0;
 
         foreach ($sourceEntries as $source) {
             $project = $source->project;
@@ -454,9 +455,12 @@ class DayView extends Component
                         $asanaGid = null;
                     }
                 }
-
+                // If the project requires an Asana task but the source row has
+                // none (or its gid is stale), still carry the row forward with
+                // a null gid — the user will be forced to pick a task at edit
+                // time by the existing save-side validation.
                 if ($asanaGid === null && (bool) $project->asana_task_required) {
-                    continue;
+                    $needsAsanaTask++;
                 }
             } else {
                 $asanaGid = null;
@@ -475,10 +479,13 @@ class DayView extends Component
 
         $sourceDateLabel = Carbon::parse($mostRecentPrior)->format('l, j F');
         if ($copied > 0) {
-            session()->flash(
-                'copy_rows_message',
-                'Copied '.$copied.' row'.($copied === 1 ? '' : 's').' from '.$sourceDateLabel.'.'
-            );
+            $message = 'Copied '.$copied.' row'.($copied === 1 ? '' : 's').' from '.$sourceDateLabel.'.';
+            if ($needsAsanaTask > 0) {
+                $message .= ' '.$needsAsanaTask.' row'.($needsAsanaTask === 1 ? '' : 's')
+                    .' '.($needsAsanaTask === 1 ? 'is' : 'are').' on a project that requires an Asana task — edit '
+                    .($needsAsanaTask === 1 ? 'it' : 'them').' to pick one before logging hours.';
+            }
+            session()->flash('copy_rows_message', $message);
         } else {
             session()->flash('copy_rows_message', 'No rows could be copied from '.$sourceDateLabel.'.');
         }
