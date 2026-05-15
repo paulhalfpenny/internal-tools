@@ -31,8 +31,12 @@ use Illuminate\Support\Carbon;
  * @property int|null $reports_to_user_id
  * @property bool $is_active
  * @property Carbon|null $archived_at
+ * @property array<int, int>|null $schedule_work_days
  * @property Collection<int, Project> $projects
+ * @property Collection<int, Team> $teams
  * @property Collection<int, TimeEntry> $timeEntries
+ * @property Collection<int, ScheduleAssignment> $scheduleAssignments
+ * @property Collection<int, ScheduleTimeOff> $scheduleTimeOff
  * @property ?User $manager
  * @property Collection<int, User> $directReports
  */
@@ -62,6 +66,7 @@ class User extends Authenticatable
         'default_hourly_rate',
         'rate_id',
         'weekly_capacity_hours',
+        'schedule_work_days',
         'is_active',
         'archived_at',
         'last_login_at',
@@ -87,6 +92,7 @@ class User extends Authenticatable
             'archived_at' => 'datetime',
             'default_hourly_rate' => 'decimal:2',
             'weekly_capacity_hours' => 'decimal:2',
+            'schedule_work_days' => 'array',
             'last_login_at' => 'datetime',
             'google_access_token' => 'encrypted',
             'google_refresh_token' => 'encrypted',
@@ -112,6 +118,12 @@ class User extends Authenticatable
             ->withPivot(['hourly_rate_override', 'rate_id']);
     }
 
+    /** @return BelongsToMany<Team, $this> */
+    public function teams(): BelongsToMany
+    {
+        return $this->belongsToMany(Team::class)->withTimestamps();
+    }
+
     /** @return BelongsTo<Rate, $this> */
     public function rate(): BelongsTo
     {
@@ -122,6 +134,18 @@ class User extends Authenticatable
     public function timeEntries(): HasMany
     {
         return $this->hasMany(TimeEntry::class);
+    }
+
+    /** @return HasMany<ScheduleAssignment, $this> */
+    public function scheduleAssignments(): HasMany
+    {
+        return $this->hasMany(ScheduleAssignment::class);
+    }
+
+    /** @return HasMany<ScheduleTimeOff, $this> */
+    public function scheduleTimeOff(): HasMany
+    {
+        return $this->hasMany(ScheduleTimeOff::class);
     }
 
     /** @return HasMany<PersonalAccessToken, $this> */
@@ -157,6 +181,24 @@ class User extends Authenticatable
         $target = (float) $this->weekly_capacity_hours;
 
         return $target > 0 ? $target : self::DEFAULT_WEEKLY_TARGET_HOURS;
+    }
+
+    /**
+     * ISO-8601 weekdays, Monday=1 through Sunday=7.
+     *
+     * @return array<int, int>
+     */
+    public function effectiveScheduleWorkDays(): array
+    {
+        $days = collect($this->schedule_work_days ?? [1, 2, 3, 4, 5])
+            ->map(fn ($day) => (int) $day)
+            ->filter(fn (int $day) => $day >= 1 && $day <= 7)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        return $days !== [] ? $days : [1, 2, 3, 4, 5];
     }
 
     public function notificationsArePaused(?\DateTimeInterface $on = null): bool

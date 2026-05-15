@@ -142,6 +142,47 @@
                 </div>
 
                 <div class="mb-4">
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Teams</label>
+                    @if($teams->isNotEmpty())
+                        <div class="space-y-2">
+                            @foreach($editTeamIds as $index => $teamId)
+                                <div wire:key="edit-team-row-{{ $index }}" class="flex items-center gap-2">
+                                    <select wire:model="editTeamIds.{{ $index }}" class="schedule-modal-select w-full border border-gray-300 rounded-md text-sm px-3 py-2">
+                                        <option value="">No team</option>
+                                        @foreach($teams as $team)
+                                            <option value="{{ $team->id }}">{{ $team->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    @if(count($editTeamIds) > 1)
+                                        <button
+                                            type="button"
+                                            wire:click="removeEditTeamRow({{ $index }})"
+                                            class="shrink-0 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                                            aria-label="Remove team"
+                                        >
+                                            &times;
+                                        </button>
+                                    @endif
+                                </div>
+                            @endforeach
+                            <button
+                                type="button"
+                                wire:click="addEditTeamRow"
+                                class="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                                + Add another
+                            </button>
+                        </div>
+                    @else
+                        <p class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                            Create teams from Admin → Teams.
+                        </p>
+                    @endif
+                    @error('editTeamIds')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                    @error('editTeamIds.*')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                </div>
+
+                <div class="mb-4">
                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Employment Type</label>
                     <select wire:model="editIsContractor" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
                         <option value="0">Employee</option>
@@ -164,6 +205,19 @@
                     <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Capacity (hrs/week)</label>
                     <input wire:model="editWeeklyCapacity" type="number" step="0.5" min="0" max="168" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
                     @error('editWeeklyCapacity')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Schedule work days</label>
+                    <div class="flex overflow-hidden rounded-md border border-gray-300">
+                        @foreach([[1,'M'], [2,'T'], [3,'W'], [4,'T'], [5,'F'], [6,'S'], [7,'S']] as [$value, $label])
+                            <label class="flex flex-1 cursor-pointer items-center justify-center border-r border-gray-300 px-3 py-2 text-sm last:border-r-0">
+                                <input wire:model="editScheduleWorkDays" value="{{ $value }}" type="checkbox" class="sr-only peer">
+                                <span class="text-gray-400 peer-checked:font-semibold peer-checked:text-blue-700">{{ $label }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                    @error('editScheduleWorkDays')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
 
                 <div class="border-t border-gray-100 pt-6 mt-6 mb-6">

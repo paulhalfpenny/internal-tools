@@ -39,6 +39,7 @@ use Illuminate\Support\Carbon;
  * @property Collection<int, Task> $tasks
  * @property Collection<int, User> $users
  * @property Collection<int, AsanaProject> $asanaProjects
+ * @property Collection<int, ScheduleAssignment> $scheduleAssignments
  */
 class Project extends Model
 {
@@ -117,6 +118,12 @@ class Project extends Model
     public function timeEntries(): HasMany
     {
         return $this->hasMany(TimeEntry::class);
+    }
+
+    /** @return HasMany<ScheduleAssignment, $this> */
+    public function scheduleAssignments(): HasMany
+    {
+        return $this->hasMany(ScheduleAssignment::class);
     }
 
     /** @return BelongsToMany<AsanaProject, $this> */

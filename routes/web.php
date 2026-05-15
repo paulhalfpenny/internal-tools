@@ -9,6 +9,7 @@ use App\Livewire\Admin\Projects\Edit as AdminProjectEdit;
 use App\Livewire\Admin\Projects\Index as AdminProjects;
 use App\Livewire\Admin\Rates\Library as AdminRatesLibrary;
 use App\Livewire\Admin\Tasks\Index as AdminTasks;
+use App\Livewire\Admin\Teams\Index as AdminTeams;
 use App\Livewire\Admin\TimeEntries\BulkMove as AdminTimeEntriesBulkMove;
 use App\Livewire\Admin\Timesheets\Index as AdminTimesheets;
 use App\Livewire\Admin\Users\Index as AdminUsers;
@@ -22,6 +23,7 @@ use App\Livewire\Reports\TasksReport;
 use App\Livewire\Reports\TeamOverviewReport;
 use App\Livewire\Reports\TeamReport;
 use App\Livewire\Reports\TimeReport;
+use App\Livewire\Schedule\ScheduleBoard;
 use App\Livewire\Timesheet\DayView;
 use App\Livewire\Timesheet\WeekView;
 use App\Models\User;
@@ -55,6 +57,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/', fn () => redirect()->route('timesheet'));
     Route::get('/timesheet', DayView::class)->name('timesheet');
     Route::get('/timesheet/week', WeekView::class)->name('timesheet.week');
+    Route::get('/schedule', ScheduleBoard::class)
+        ->name('schedule')
+        ->middleware('can:access-reports');
     Route::get('/team/{user}', DayView::class)
         ->name('team.timesheet')
         ->middleware('can:view-team-timesheet,user');
@@ -96,6 +101,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/users', AdminUsers::class)->name('users');
         Route::get('/clients', AdminClients::class)->name('clients');
         Route::get('/tasks', AdminTasks::class)->name('tasks');
+        Route::get('/teams', AdminTeams::class)->name('teams');
         Route::get('/projects', AdminProjects::class)->name('projects');
         Route::get('/projects/{project}/edit', AdminProjectEdit::class)->name('projects.edit');
         Route::redirect('/rates', '/admin/rates/library')->name('rates');

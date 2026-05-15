@@ -22,6 +22,7 @@ class UserFactory extends Factory
             'is_contractor' => false,
             'default_hourly_rate' => null,
             'weekly_capacity_hours' => 40.00,
+            'schedule_work_days' => [1, 2, 3, 4, 5],
             'is_active' => true,
             'last_login_at' => null,
             'email_notifications_enabled' => true,

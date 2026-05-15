@@ -7,8 +7,13 @@ use App\Models\User;
 use App\Services\TimesheetCompletionService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 
 uses(RefreshDatabase::class);
+
+afterEach(function () {
+    Carbon::setTestNow();
+});
 
 function logHours(User $user, string $date, float $hours): void
 {
@@ -99,6 +104,7 @@ test('mid-week threshold ignores entries logged on Thu, Fri, Sat, Sun', function
 test('mid-week threshold skips paused users', function () {
     $service = app(TimesheetCompletionService::class);
     $monday = CarbonImmutable::parse('2026-05-04');
+    Carbon::setTestNow('2026-05-07 09:30:00');
 
     User::factory()->create([
         'name' => 'OnHoliday',

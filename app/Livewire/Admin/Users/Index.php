@@ -4,6 +4,7 @@ namespace App\Livewire\Admin\Users;
 
 use App\Enums\Role;
 use App\Models\Rate;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -41,6 +42,12 @@ class Index extends Component
 
     public string $editWeeklyCapacity = '';
 
+    /** @var array<int, int|string> */
+    public array $editScheduleWorkDays = [1, 2, 3, 4, 5];
+
+    /** @var array<int, int|string> */
+    public array $editTeamIds = [''];
+
     public bool $editIsContractor = false;
 
     public ?int $editReportsToUserId = null;
@@ -65,6 +72,8 @@ class Index extends Component
         $this->editRoleTitle = $user->role_title ?? '';
         $this->editRateId = $user->rate_id;
         $this->editWeeklyCapacity = (string) $user->weekly_capacity_hours;
+        $this->editScheduleWorkDays = $user->effectiveScheduleWorkDays();
+        $this->editTeamIds = $this->teamRowsFromIds($user->teams()->pluck('teams.id')->all());
         $this->editIsContractor = $user->is_contractor;
         $this->editReportsToUserId = $user->reports_to_user_id;
         $this->editNotificationsPausedUntil = $user->notifications_paused_until?->toDateString() ?? '';
@@ -77,11 +86,26 @@ class Index extends Component
     {
         Gate::authorize('access-admin');
 
+        $this->editScheduleWorkDays = collect($this->editScheduleWorkDays)
+            ->map(fn ($day) => (int) $day)
+            ->filter(fn (int $day) => $day >= 1 && $day <= 7)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+        $this->editTeamIds = $this->normalisedTeamIds($this->editTeamIds);
+
         $this->validate([
             'editRole' => 'required|in:user,manager,admin',
             'editRoleTitle' => 'nullable|string|max:255',
             'editRateId' => 'nullable|exists:rates,id',
             'editWeeklyCapacity' => 'required|numeric|min:0|max:168',
+            'editScheduleWorkDays' => 'required|array|min:1',
+            'editTeamIds' => 'array',
+            'editTeamIds.*' => [
+                'integer',
+                Rule::exists('teams', 'id')->where(fn ($q) => $q->where('is_archived', false)),
+            ],
             'editReportsToUserId' => [
                 'nullable',
                 'integer',
@@ -112,19 +136,42 @@ class Index extends Component
             }
         }
 
-        User::findOrFail((int) $this->editingId)->update([
+        $user = User::findOrFail((int) $this->editingId);
+        $user->update([
             'role' => Role::from($this->editRole),
             'role_title' => $this->editRoleTitle ?: null,
             'rate_id' => $this->editRateId,
             'weekly_capacity_hours' => (float) $this->editWeeklyCapacity,
+            'schedule_work_days' => $this->editScheduleWorkDays,
             'is_contractor' => $this->editIsContractor,
             'reports_to_user_id' => $this->editReportsToUserId,
             'notifications_paused_until' => $this->editNotificationsPausedUntil !== '' ? $this->editNotificationsPausedUntil : null,
             'email_notifications_enabled' => $this->editEmailNotificationsEnabled,
             'slack_notifications_enabled' => $this->editSlackNotificationsEnabled,
         ]);
+        $user->teams()->sync($this->editTeamIds);
 
         $this->editingId = null;
+        $this->editTeamIds = [''];
+    }
+
+    public function addEditTeamRow(): void
+    {
+        Gate::authorize('access-admin');
+
+        $this->editTeamIds[] = '';
+    }
+
+    public function removeEditTeamRow(int $index): void
+    {
+        Gate::authorize('access-admin');
+
+        unset($this->editTeamIds[$index]);
+        $this->editTeamIds = array_values($this->editTeamIds);
+
+        if ($this->editTeamIds === []) {
+            $this->editTeamIds = [''];
+        }
     }
 
     public function confirmArchive(int $userId): void
@@ -197,6 +244,32 @@ class Index extends Component
     public function cancel(): void
     {
         $this->editingId = null;
+        $this->editTeamIds = [''];
+    }
+
+    /**
+     * @param  array<int, int|string>  $ids
+     * @return array<int, int>
+     */
+    private function normalisedTeamIds(array $ids): array
+    {
+        return collect($ids)
+            ->map(fn ($teamId) => (int) $teamId)
+            ->filter(fn (int $teamId) => $teamId > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int|string>  $ids
+     * @return array<int, int|string>
+     */
+    private function teamRowsFromIds(array $ids): array
+    {
+        $normalised = $this->normalisedTeamIds($ids);
+
+        return $normalised === [] ? [''] : $normalised;
     }
 
     public function render(): View
@@ -235,6 +308,7 @@ class Index extends Component
             'roles' => Role::cases(),
             'managerCandidates' => $managerCandidates,
             'rates' => Rate::where('is_archived', false)->orderBy('name')->get(),
+            'teams' => Team::active()->orderBy('name')->get(),
             'archivedCount' => $archivedCount,
         ]);
     }

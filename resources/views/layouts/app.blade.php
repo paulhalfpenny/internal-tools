@@ -33,6 +33,11 @@
                 </a>
 
                 @if(auth()->user()->isManager())
+                <a href="{{ route('schedule') }}"
+                   class="text-sm font-medium text-white {{ request()->routeIs('schedule') ? 'opacity-100 font-semibold' : 'opacity-70 hover:opacity-100' }}">
+                    Schedule
+                </a>
+
                 <div class="relative" x-data="{ open: false }" @click.outside="open = false">
                     <button @click="open = !open"
                             class="text-sm font-medium text-white flex items-center gap-1 {{ request()->routeIs('reports.*') ? 'opacity-100 font-semibold' : 'opacity-70 hover:opacity-100' }}">
@@ -63,6 +68,7 @@
                         <a href="{{ route('admin.users') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Users</a>
                         <a href="{{ route('admin.clients') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Clients</a>
                         <a href="{{ route('admin.projects') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Projects</a>
+                        <a href="{{ route('admin.teams') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Teams</a>
                         <a href="{{ route('admin.tasks') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Tasks</a>
                         <hr class="my-1 border-gray-100">
                         <a href="{{ route('admin.rates.library') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Rates</a>
