@@ -267,7 +267,6 @@ class Index extends Component
                     || str_contains(mb_strtolower($user->email), $term)
                     || str_contains(mb_strtolower($user->role_title ?? ''), $term);
             })
-            ->take(8)
             ->values();
     }
 }

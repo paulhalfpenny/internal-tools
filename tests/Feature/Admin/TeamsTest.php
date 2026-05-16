@@ -85,3 +85,25 @@ test('admin can assign a user to multiple teams from the user editor', function 
         'Design',
     ]);
 });
+
+test('team member picker exposes all matching active users', function () {
+    $admin = User::factory()->admin()->create();
+    $team = Team::factory()->create(['name' => 'Delivery']);
+
+    $users = collect(range(1, 12))
+        ->map(fn (int $number) => User::factory()->create([
+            'name' => sprintf('Available Person %02d', $number),
+        ]));
+
+    $component = Livewire::actingAs($admin)
+        ->test(TeamsIndex::class)
+        ->call('edit', $team->id);
+
+    $availableUserIds = $component->viewData('availableEditUsers')->pluck('id')->all();
+
+    expect($availableUserIds)->toHaveCount(13);
+    expect($availableUserIds)->toEqualCanonicalizing([
+        $admin->id,
+        ...$users->pluck('id')->all(),
+    ]);
+});
