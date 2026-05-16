@@ -46,6 +46,9 @@ class ScheduleBoard extends Component
     #[Url(as: 'project', except: '')]
     public string $projectFilter = '';
 
+    #[Url(as: 'group', except: '')]
+    public string $businessUnitFilter = '';
+
     public string $scheduleFilter = 'metric:availability';
 
     /** @var array<string, bool> */
@@ -115,38 +118,69 @@ class ScheduleBoard extends Component
 
     public function mount(): void
     {
-        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->selectedDate)) {
-            $this->selectedDate = today()->toDateString();
+        if (! $this->hasScheduleQueryParameters()) {
+            $this->loadSchedulePreferences();
         }
 
-        $this->viewMode = in_array($this->viewMode, ['projects', 'team'], true) ? $this->viewMode : 'team';
-        $this->scale = in_array($this->scale, ['day', 'week', 'month'], true) ? $this->scale : 'week';
-        $this->heatmapMetric = in_array($this->heatmapMetric, ['availability', 'capacity'], true) ? $this->heatmapMetric : 'availability';
-        $this->teamFilter = ctype_digit($this->teamFilter) ? $this->teamFilter : '';
-        $this->projectFilter = ctype_digit($this->projectFilter) ? $this->projectFilter : '';
-        $this->roleFilter = trim($this->roleFilter);
+        $this->normaliseScheduleState();
         $this->syncScheduleFilterFromState();
+        $this->persistSchedulePreferences();
     }
 
     public function setViewMode(string $viewMode): void
     {
         $this->viewMode = in_array($viewMode, ['projects', 'team'], true) ? $viewMode : 'team';
+        $this->persistSchedulePreferences();
     }
 
     public function setScale(string $scale): void
     {
         $this->scale = in_array($scale, ['day', 'week', 'month'], true) ? $scale : 'week';
+        $this->persistSchedulePreferences();
+    }
+
+    public function setBusinessUnitFilter(string $teamName): void
+    {
+        $teamName = $this->normalisedBusinessUnitFilter($teamName);
+        $this->businessUnitFilter = $this->businessUnitFilter === $teamName ? '' : $teamName;
+        $this->persistSchedulePreferences();
     }
 
     public function setHeatmapMetric(string $metric): void
     {
         $this->heatmapMetric = in_array($metric, ['availability', 'capacity'], true) ? $metric : 'availability';
         $this->syncScheduleFilterFromState();
+        $this->persistSchedulePreferences();
     }
 
     public function updatedScheduleFilter(string $value): void
     {
         $this->applyScheduleFilter($value);
+        $this->persistSchedulePreferences();
+    }
+
+    public function updatedViewMode(): void
+    {
+        $this->normaliseScheduleState();
+        $this->persistSchedulePreferences();
+    }
+
+    public function updatedScale(): void
+    {
+        $this->normaliseScheduleState();
+        $this->persistSchedulePreferences();
+    }
+
+    public function updatedSelectedDate(): void
+    {
+        $this->normaliseScheduleState();
+        $this->persistSchedulePreferences();
+    }
+
+    public function updatedBusinessUnitFilter(): void
+    {
+        $this->normaliseScheduleState();
+        $this->persistSchedulePreferences();
     }
 
     public function clearPeopleFilters(): void
@@ -155,6 +189,7 @@ class ScheduleBoard extends Component
         $this->teamFilter = '';
         $this->projectFilter = '';
         $this->syncScheduleFilterFromState();
+        $this->persistSchedulePreferences();
     }
 
     public function previousPeriod(): void
@@ -165,6 +200,7 @@ class ScheduleBoard extends Component
             'week' => $date->subWeeks(4)->toDateString(),
             default => $date->subWeek()->toDateString(),
         };
+        $this->persistSchedulePreferences();
     }
 
     public function nextPeriod(): void
@@ -175,17 +211,20 @@ class ScheduleBoard extends Component
             'week' => $date->addWeeks(4)->toDateString(),
             default => $date->addWeek()->toDateString(),
         };
+        $this->persistSchedulePreferences();
     }
 
     public function goToToday(): void
     {
         $this->selectedDate = today()->toDateString();
+        $this->persistSchedulePreferences();
     }
 
     public function selectDate(string $date): void
     {
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             $this->selectedDate = $date;
+            $this->persistSchedulePreferences();
         }
     }
 
@@ -580,7 +619,8 @@ class ScheduleBoard extends Component
 
     public function render(ScheduleAvailabilityService $availability): View
     {
-        $this->mount();
+        $this->normaliseScheduleState();
+        $this->syncScheduleFilterFromState();
         $periods = $availability->periods($this->scale, $this->selectedDate);
         $rangeStart = $periods[0]['starts_on'];
         $rangeEnd = $periods[array_key_last($periods)]['ends_on'];
@@ -588,7 +628,7 @@ class ScheduleBoard extends Component
         $users = User::query()
             ->where('is_active', true)
             ->whereNull('archived_at')
-            ->with(['manager', 'projects:id', 'teams:id'])
+            ->with(['manager', 'projects:id', 'teams:id,name'])
             ->orderBy('name')
             ->get();
 
@@ -939,6 +979,7 @@ class ScheduleBoard extends Component
         $roleFilter = mb_strtolower($this->roleFilter);
         $teamFilter = $this->selectedTeamFilterId();
         $projectFilter = $this->selectedProjectFilterId();
+        $businessUnitFilter = $this->businessUnitFilter;
         $rows = collect();
 
         foreach ($placeholders as $placeholder) {
@@ -950,7 +991,7 @@ class ScheduleBoard extends Component
                 continue;
             }
 
-            if ($teamFilter !== null) {
+            if ($teamFilter !== null || $businessUnitFilter !== '') {
                 continue;
             }
 
@@ -990,6 +1031,10 @@ class ScheduleBoard extends Component
             }
 
             if ($teamFilter !== null && ! $user->teams->contains('id', $teamFilter)) {
+                continue;
+            }
+
+            if ($businessUnitFilter !== '' && ! $user->teams->contains('name', $businessUnitFilter)) {
                 continue;
             }
 
@@ -1070,7 +1115,36 @@ class ScheduleBoard extends Component
     {
         return $this->roleFilter !== ''
             || $this->selectedTeamFilterId() !== null
-            || $this->selectedProjectFilterId() !== null;
+            || $this->selectedProjectFilterId() !== null
+            || $this->businessUnitFilter !== '';
+    }
+
+    public function updatedHeatmapMetric(): void
+    {
+        $this->normaliseScheduleState();
+        $this->syncScheduleFilterFromState();
+        $this->persistSchedulePreferences();
+    }
+
+    public function updatedRoleFilter(): void
+    {
+        $this->normaliseScheduleState();
+        $this->syncScheduleFilterFromState();
+        $this->persistSchedulePreferences();
+    }
+
+    public function updatedTeamFilter(): void
+    {
+        $this->normaliseScheduleState();
+        $this->syncScheduleFilterFromState();
+        $this->persistSchedulePreferences();
+    }
+
+    public function updatedProjectFilter(): void
+    {
+        $this->normaliseScheduleState();
+        $this->syncScheduleFilterFromState();
+        $this->persistSchedulePreferences();
     }
 
     private function applyScheduleFilter(string $value): void
@@ -1122,6 +1196,91 @@ class ScheduleBoard extends Component
         }
 
         $this->scheduleFilter = 'metric:'.$this->heatmapMetric;
+    }
+
+    private function normaliseScheduleState(): void
+    {
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $this->selectedDate)) {
+            $this->selectedDate = today()->toDateString();
+        }
+
+        $this->viewMode = in_array($this->viewMode, ['projects', 'team'], true) ? $this->viewMode : 'team';
+        $this->scale = in_array($this->scale, ['day', 'week', 'month'], true) ? $this->scale : 'week';
+        $this->heatmapMetric = in_array($this->heatmapMetric, ['availability', 'capacity'], true) ? $this->heatmapMetric : 'availability';
+        $this->teamFilter = ctype_digit($this->teamFilter) ? $this->teamFilter : '';
+        $this->projectFilter = ctype_digit($this->projectFilter) ? $this->projectFilter : '';
+        $this->roleFilter = trim($this->roleFilter);
+        $this->businessUnitFilter = $this->normalisedBusinessUnitFilter($this->businessUnitFilter);
+    }
+
+    private function normalisedBusinessUnitFilter(string $teamName): string
+    {
+        $teamName = trim($teamName);
+
+        if (strcasecmp($teamName, Team::SCHEDULE_GROUP_JDW) === 0) {
+            return Team::SCHEDULE_GROUP_JDW;
+        }
+
+        if (strcasecmp($teamName, Team::SCHEDULE_GROUP_AGENCY) === 0) {
+            return Team::SCHEDULE_GROUP_AGENCY;
+        }
+
+        return '';
+    }
+
+    private function hasScheduleQueryParameters(): bool
+    {
+        return request()->hasAny(['view', 'scale', 'date', 'heatmap', 'role', 'team', 'project', 'group']);
+    }
+
+    private function loadSchedulePreferences(): void
+    {
+        $user = auth()->user();
+        if (! $user instanceof User || ! is_array($user->schedule_preferences)) {
+            return;
+        }
+
+        $preferences = $user->schedule_preferences;
+        $this->viewMode = (string) ($preferences['view_mode'] ?? $this->viewMode);
+        $this->scale = (string) ($preferences['scale'] ?? $this->scale);
+        $this->selectedDate = (string) ($preferences['selected_date'] ?? $this->selectedDate);
+        $this->heatmapMetric = (string) ($preferences['heatmap_metric'] ?? $this->heatmapMetric);
+        $this->roleFilter = (string) ($preferences['role_filter'] ?? $this->roleFilter);
+        $this->teamFilter = (string) ($preferences['team_filter'] ?? $this->teamFilter);
+        $this->projectFilter = (string) ($preferences['project_filter'] ?? $this->projectFilter);
+        $this->businessUnitFilter = (string) ($preferences['business_unit_filter'] ?? $this->businessUnitFilter);
+    }
+
+    private function persistSchedulePreferences(): void
+    {
+        $user = auth()->user();
+        if (! $user instanceof User) {
+            return;
+        }
+
+        $preferences = $this->schedulePreferencesPayload();
+        if ($user->schedule_preferences === $preferences) {
+            return;
+        }
+
+        $user->forceFill(['schedule_preferences' => $preferences])->saveQuietly();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function schedulePreferencesPayload(): array
+    {
+        return [
+            'view_mode' => $this->viewMode,
+            'scale' => $this->scale,
+            'selected_date' => $this->selectedDate,
+            'heatmap_metric' => $this->heatmapMetric,
+            'role_filter' => $this->roleFilter,
+            'team_filter' => $this->teamFilter,
+            'project_filter' => $this->projectFilter,
+            'business_unit_filter' => $this->businessUnitFilter,
+        ];
     }
 
     private function syncScheduleFilterFromState(): void

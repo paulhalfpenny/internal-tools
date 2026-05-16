@@ -30,7 +30,7 @@ test('admin can create edit archive and delete teams', function () {
         ->call('create')
         ->assertHasNoErrors();
 
-    $team = Team::firstOrFail();
+    $team = Team::where('name', 'Development')->firstOrFail();
     expect($team->name)->toBe('Development');
     expect($team->description)->toBe('People building things');
     expect($team->colour)->toBe('#0E8F3A');

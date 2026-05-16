@@ -54,6 +54,36 @@ test('url backed state controls schedule view defaults', function () {
         ->assertSet('projectFilter', (string) $project->id);
 });
 
+test('schedule preferences are restored for the user', function () {
+    $manager = User::factory()->manager()->create();
+
+    Livewire::actingAs($manager)
+        ->test(ScheduleBoard::class)
+        ->call('setViewMode', 'team')
+        ->call('setScale', 'month')
+        ->call('selectDate', '2026-06-01')
+        ->call('setBusinessUnitFilter', 'Agency')
+        ->set('scheduleFilter', 'metric:capacity')
+        ->assertSet('businessUnitFilter', 'Agency')
+        ->assertSet('heatmapMetric', 'capacity');
+
+    expect($manager->fresh()->schedule_preferences)->toMatchArray([
+        'view_mode' => 'team',
+        'scale' => 'month',
+        'selected_date' => '2026-06-01',
+        'heatmap_metric' => 'capacity',
+        'business_unit_filter' => 'Agency',
+    ]);
+
+    Livewire::actingAs($manager)
+        ->test(ScheduleBoard::class)
+        ->assertSet('viewMode', 'team')
+        ->assertSet('scale', 'month')
+        ->assertSet('selectedDate', '2026-06-01')
+        ->assertSet('businessUnitFilter', 'Agency')
+        ->assertSet('heatmapMetric', 'capacity');
+});
+
 test('manager can view but not mutate schedule data', function () {
     $manager = User::factory()->manager()->create();
 
@@ -199,6 +229,27 @@ test('team schedule can be filtered by assigned team', function () {
         ->test(ScheduleBoard::class)
         ->assertSee('Morgan Developer')
         ->assertDontSee('Oscar Designer');
+});
+
+test('team schedule can be filtered by fixed JDW and Agency groups', function () {
+    $admin = User::factory()->admin()->create();
+    $jdw = Team::where('name', Team::SCHEDULE_GROUP_JDW)->firstOrFail();
+    $agency = Team::where('name', Team::SCHEDULE_GROUP_AGENCY)->firstOrFail();
+    $jdwUser = User::factory()->create(['name' => 'JDW Planner']);
+    $agencyUser = User::factory()->create(['name' => 'Agency Planner']);
+    $jdwUser->teams()->attach($jdw->id);
+    $agencyUser->teams()->attach($agency->id);
+
+    Livewire::actingAs($admin)
+        ->test(ScheduleBoard::class)
+        ->call('setBusinessUnitFilter', Team::SCHEDULE_GROUP_JDW)
+        ->assertSet('businessUnitFilter', Team::SCHEDULE_GROUP_JDW)
+        ->assertSee('JDW Planner')
+        ->assertDontSee('Agency Planner')
+        ->call('setBusinessUnitFilter', Team::SCHEDULE_GROUP_AGENCY)
+        ->assertSet('businessUnitFilter', Team::SCHEDULE_GROUP_AGENCY)
+        ->assertSee('Agency Planner')
+        ->assertDontSee('JDW Planner');
 });
 
 test('team schedule can be filtered by project membership or scheduled project work', function () {

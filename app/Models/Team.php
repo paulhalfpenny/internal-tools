@@ -22,6 +22,10 @@ class Team extends Model
     /** @use HasFactory<TeamFactory> */
     use HasFactory;
 
+    public const SCHEDULE_GROUP_JDW = 'JDW';
+
+    public const SCHEDULE_GROUP_AGENCY = 'Agency';
+
     protected $fillable = [
         'name',
         'description',

@@ -32,6 +32,7 @@ use Illuminate\Support\Carbon;
  * @property bool $is_active
  * @property Carbon|null $archived_at
  * @property array<int, int>|null $schedule_work_days
+ * @property array<string, mixed>|null $schedule_preferences
  * @property Collection<int, Project> $projects
  * @property Collection<int, Team> $teams
  * @property Collection<int, TimeEntry> $timeEntries
@@ -67,6 +68,7 @@ class User extends Authenticatable
         'rate_id',
         'weekly_capacity_hours',
         'schedule_work_days',
+        'schedule_preferences',
         'is_active',
         'archived_at',
         'last_login_at',
@@ -93,6 +95,7 @@ class User extends Authenticatable
             'default_hourly_rate' => 'decimal:2',
             'weekly_capacity_hours' => 'decimal:2',
             'schedule_work_days' => 'array',
+            'schedule_preferences' => 'array',
             'last_login_at' => 'datetime',
             'google_access_token' => 'encrypted',
             'google_refresh_token' => 'encrypted',

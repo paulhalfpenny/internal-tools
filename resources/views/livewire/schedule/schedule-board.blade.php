@@ -83,6 +83,13 @@
                     <button wire:click="setViewMode('team')" class="schedule-segment-button {{ $viewMode === 'team' ? 'schedule-segment-button-active' : '' }}">Team</button>
                     <button wire:click="setViewMode('projects')" class="schedule-segment-button {{ $viewMode === 'projects' ? 'schedule-segment-button-active' : '' }}">Projects</button>
                 </div>
+
+                @if($viewMode === 'team')
+                    <div class="schedule-segmented">
+                        <button wire:click="setBusinessUnitFilter('{{ \App\Models\Team::SCHEDULE_GROUP_JDW }}')" class="schedule-segment-button {{ $businessUnitFilter === \App\Models\Team::SCHEDULE_GROUP_JDW ? 'schedule-segment-button-active' : '' }}">JDW</button>
+                        <button wire:click="setBusinessUnitFilter('{{ \App\Models\Team::SCHEDULE_GROUP_AGENCY }}')" class="schedule-segment-button {{ $businessUnitFilter === \App\Models\Team::SCHEDULE_GROUP_AGENCY ? 'schedule-segment-button-active' : '' }}">Agency</button>
+                    </div>
+                @endif
             </div>
 
             <div class="flex flex-col gap-3 xl:items-end">
