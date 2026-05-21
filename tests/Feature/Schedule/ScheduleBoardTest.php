@@ -145,6 +145,29 @@ test('admin must explicitly attach a non-team user before scheduling them', func
     ]);
 });
 
+test('admin can create an assignment against the default placeholder option', function () {
+    $admin = User::factory()->admin()->create();
+    $project = Project::factory()->create();
+
+    Livewire::actingAs($admin)
+        ->test(ScheduleBoard::class)
+        ->set('assignmentProjectId', $project->id)
+        ->set('assignmentAssigneeType', 'placeholder')
+        ->set('assignmentPlaceholderId', null)
+        ->set('assignmentStartsOn', '2026-05-11')
+        ->set('assignmentEndsOn', '2026-05-15')
+        ->set('assignmentHoursPerDay', '5')
+        ->call('saveAssignment')
+        ->assertHasNoErrors();
+
+    $placeholder = SchedulePlaceholder::where('name', SchedulePlaceholder::DEFAULT_NAME)->firstOrFail();
+    $assignment = ScheduleAssignment::firstOrFail();
+
+    expect($assignment->project_id)->toBe($project->id);
+    expect($assignment->user_id)->toBeNull();
+    expect($assignment->schedule_placeholder_id)->toBe($placeholder->id);
+});
+
 test('admin creates placeholders and time off', function () {
     $admin = User::factory()->admin()->create();
     $user = User::factory()->create(['name' => 'Sam Producer']);

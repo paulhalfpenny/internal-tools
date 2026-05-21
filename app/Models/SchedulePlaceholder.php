@@ -24,6 +24,8 @@ class SchedulePlaceholder extends Model
     /** @use HasFactory<SchedulePlaceholderFactory> */
     use HasFactory;
 
+    public const DEFAULT_NAME = 'Placeholder';
+
     protected $fillable = [
         'name',
         'role_title',

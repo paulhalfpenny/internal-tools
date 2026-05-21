@@ -429,7 +429,7 @@
                             <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">&nbsp;</label>
                             @if($assignmentAssigneeType === 'placeholder')
                                 <select wire:model="assignmentPlaceholderId" class="schedule-modal-select">
-                                    <option value="">Select placeholder...</option>
+                                    <option value="">Default placeholder</option>
                                     @foreach($allPlaceholders as $placeholder)
                                         <option value="{{ $placeholder->id }}">{{ $placeholder->name }}</option>
                                     @endforeach

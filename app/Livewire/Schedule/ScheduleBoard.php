@@ -321,15 +321,18 @@ class ScheduleBoard extends Component
                 $project->users()->attach($userId, ['hourly_rate_override' => null, 'rate_id' => null]);
             }
         } else {
-            $this->validate([
-                'assignmentPlaceholderId' => [
-                    'required',
-                    'integer',
-                    Rule::exists('schedule_placeholders', 'id')->where(fn ($query) => $query->whereNull('archived_at')),
-                ],
-            ]);
+            if (! blank($this->assignmentPlaceholderId)) {
+                $this->validate([
+                    'assignmentPlaceholderId' => [
+                        'integer',
+                        Rule::exists('schedule_placeholders', 'id')->where(fn ($query) => $query->whereNull('archived_at')),
+                    ],
+                ]);
+            }
 
-            $placeholderId = (int) $this->assignmentPlaceholderId;
+            $placeholderId = ! blank($this->assignmentPlaceholderId)
+                ? (int) $this->assignmentPlaceholderId
+                : $this->defaultSchedulePlaceholder()->id;
         }
 
         $values = [
@@ -899,6 +902,21 @@ class ScheduleBoard extends Component
         $this->assignmentNotes = '';
         $this->addUserToProjectTeam = true;
         $this->resetErrorBag();
+    }
+
+    private function defaultSchedulePlaceholder(): SchedulePlaceholder
+    {
+        return SchedulePlaceholder::query()
+            ->active()
+            ->where('name', SchedulePlaceholder::DEFAULT_NAME)
+            ->firstOrCreate(
+                ['name' => SchedulePlaceholder::DEFAULT_NAME],
+                [
+                    'role_title' => null,
+                    'weekly_capacity_hours' => 40.00,
+                    'schedule_work_days' => [1, 2, 3, 4, 5],
+                ],
+            );
     }
 
     private function resetTimeOffModal(): void
