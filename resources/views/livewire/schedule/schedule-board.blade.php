@@ -201,7 +201,7 @@
                                             {{ $project['name'] }}
                                         </button>
                                     </div>
-                                    <div class="mt-0.5 text-xs text-gray-500">{{ $project['client_name'] }} · {{ $formatHours($project['scheduled_hours']) }}h scheduled</div>
+                                    <div class="mt-0.5 text-xs text-gray-500">{{ $project['client_name'] }} · {{ $formatHours($project['scheduled_hours']) }}h scheduled · {{ $formatHours($project['actual_period_hours']) }}h logged ({{ $formatHours($project['actual_lifetime_hours']) }}h total)</div>
                                 </div>
                                 <button wire:click="toggleProject({{ $project['id'] }})" class="text-gray-400 hover:text-gray-700" title="{{ $project['expanded'] ? 'Collapse' : 'Expand' }}">
                                     <svg class="h-4 w-4 {{ $project['expanded'] ? 'rotate-180' : '' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -247,7 +247,7 @@
                             <div class="grid border-b border-gray-100 bg-gray-50/60" style="grid-template-columns: {{ $gridTemplate }};">
                                 <div class="sticky left-0 z-10 border-r border-gray-200 bg-gray-50 py-2 pl-4 pr-8">
                                     <div class="text-sm font-medium text-gray-800">{{ $assignment['assignee_name'] }}</div>
-                                    <div class="text-xs text-gray-500">{{ $assignment['starts_on'] }} to {{ $assignment['ends_on'] }} · {{ $formatHours($assignment['hours_per_day']) }}h/day</div>
+                                    <div class="text-xs text-gray-500">{{ $assignment['starts_on'] }} to {{ $assignment['ends_on'] }} · {{ $formatHours($assignment['hours_per_day']) }}h/day · {{ $formatHours($assignment['project_actual_lifetime_hours']) }}h logged on project</div>
                                 </div>
                                 @foreach($periods as $period)
                                     <div
@@ -328,6 +328,7 @@
                                     @if($metric['time_off'] > 0)
                                         <div class="mt-0.5 opacity-75">{{ $formatHours($metric['time_off']) }}h off</div>
                                     @endif
+                                    <div class="mt-0.5 opacity-75">{{ $formatHours($metric['actual'] ?? 0) }}h logged</div>
                                 </div>
                             </div>
                         @endforeach
@@ -341,7 +342,7 @@
                                         <span class="h-3 w-3 rounded-full" style="background-color: {{ $assignment['colour'] }}"></span>
                                         <div>
                                             <div class="text-sm font-medium text-gray-800">{{ $assignment['project_name'] }}</div>
-                                            <div class="text-xs text-gray-500">{{ $assignment['client_name'] }} · {{ $formatHours($assignment['hours_per_day']) }}h/day</div>
+                                            <div class="text-xs text-gray-500">{{ $assignment['client_name'] }} · {{ $formatHours($assignment['hours_per_day']) }}h/day · {{ $formatHours($assignment['project_actual_period_hours']) }}h logged ({{ $formatHours($assignment['project_actual_lifetime_hours']) }}h total)</div>
                                         </div>
                                     </div>
                                 </div>

@@ -4,6 +4,7 @@ namespace App\Livewire\Schedule;
 
 use App\Domain\Schedule\ScheduleAvailabilityService;
 use App\Domain\Schedule\ScheduleShiftService;
+use App\Domain\Schedule\TimesheetActualsService;
 use App\Models\Project;
 use App\Models\ScheduleAssignment;
 use App\Models\SchedulePlaceholder;
@@ -372,8 +373,7 @@ class ScheduleBoard extends Component
         ?string $sourcePeriodStartsOn = null,
         ?string $targetAssigneeType = null,
         ?int $targetAssigneeId = null,
-    ): void
-    {
+    ): void {
         Gate::authorize('access-admin');
 
         $this->validate([
@@ -617,7 +617,7 @@ class ScheduleBoard extends Component
         $this->closeShiftModal();
     }
 
-    public function render(ScheduleAvailabilityService $availability): View
+    public function render(ScheduleAvailabilityService $availability, TimesheetActualsService $actuals): View
     {
         $this->normaliseScheduleState();
         $this->syncScheduleFilterFromState();
@@ -663,10 +663,16 @@ class ScheduleBoard extends Component
             ->orderBy('starts_on')
             ->get();
 
+        $projectIds = $projects->pluck('id')->all();
+        $userIds = $users->pluck('id')->all();
+        $projectActualsByPeriod = $actuals->actualsByProjectForPeriods($projectIds, $periods);
+        $projectLifetimeActuals = $actuals->lifetimeActualsByProject($projectIds);
+        $userActualsByPeriod = $actuals->actualsByUserForPeriods($userIds, $periods);
+
         return view('livewire.schedule.schedule-board', [
             'periods' => $periods,
-            'projectRows' => $this->projectRows($projects, $assignments, $timeOff, $periods, $availability),
-            'teamRows' => $this->teamRows($users, $placeholders, $assignments, $timeOff, $periods, $availability),
+            'projectRows' => $this->projectRows($projects, $assignments, $timeOff, $periods, $availability, $projectActualsByPeriod, $projectLifetimeActuals),
+            'teamRows' => $this->teamRows($users, $placeholders, $assignments, $timeOff, $periods, $availability, $projectActualsByPeriod, $projectLifetimeActuals, $userActualsByPeriod),
             'timeOffRows' => $this->timeOffRows($timeOff, $periods, $availability),
             'allProjects' => $projects,
             'allUsers' => $users,
@@ -689,8 +695,7 @@ class ScheduleBoard extends Component
         CarbonImmutable $sourcePeriodStart,
         CarbonImmutable $targetPeriodStart,
         array $targetAssignee,
-    ): bool
-    {
+    ): bool {
         $sourcePeriodEnd = $this->periodEnd($sourcePeriodStart);
         $assignmentStart = CarbonImmutable::parse($assignment->starts_on);
         $assignmentEnd = CarbonImmutable::parse($assignment->ends_on);
@@ -923,6 +928,8 @@ class ScheduleBoard extends Component
      * @param  EloquentCollection<int, ScheduleAssignment>  $assignments
      * @param  EloquentCollection<int, ScheduleTimeOff>  $timeOff
      * @param  array<int, array<string, mixed>>  $periods
+     * @param  array<int, array<int, float>>  $projectActualsByPeriod
+     * @param  array<int, float>  $projectLifetimeActuals
      * @return array<int, array<string, mixed>>
      */
     private function projectRows(
@@ -931,17 +938,21 @@ class ScheduleBoard extends Component
         EloquentCollection $timeOff,
         array $periods,
         ScheduleAvailabilityService $availability,
+        array $projectActualsByPeriod,
+        array $projectLifetimeActuals,
     ): array {
         $selectedProjectId = $this->selectedProjectFilterId();
 
         return $projects
             ->when($selectedProjectId !== null, fn ($rows) => $rows->where('id', $selectedProjectId)->values())
-            ->map(function (Project $project) use ($assignments, $periods, $availability) {
+            ->map(function (Project $project) use ($assignments, $periods, $availability, $projectActualsByPeriod, $projectLifetimeActuals) {
                 $projectAssignments = $assignments
                     ->where('project_id', $project->id)
                     ->values();
+                $periodActuals = $projectActualsByPeriod[$project->id] ?? [];
+                $lifetimeActual = (float) ($projectLifetimeActuals[$project->id] ?? 0.0);
                 $assignmentRows = $projectAssignments
-                    ->map(fn (ScheduleAssignment $assignment) => $this->assignmentView($assignment, $periods, $availability))
+                    ->map(fn (ScheduleAssignment $assignment) => $this->assignmentView($assignment, $periods, $availability, $periodActuals, $lifetimeActual))
                     ->all();
 
                 return [
@@ -952,6 +963,9 @@ class ScheduleBoard extends Component
                     'expanded' => $this->expandedProjects[(string) $project->id] ?? false,
                     'assignments' => $assignmentRows,
                     'scheduled_hours' => round(collect($assignmentRows)->sum('total_hours'), 2),
+                    'actual_period_hours' => round(array_sum($periodActuals), 2),
+                    'actual_lifetime_hours' => round($lifetimeActual, 2),
+                    'period_actual_hours' => $periodActuals,
                     'team_count' => $project->users->count(),
                 ];
             })
@@ -966,6 +980,9 @@ class ScheduleBoard extends Component
      * @param  EloquentCollection<int, ScheduleAssignment>  $assignments
      * @param  EloquentCollection<int, ScheduleTimeOff>  $timeOff
      * @param  array<int, array<string, mixed>>  $periods
+     * @param  array<int, array<int, float>>  $projectActualsByPeriod
+     * @param  array<int, float>  $projectLifetimeActuals
+     * @param  array<int, array<int, float>>  $userActualsByPeriod
      * @return array<int, array<string, mixed>>
      */
     private function teamRows(
@@ -975,6 +992,9 @@ class ScheduleBoard extends Component
         EloquentCollection $timeOff,
         array $periods,
         ScheduleAvailabilityService $availability,
+        array $projectActualsByPeriod,
+        array $projectLifetimeActuals,
+        array $userActualsByPeriod,
     ): array {
         $roleFilter = mb_strtolower($this->roleFilter);
         $teamFilter = $this->selectedTeamFilterId();
@@ -1001,7 +1021,12 @@ class ScheduleBoard extends Component
 
             $visibleAssignments = $this->visibleAssignmentsForProjectFilter($assigneeAssignments, $projectFilter);
             $visibleAssignmentRows = $visibleAssignments
-                ->map(fn (ScheduleAssignment $assignment) => $this->assignmentView($assignment, $periods, $availability))
+                ->map(function (ScheduleAssignment $assignment) use ($periods, $availability, $projectActualsByPeriod, $projectLifetimeActuals) {
+                    $periodActuals = $projectActualsByPeriod[$assignment->project_id] ?? [];
+                    $lifetimeActual = (float) ($projectLifetimeActuals[$assignment->project_id] ?? 0.0);
+
+                    return $this->assignmentView($assignment, $periods, $availability, $periodActuals, $lifetimeActual);
+                })
                 ->all();
 
             $rows->push([
@@ -1012,7 +1037,7 @@ class ScheduleBoard extends Component
                 'role_title' => $placeholder->role_title,
                 'is_placeholder' => true,
                 'expanded' => $this->expandedAssignees[$key] ?? true,
-                'metrics' => $this->periodMetrics($placeholder, $assigneeAssignments, collect(), $periods, $availability),
+                'metrics' => $this->periodMetrics($placeholder, $assigneeAssignments, collect(), $periods, $availability, []),
                 'assignments' => $this->groupTeamAssignmentRows($visibleAssignmentRows),
                 'time_off' => [],
             ]);
@@ -1044,7 +1069,12 @@ class ScheduleBoard extends Component
 
             $visibleAssignments = $this->visibleAssignmentsForProjectFilter($assigneeAssignments, $projectFilter);
             $visibleAssignmentRows = $visibleAssignments
-                ->map(fn (ScheduleAssignment $assignment) => $this->assignmentView($assignment, $periods, $availability))
+                ->map(function (ScheduleAssignment $assignment) use ($periods, $availability, $projectActualsByPeriod, $projectLifetimeActuals) {
+                    $periodActuals = $projectActualsByPeriod[$assignment->project_id] ?? [];
+                    $lifetimeActual = (float) ($projectLifetimeActuals[$assignment->project_id] ?? 0.0);
+
+                    return $this->assignmentView($assignment, $periods, $availability, $periodActuals, $lifetimeActual);
+                })
                 ->all();
             $timeOffRows = $assigneeTimeOff
                 ->map(fn (ScheduleTimeOff $entry) => $this->timeOffView($entry, $periods, $availability))
@@ -1058,7 +1088,7 @@ class ScheduleBoard extends Component
                 'role_title' => $user->role_title,
                 'is_placeholder' => false,
                 'expanded' => $this->expandedAssignees[$key] ?? true,
-                'metrics' => $this->periodMetrics($user, $assigneeAssignments, $assigneeTimeOff, $periods, $availability),
+                'metrics' => $this->periodMetrics($user, $assigneeAssignments, $assigneeTimeOff, $periods, $availability, $userActualsByPeriod[$user->id] ?? []),
                 'assignments' => $this->groupTeamAssignmentRows($visibleAssignmentRows),
                 'time_off' => $timeOffRows,
             ]);
@@ -1379,10 +1409,16 @@ class ScheduleBoard extends Component
 
     /**
      * @param  array<int, array<string, mixed>>  $periods
+     * @param  array<int, float>  $projectPeriodActuals
      * @return array<string, mixed>
      */
-    private function assignmentView(ScheduleAssignment $assignment, array $periods, ScheduleAvailabilityService $availability): array
-    {
+    private function assignmentView(
+        ScheduleAssignment $assignment,
+        array $periods,
+        ScheduleAvailabilityService $availability,
+        array $projectPeriodActuals = [],
+        float $projectLifetimeActual = 0.0,
+    ): array {
         $periodHours = [];
         $totalHours = 0.0;
         foreach ($periods as $period) {
@@ -1410,6 +1446,8 @@ class ScheduleBoard extends Component
             'period_hours' => $periodHours,
             'period_assignment_ids' => array_fill_keys(array_keys($periodHours), $assignment->id),
             'total_hours' => round($totalHours, 2),
+            'project_actual_period_hours' => round(array_sum($projectPeriodActuals), 2),
+            'project_actual_lifetime_hours' => round($projectLifetimeActual, 2),
         ];
     }
 
@@ -1447,6 +1485,7 @@ class ScheduleBoard extends Component
      * @param  EloquentCollection<int, ScheduleAssignment>  $assignments
      * @param  EloquentCollection<int, ScheduleTimeOff>  $timeOff
      * @param  array<int, array<string, mixed>>  $periods
+     * @param  array<int, float>  $assigneeActualsByPeriod
      * @return array<int, array<string, mixed>>
      */
     private function periodMetrics(
@@ -1455,15 +1494,17 @@ class ScheduleBoard extends Component
         EloquentCollection|Collection $timeOff,
         array $periods,
         ScheduleAvailabilityService $availability,
+        array $assigneeActualsByPeriod = [],
     ): array {
         return collect($periods)
-            ->map(function (array $period) use ($assignee, $assignments, $timeOff, $availability) {
+            ->map(function (array $period) use ($assignee, $assignments, $timeOff, $availability, $assigneeActualsByPeriod) {
                 $summary = $availability->summaryForPeriod($assignee, $assignments, $timeOff, $period['starts_on'], $period['ends_on']);
                 $summary['project_count'] = $assignments
                     ->filter(fn (ScheduleAssignment $assignment) => $availability->assignmentHoursForPeriod($assignment, $period['starts_on'], $period['ends_on']) > 0)
                     ->pluck('project_id')
                     ->unique()
                     ->count();
+                $summary['actual'] = round((float) ($assigneeActualsByPeriod[$period['index']] ?? 0.0), 2);
                 $summary['class'] = $this->heatClass($summary);
 
                 return $summary;
