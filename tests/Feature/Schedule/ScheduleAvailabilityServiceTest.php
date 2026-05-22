@@ -55,7 +55,39 @@ test('availability subtracts scheduled work and time off', function () {
     expect($summary['capacity'])->toBe(40.0);
     expect($summary['scheduled'])->toBe(30.0);
     expect($summary['time_off'])->toBe(8.0);
+    expect($summary['committed'])->toBe(38.0);
     expect($summary['availability'])->toBe(2.0);
+});
+
+test('committed hours include scheduled project work and time off', function () {
+    $service = app(ScheduleAvailabilityService::class);
+    $project = Project::factory()->create();
+    $user = User::factory()->create([
+        'weekly_capacity_hours' => 40,
+        'schedule_work_days' => [1, 2, 3, 4, 5],
+    ]);
+
+    $assignment = ScheduleAssignment::factory()->create([
+        'project_id' => $project->id,
+        'user_id' => $user->id,
+        'starts_on' => '2026-05-11',
+        'ends_on' => '2026-05-15',
+        'hours_per_day' => 7.5,
+    ]);
+
+    $timeOff = ScheduleTimeOff::factory()->create([
+        'user_id' => $user->id,
+        'starts_on' => '2026-05-12',
+        'ends_on' => '2026-05-15',
+        'hours_per_day' => 5,
+    ]);
+
+    $summary = $service->summaryForPeriod($user, collect([$assignment->load(['user', 'placeholder'])]), collect([$timeOff->load('user')]), '2026-05-11', '2026-05-17');
+
+    expect($summary['scheduled'])->toBe(37.5);
+    expect($summary['time_off'])->toBe(20.0);
+    expect($summary['committed'])->toBe(57.5);
+    expect($summary['availability'])->toBe(-17.5);
 });
 
 test('assignments scheduled on non working days remain visible as over capacity', function () {

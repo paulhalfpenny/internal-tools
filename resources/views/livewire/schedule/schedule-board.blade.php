@@ -308,9 +308,9 @@
                         @foreach($periods as $period)
                             @php
                                 $metric = $row['metrics'][$period['index']];
-                                $primary = $heatmapMetric === 'capacity' ? $metric['scheduled'] : $metric['availability'];
+                                $primary = $heatmapMetric === 'capacity' ? $metric['committed'] : $metric['availability'];
                                 $primaryLabel = $heatmapMetric === 'capacity'
-                                    ? $formatHours($metric['scheduled']).'h'
+                                    ? $formatHours($metric['committed']).'h'
                                     : ($metric['availability'] < 0 ? $formatHours(abs($metric['availability'])).'h over' : $formatHours($metric['availability']).'h open');
                             @endphp
                             <div

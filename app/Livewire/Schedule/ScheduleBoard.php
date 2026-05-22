@@ -1531,7 +1531,7 @@ class ScheduleBoard extends Component
     }
 
     /**
-     * @param  array{capacity: float, scheduled: float, time_off: float, availability: float}  $summary
+     * @param  array{capacity: float, scheduled: float, time_off: float, committed: float, availability: float}  $summary
      */
     private function heatClass(array $summary): string
     {
@@ -1540,11 +1540,11 @@ class ScheduleBoard extends Component
         }
 
         if ($this->heatmapMetric === 'capacity') {
-            if ($summary['scheduled'] <= 0) {
+            if ($summary['committed'] <= 0) {
                 return 'bg-gray-50 text-gray-400 border-gray-100';
             }
 
-            return $summary['scheduled'] >= $summary['capacity']
+            return $summary['committed'] >= $summary['capacity']
                 ? 'bg-amber-100 text-amber-800 border-amber-200'
                 : 'bg-blue-50 text-blue-800 border-blue-100';
         }

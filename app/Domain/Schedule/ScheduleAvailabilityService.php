@@ -137,7 +137,7 @@ final class ScheduleAvailabilityService
     /**
      * @param  iterable<ScheduleAssignment>  $assignments
      * @param  iterable<ScheduleTimeOff>  $timeOff
-     * @return array{capacity: float, scheduled: float, time_off: float, availability: float}
+     * @return array{capacity: float, scheduled: float, time_off: float, committed: float, availability: float}
      */
     public function summaryForPeriod(
         User|SchedulePlaceholder $assignee,
@@ -161,6 +161,7 @@ final class ScheduleAvailabilityService
             'capacity' => round($capacity, 2),
             'scheduled' => round($scheduled, 2),
             'time_off' => round($timeOffHours, 2),
+            'committed' => round($scheduled + $timeOffHours, 2),
             'availability' => round($capacity - $timeOffHours - $scheduled, 2),
         ];
     }

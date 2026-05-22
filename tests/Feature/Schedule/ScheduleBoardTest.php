@@ -298,6 +298,42 @@ test('team schedule can be filtered by project membership or scheduled project w
         ->assertDontSee('Beta Member');
 });
 
+test('capacity heatmap counts time off as committed hours', function () {
+    $admin = User::factory()->admin()->create();
+    $user = User::factory()->create([
+        'name' => 'Chris Murfin',
+        'weekly_capacity_hours' => 40,
+        'schedule_work_days' => [1, 2, 3, 4, 5],
+    ]);
+    $project = Project::factory()->create(['name' => 'Must Do Release']);
+
+    ScheduleAssignment::factory()->create([
+        'project_id' => $project->id,
+        'user_id' => $user->id,
+        'starts_on' => '2026-05-11',
+        'ends_on' => '2026-05-15',
+        'hours_per_day' => 7.5,
+    ]);
+
+    ScheduleTimeOff::factory()->create([
+        'user_id' => $user->id,
+        'starts_on' => '2026-05-12',
+        'ends_on' => '2026-05-15',
+        'hours_per_day' => 5,
+    ]);
+
+    Livewire::actingAs($admin)
+        ->withQueryParams([
+            'view' => 'team',
+            'date' => '2026-05-15',
+            'heatmap' => 'capacity',
+        ])
+        ->test(ScheduleBoard::class)
+        ->assertSee('Chris Murfin')
+        ->assertSee('57.5h', false)
+        ->assertSee('20h off', false);
+});
+
 test('drag move places an assignment on the dropped period and preserves duration', function () {
     $admin = User::factory()->admin()->create();
     $assignment = ScheduleAssignment::factory()->create([
