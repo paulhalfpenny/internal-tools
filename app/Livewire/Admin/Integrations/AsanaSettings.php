@@ -61,7 +61,7 @@ class AsanaSettings extends Component
         return view('livewire.admin.integrations.asana', [
             'connectedUserCount' => User::query()->whereNotNull('asana_access_token')->count(),
             'cachedProjectCount' => AsanaProject::query()->count(),
-            'linkedProjectCount' => Project::query()->whereNotNull('asana_project_gid')->count(),
+            'linkedProjectCount' => Project::query()->whereHas('asanaProjects')->count(),
             'pendingAsana' => $pendingAsana,
             'failedAsana' => $failedAsana,
             'entriesWithSyncError' => $entriesWithSyncError,
