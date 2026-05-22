@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
+use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +14,8 @@ class HarvestImportReference extends Command
 {
     protected $signature = 'harvest:import-reference
         {path : Path to the Harvest detailed-time CSV file}
-        {--dry-run : Parse and validate without writing to the database}';
+        {--dry-run : Parse and validate without writing to the database}
+        {--since= : Only consider entries on or after this date (YYYY-MM-DD)}';
 
     protected $description = 'Import clients, projects, tasks, and project-task links from a Harvest CSV (no time entries)';
 
@@ -62,9 +64,14 @@ class HarvestImportReference extends Command
         }
 
         $dryRun = $this->option('dry-run');
+        $since = $this->option('since') ? Carbon::parse($this->option('since')) : null;
 
         if ($dryRun) {
             $this->info('[dry-run] No changes will be written.');
+        }
+
+        if ($since) {
+            $this->info("Filtering to rows on or after {$since->toDateString()}.");
         }
 
         $handle = fopen($path, 'r');
@@ -94,7 +101,7 @@ class HarvestImportReference extends Command
             }
 
             try {
-                $this->processRow($row, $dryRun);
+                $this->processRow($row, $dryRun, $since);
             } catch (\RuntimeException $e) {
                 $bar->clear();
                 $this->error($e->getMessage());
@@ -161,8 +168,13 @@ class HarvestImportReference extends Command
     /**
      * @param  array<int, string>  $row
      */
-    private function processRow(array $row, bool $dryRun): void
+    private function processRow(array $row, bool $dryRun, ?Carbon $since): void
     {
+        $date = $row[0];
+        if ($since && Carbon::parse($date)->lt($since)) {
+            return;
+        }
+
         $clientName = $row[1];
         $projectName = $row[2];
         $projectCode = $row[3];
