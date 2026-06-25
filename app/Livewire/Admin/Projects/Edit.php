@@ -34,7 +34,7 @@ class Edit extends Component
 
     public string $name;
 
-    public bool $isBillable = true;
+    public string $isBillable = '1';
 
     public string $startsOn;
 
@@ -74,7 +74,7 @@ class Edit extends Component
         $this->managerUserId = $project->manager_user_id;
         $this->code = $project->code;
         $this->name = $project->name;
-        $this->isBillable = (bool) $project->is_billable;
+        $this->isBillable = $project->is_billable ? '1' : '0';
         $this->startsOn = $project->starts_on?->toDateString() ?? '';
         $this->endsOn = $project->ends_on?->toDateString() ?? '';
         $this->budgetType = $project->budget_type?->value ?? '';
@@ -267,7 +267,7 @@ class Edit extends Component
             'manager_user_id' => $this->managerUserId,
             'code' => $this->code ?: null,
             'name' => $this->name,
-            'is_billable' => $this->isBillable,
+            'is_billable' => $this->isBillable === '1',
             'starts_on' => $this->startsOn ?: null,
             'ends_on' => $this->endsOn ?: null,
             'budget_type' => $this->budgetType !== '' ? BudgetType::from($this->budgetType) : null,

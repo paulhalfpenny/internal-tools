@@ -24,7 +24,7 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Client</label>
-                            <select wire:model="clientId" class="w-full border border-gray-300 rounded text-sm px-3 py-2" style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
+                            <select wire:model="clientId" class="admin-select">
                                 @foreach($clients as $client)
                                     <option value="{{ $client->id }}">{{ $client->name }}</option>
                                 @endforeach
@@ -32,7 +32,7 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Project manager / Account lead</label>
-                            <select wire:model="managerUserId" class="w-full border border-gray-300 rounded text-sm px-3 py-2" style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
+                            <select wire:model="managerUserId" class="admin-select">
                                 <option value="">— None —</option>
                                 @foreach($allUsers as $u)
                                     <option value="{{ $u->id }}">{{ $u->name }}</option>
@@ -54,7 +54,7 @@
                     <div class="grid grid-cols-3 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Billable</label>
-                            <select wire:model="isBillable" class="w-full border border-gray-300 rounded text-sm px-3 py-2" style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
+                            <select wire:model="isBillable" class="admin-select">
                                 <option value="1">Billable</option>
                                 <option value="0">Non-billable</option>
                             </select>
@@ -83,7 +83,7 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Budget type</label>
-                            <select wire:model.live="budgetType" class="w-full border border-gray-300 rounded text-sm px-3 py-2" style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
+                            <select wire:model.live="budgetType" class="admin-select">
                                 <option value="">No budget</option>
                                 @foreach($budgetTypes as $type)
                                     <option value="{{ $type->value }}">{{ $type->label() }}</option>
@@ -171,8 +171,7 @@
                                 {{ $linkedBoards->isEmpty() ? 'Asana board' : 'Add another board' }}
                             </label>
                             <select wire:model.live="pendingAsanaProjectGid"
-                                    class="w-full border border-gray-300 rounded text-sm px-3 py-2"
-                                    style="-webkit-appearance:none;-moz-appearance:none;appearance:none;">
+                                    class="admin-select">
                                 <option value="">— Select a board —</option>
                                 @foreach($availableBoards as $ap)
                                     <option value="{{ $ap->gid }}">{{ $ap->name }}</option>
@@ -327,7 +326,7 @@
 
                         <div class="mt-2 mb-6">
                             <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">User</label>
-                            <select wire:model.live="pendingNewUserDropdown" class="w-full border border-gray-300 rounded-md text-sm px-3 py-2">
+                            <select wire:model.live="pendingNewUserDropdown" class="admin-select">
                                 <option value="">— Select a user —</option>
                                 @foreach($unassignedUsers as $user)
                                     <option value="{{ $user->id }}">{{ $user->name }}</option>

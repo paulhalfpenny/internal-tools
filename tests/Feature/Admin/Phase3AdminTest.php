@@ -153,6 +153,16 @@ test('saving a freshly duplicated project does not error', function () {
     expect($copy->tasks()->count())->toBe(1);
 });
 
+test('project edit exposes non billable value as select option value', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $this->actingAs($admin);
+
+    $project = Project::factory()->nonBillable()->create();
+
+    Livewire::test(AdminProjectEdit::class, ['project' => $project])
+        ->assertSetStrict('isBillable', '0');
+});
+
 test('saving a project with an Asana gid that another project already uses returns a validation error, not a 500', function () {
     $admin = User::factory()->create(['role' => Role::Admin]);
     $this->actingAs($admin);
