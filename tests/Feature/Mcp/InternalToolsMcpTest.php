@@ -9,6 +9,8 @@ use App\Mcp\Tools\CreateProject;
 use App\Mcp\Tools\DeleteTimeEntry;
 use App\Mcp\Tools\LogTimeEntry;
 use App\Mcp\Tools\UpdateTimeEntry;
+use App\Models\AsanaProject;
+use App\Models\AsanaTask;
 use App\Models\Client;
 use App\Models\McpAuditLog;
 use App\Models\McpPendingAction;
@@ -38,6 +40,33 @@ function logTimeEntryToolFrom(array $tools): array
 {
     return collect($tools)
         ->firstWhere('name', 'log-time-entry');
+}
+
+function mcpLinkedAsanaProject(User $user, bool $asanaTaskRequired = true, bool $billable = true): array
+{
+    [$client, $project, $task] = mcpAssignedProject($user);
+    $project->forceFill([
+        'asana_task_required' => $asanaTaskRequired,
+        'is_billable' => $billable,
+    ])->save();
+
+    $asanaProject = AsanaProject::create([
+        'gid' => 'AP1',
+        'workspace_gid' => 'WS1',
+        'name' => 'Asana board',
+        'is_archived' => false,
+    ]);
+
+    $project->asanaProjects()->attach($asanaProject->gid, ['asana_custom_field_gid' => null]);
+
+    $asanaTask = AsanaTask::create([
+        'gid' => 'AT1',
+        'asana_project_gid' => $asanaProject->gid,
+        'name' => 'Asana task',
+        'is_completed' => false,
+    ]);
+
+    return [$client, $project, $task, $asanaTask];
 }
 
 test('oauth discovery exposes the MCP scope and existing API tokens still work', function () {
@@ -184,6 +213,7 @@ test('log time entry advertises input schema for MCP clients', function () {
 
     $schema = $tool['inputSchema'];
     expect(array_keys($schema['properties']))->toEqualCanonicalizing([
+        'asana_task_gid',
         'hours',
         'notes',
         'project_id',
@@ -214,7 +244,8 @@ test('log time entry schema uses scalar property types for Claude connectors', f
         ->and($properties['task_id']['type'])->toBe('integer')
         ->and($properties['spent_at']['type'])->toBe('string')
         ->and($properties['hours']['type'])->toBe('string')
-        ->and($properties['notes']['type'])->toBe('string');
+        ->and($properties['notes']['type'])->toBe('string')
+        ->and($properties['asana_task_gid']['type'])->toBe('string');
 });
 
 test('log time entry writes immediately and records an MCP audit row', function () {
@@ -244,6 +275,82 @@ test('log time entry writes immediately and records an MCP audit row', function 
         ->where('user_id', $user->id)
         ->where('status', 'completed')
         ->exists())->toBeTrue();
+});
+
+test('log time entry rejects missing Asana task when linked project requires it', function () {
+    $user = User::factory()->create();
+    [, $project, $task] = mcpLinkedAsanaProject($user, asanaTaskRequired: true, billable: false);
+
+    InternalToolsServer::actingAs($user, 'api')
+        ->tool(LogTimeEntry::class, [
+            'project_id' => $project->id,
+            'task_id' => $task->id,
+            'spent_at' => '2026-05-04T09:30:00+01:00',
+            'hours' => '1:30',
+        ])
+        ->assertHasErrors(['An Asana task is required for this project.']);
+
+    expect(TimeEntry::count())->toBe(0);
+});
+
+test('log time entry accepts valid Asana task for linked project', function () {
+    $user = User::factory()->create();
+    [, $project, $task, $asanaTask] = mcpLinkedAsanaProject($user);
+
+    InternalToolsServer::actingAs($user, 'api')
+        ->tool(LogTimeEntry::class, [
+            'project_id' => $project->id,
+            'task_id' => $task->id,
+            'spent_at' => '2026-05-04T09:30:00+01:00',
+            'hours' => '1:30',
+            'asana_task_gid' => $asanaTask->gid,
+        ])
+        ->assertOk()
+        ->assertStructuredContent([
+            'approval_required' => false,
+            'time_entry_id' => 1,
+        ]);
+
+    expect(TimeEntry::firstOrFail()->asana_task_gid)->toBe($asanaTask->gid);
+});
+
+test('log time entry allows missing Asana task when linked project marks it optional', function () {
+    $user = User::factory()->create();
+    [, $project, $task] = mcpLinkedAsanaProject($user, asanaTaskRequired: false);
+
+    InternalToolsServer::actingAs($user, 'api')
+        ->tool(LogTimeEntry::class, [
+            'project_id' => $project->id,
+            'task_id' => $task->id,
+            'spent_at' => '2026-05-04T09:30:00+01:00',
+            'hours' => '1:30',
+        ])
+        ->assertOk();
+
+    expect(TimeEntry::firstOrFail()->asana_task_gid)->toBeNull();
+});
+
+test('log time entry rejects invalid Asana task even when linked project marks it optional', function () {
+    $user = User::factory()->create();
+    [, $project, $task] = mcpLinkedAsanaProject($user, asanaTaskRequired: false);
+    AsanaTask::create([
+        'gid' => 'OUTSIDER',
+        'asana_project_gid' => 'OUTSIDE',
+        'name' => 'Foreign task',
+        'is_completed' => false,
+    ]);
+
+    InternalToolsServer::actingAs($user, 'api')
+        ->tool(LogTimeEntry::class, [
+            'project_id' => $project->id,
+            'task_id' => $task->id,
+            'spent_at' => '2026-05-04T09:30:00+01:00',
+            'hours' => '1:30',
+            'asana_task_gid' => 'OUTSIDER',
+        ])
+        ->assertHasErrors(['The selected Asana task does not belong to this project.']);
+
+    expect(TimeEntry::count())->toBe(0);
 });
 
 test('updating the owners own time entry writes immediately without approval', function () {

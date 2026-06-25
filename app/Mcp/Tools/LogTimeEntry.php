@@ -37,6 +37,8 @@ class LogTimeEntry extends Tool
             'notes' => $schema->string()
                 ->description('Optional notes for the time entry. Omit this field when there are no notes.')
                 ->max(2000),
+            'asana_task_gid' => $schema->string()
+                ->description('Optional Asana task GID. Required when the project has linked Asana boards and requires Asana tasks.'),
         ];
     }
 
