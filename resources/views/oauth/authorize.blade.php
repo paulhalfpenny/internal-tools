@@ -14,7 +14,7 @@
                 <ul class="mt-3 space-y-2">
                     @forelse($scopes as $scope)
                         <li class="flex items-start gap-2 text-sm text-gray-700">
-                            <span class="mt-1 h-1.5 w-1.5 rounded-full bg-blue-600"></span>
+                            <span class="mt-[0.4375rem] h-1.5 w-1.5 rounded-full bg-blue-600"></span>
                             <span>{{ $scope->description }}</span>
                         </li>
                     @empty
