@@ -34,6 +34,12 @@ function mcpAssignedProject(User $user): array
     return [$client, $project, $task];
 }
 
+function logTimeEntryToolFrom(array $tools): array
+{
+    return collect($tools)
+        ->firstWhere('name', 'log-time-entry');
+}
+
 test('oauth discovery exposes the MCP scope and existing API tokens still work', function () {
     $this->getJson('/.well-known/oauth-authorization-server')
         ->assertOk()
@@ -172,8 +178,7 @@ test('log time entry advertises input schema for MCP clients', function () {
         'params' => [],
     ])->assertOk();
 
-    $tool = collect($response->json('result.tools'))
-        ->firstWhere('name', 'log-time-entry');
+    $tool = logTimeEntryToolFrom($response->json('result.tools'));
 
     expect($tool)->not->toBeNull();
 
@@ -191,6 +196,25 @@ test('log time entry advertises input schema for MCP clients', function () {
             'spent_at',
             'task_id',
         ]);
+});
+
+test('log time entry schema uses scalar property types for Claude connectors', function () {
+    Passport::actingAs(User::factory()->create(), ['mcp:use']);
+
+    $response = $this->postJson('/mcp', [
+        'jsonrpc' => '2.0',
+        'id' => 'tools-1',
+        'method' => 'tools/list',
+        'params' => [],
+    ])->assertOk();
+
+    $properties = logTimeEntryToolFrom($response->json('result.tools'))['inputSchema']['properties'];
+
+    expect($properties['project_id']['type'])->toBe('integer')
+        ->and($properties['task_id']['type'])->toBe('integer')
+        ->and($properties['spent_at']['type'])->toBe('string')
+        ->and($properties['hours']['type'])->toBe('string')
+        ->and($properties['notes']['type'])->toBe('string');
 });
 
 test('log time entry writes immediately and records an MCP audit row', function () {

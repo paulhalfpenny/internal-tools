@@ -31,12 +31,12 @@ class LogTimeEntry extends Tool
                 ->format('date-time')
                 ->description('Date or ISO-8601 date/time for the time entry. The entry is logged against this date.')
                 ->required(),
-            'hours' => $schema->union(['string', 'number'])
-                ->description('Hours to log. Accepts decimal hours like 1.5, h:mm like 1:30, or minutes like 90m.')
+            'hours' => $schema->string()
+                ->description('Hours to log as a string. Accepts decimal hours like "1.5", h:mm like "1:30", or minutes like "90m".')
                 ->required(),
             'notes' => $schema->string()
-                ->description('Optional notes for the time entry.')
-                ->nullable(),
+                ->description('Optional notes for the time entry. Omit this field when there are no notes.')
+                ->max(2000),
         ];
     }
 
