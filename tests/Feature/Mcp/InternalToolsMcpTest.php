@@ -68,6 +68,50 @@ test('oauth dynamic registration allows trusted AI connector redirect origins by
     }
 });
 
+test('oauth authorize renders a consent screen for registered MCP clients', function () {
+    $redirectUri = 'https://claude.ai/api/mcp/auth_callback';
+
+    $clientId = $this->postJson('/oauth/register', [
+        'client_name' => 'Claude',
+        'redirect_uris' => [$redirectUri],
+        'grant_types' => ['authorization_code', 'refresh_token'],
+        'response_types' => ['code'],
+        'scope' => 'mcp:use',
+        'token_endpoint_auth_method' => 'none',
+    ])
+        ->assertCreated()
+        ->json('client_id');
+
+    $response = $this->actingAs(User::factory()->create())
+        ->get('/oauth/authorize?'.http_build_query([
+            'response_type' => 'code',
+            'client_id' => $clientId,
+            'redirect_uri' => $redirectUri,
+            'code_challenge' => 'H4RW8540FmDndrERFfkQHOE_EfPMMHY-30CFd74gnTE',
+            'code_challenge_method' => 'S256',
+            'state' => 'test-state',
+            'scope' => 'mcp:use',
+            'resource' => 'https://internal.filter.agency/mcp',
+        ]))
+        ->assertOk()
+        ->assertSee('Claude')
+        ->assertSee('Approve');
+
+    preg_match('/name="auth_token" value="([^"]+)"/', $response->getContent(), $matches);
+
+    expect($matches[1] ?? null)->not->toBeNull();
+
+    $approval = $this->post(route('passport.authorizations.approve'), [
+        'auth_token' => $matches[1],
+    ]);
+
+    $approval->assertRedirect();
+
+    expect($approval->headers->get('Location'))
+        ->toStartWith($redirectUri.'?code=')
+        ->toContain('state=test-state');
+});
+
 test('mcp endpoint requires an OAuth token with the MCP scope', function () {
     $payload = [
         'jsonrpc' => '2.0',

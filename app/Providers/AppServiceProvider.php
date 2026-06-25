@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Passport\Passport;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,6 +20,12 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        Passport::tokensCan([
+            'mcp:use' => 'Use Internal Tools MCP server',
+        ]);
+
+        Passport::authorizationView('oauth.authorize');
+
         RateLimiter::for('google-oauth', function (Request $request) {
             return Limit::perMinute(10)->by($request->ip());
         });
