@@ -46,6 +46,28 @@ test('oauth discovery exposes the MCP scope and existing API tokens still work',
         ->assertJsonPath('id', $user->id);
 });
 
+test('oauth dynamic registration allows trusted AI connector redirect origins by default', function () {
+    expect(config('mcp.redirect_domains'))
+        ->toContain('https://claude.ai')
+        ->toContain('https://chatgpt.com');
+
+    foreach ([
+        'https://claude.ai/api/mcp/auth_callback',
+        'https://chatgpt.com/connector/oauth/test-callback',
+    ] as $redirectUri) {
+        $this->postJson('/oauth/register', [
+            'client_name' => 'Trusted AI connector',
+            'redirect_uris' => [$redirectUri],
+            'grant_types' => ['authorization_code', 'refresh_token'],
+            'response_types' => ['code'],
+            'scope' => 'mcp:use',
+            'token_endpoint_auth_method' => 'none',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('redirect_uris.0', $redirectUri);
+    }
+});
+
 test('mcp endpoint requires an OAuth token with the MCP scope', function () {
     $payload = [
         'jsonrpc' => '2.0',

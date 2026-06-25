@@ -6,7 +6,7 @@ $csv = static fn (string $value): array => array_values(array_filter(
 ));
 
 return [
-    'redirect_domains' => $csv(env('MCP_REDIRECT_DOMAINS', 'http://localhost,http://127.0.0.1')),
+    'redirect_domains' => $csv(env('MCP_REDIRECT_DOMAINS', 'http://localhost,http://127.0.0.1,https://claude.ai,https://chatgpt.com')),
 
     'custom_schemes' => $csv(env('MCP_CUSTOM_SCHEMES', 'claude,cursor,vscode')),
 
