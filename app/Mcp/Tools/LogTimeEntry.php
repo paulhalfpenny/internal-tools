@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Domain\Mcp\InternalMcpActions;
 use App\Domain\Mcp\McpAuditService;
 use App\Mcp\Tools\Concerns\InteractsWithInternalTools;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
@@ -14,10 +15,40 @@ class LogTimeEntry extends Tool
 {
     use InteractsWithInternalTools;
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'project_id' => $schema->integer()
+                ->description('Internal Tools project ID to log time against.')
+                ->required(),
+            'task_id' => $schema->integer()
+                ->description('Internal Tools task ID to log time against.')
+                ->required(),
+            'spent_at' => $schema->string()
+                ->format('date-time')
+                ->description('Date or ISO-8601 date/time for the time entry. The entry is logged against this date.')
+                ->required(),
+            'hours' => $schema->union(['string', 'number'])
+                ->description('Hours to log. Accepts decimal hours like 1.5, h:mm like 1:30, or minutes like 90m.')
+                ->required(),
+            'notes' => $schema->string()
+                ->description('Optional notes for the time entry.')
+                ->nullable(),
+        ];
+    }
+
     public function handle(Request $request, InternalMcpActions $actions, McpAuditService $audit)
     {
         $user = $this->user($request);
         $input = $request->all();
+
+        if (isset($input['spent_at']) && ! isset($input['spent_on'])) {
+            $input['spent_on'] = substr((string) $input['spent_at'], 0, 10);
+        }
+
         $entry = $actions->createTimeEntry($user, $input);
         $result = ['time_entry_id' => $entry->id];
 

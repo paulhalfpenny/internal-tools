@@ -11,12 +11,13 @@ use Illuminate\View\View;
 
 class PendingActionController
 {
-    public function show(McpPendingAction $pendingAction): View
+    public function show(McpPendingAction $pendingAction, McpApprovalService $approvals): View
     {
         $this->authorizeOwner($pendingAction);
 
         return view('mcp.pending-action', [
             'pendingAction' => $pendingAction,
+            'details' => $approvals->approvalDetails($pendingAction),
         ]);
     }
 

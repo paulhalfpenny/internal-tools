@@ -1,6 +1,8 @@
 <?php
 
 use App\Mcp\InternalToolsServer;
+use App\Mcp\Tools\ArchiveClient;
+use App\Mcp\Tools\ArchiveProject;
 use App\Mcp\Tools\AssignProjectMember;
 use App\Mcp\Tools\CreateClient;
 use App\Mcp\Tools\CreateProject;
@@ -66,6 +68,28 @@ test('oauth dynamic registration allows trusted AI connector redirect origins by
             ->assertCreated()
             ->assertJsonPath('redirect_uris.0', $redirectUri);
     }
+});
+
+test('oauth dynamic registration is rate limited', function () {
+    foreach (range(1, 10) as $attempt) {
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.10'])->postJson('/oauth/register', [
+            'client_name' => "Trusted AI connector {$attempt}",
+            'redirect_uris' => ['https://claude.ai/api/mcp/auth_callback'],
+            'grant_types' => ['authorization_code', 'refresh_token'],
+            'response_types' => ['code'],
+            'scope' => 'mcp:use',
+            'token_endpoint_auth_method' => 'none',
+        ])->assertCreated();
+    }
+
+    $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.10'])->postJson('/oauth/register', [
+        'client_name' => 'Trusted AI connector overflow',
+        'redirect_uris' => ['https://claude.ai/api/mcp/auth_callback'],
+        'grant_types' => ['authorization_code', 'refresh_token'],
+        'response_types' => ['code'],
+        'scope' => 'mcp:use',
+        'token_endpoint_auth_method' => 'none',
+    ])->assertTooManyRequests();
 });
 
 test('oauth authorize renders a consent screen for registered MCP clients', function () {
@@ -138,6 +162,37 @@ test('mcp endpoint requires an OAuth token with the MCP scope', function () {
         ->assertJsonPath('id', 'init-1');
 });
 
+test('log time entry advertises input schema for MCP clients', function () {
+    Passport::actingAs(User::factory()->create(), ['mcp:use']);
+
+    $response = $this->postJson('/mcp', [
+        'jsonrpc' => '2.0',
+        'id' => 'tools-1',
+        'method' => 'tools/list',
+        'params' => [],
+    ])->assertOk();
+
+    $tool = collect($response->json('result.tools'))
+        ->firstWhere('name', 'log-time-entry');
+
+    expect($tool)->not->toBeNull();
+
+    $schema = $tool['inputSchema'];
+    expect(array_keys($schema['properties']))->toEqualCanonicalizing([
+        'hours',
+        'notes',
+        'project_id',
+        'spent_at',
+        'task_id',
+    ])
+        ->and($schema['required'])->toEqualCanonicalizing([
+            'hours',
+            'project_id',
+            'spent_at',
+            'task_id',
+        ]);
+});
+
 test('log time entry writes immediately and records an MCP audit row', function () {
     $user = User::factory()->create();
     [, $project, $task] = mcpAssignedProject($user);
@@ -146,7 +201,7 @@ test('log time entry writes immediately and records an MCP audit row', function 
         ->tool(LogTimeEntry::class, [
             'project_id' => $project->id,
             'task_id' => $task->id,
-            'spent_on' => '2026-05-04',
+            'spent_at' => '2026-05-04T09:30:00+01:00',
             'hours' => '1:30',
             'notes' => 'Build landing page',
         ])
@@ -158,6 +213,7 @@ test('log time entry writes immediately and records an MCP audit row', function 
 
     $entry = TimeEntry::firstOrFail();
     expect((float) $entry->hours)->toBe(1.5)
+        ->and($entry->spent_on->toDateString())->toBe('2026-05-04')
         ->and($entry->user_id)->toBe($user->id);
 
     expect(McpAuditLog::where('action', 'log_time_entry')
@@ -220,6 +276,10 @@ test('updating another users time entry creates a pending approval and does not 
     expect((float) $entry->hours)->toBe(1.0)
         ->and($entry->notes)->toBe('Original')
         ->and(McpPendingAction::where('action', 'update_time_entry')->where('requested_by_user_id', $admin->id)->count())->toBe(1);
+
+    $pending = McpPendingAction::firstOrFail();
+    expect(json_encode($pending->payload))->not->toContain('Admin change')
+        ->and($pending->payload_hash)->not->toBeNull();
 });
 
 test('deleting a time entry always requires owner approval and approval executes the delete', function () {
@@ -251,6 +311,128 @@ test('deleting a time entry always requires owner approval and approval executes
 
     expect(TimeEntry::whereKey($entry->id)->exists())->toBeFalse();
     expect($pending->refresh()->status)->toBe('approved');
+});
+
+test('pending approval page shows the reviewed time entry context', function () {
+    $user = User::factory()->create(['name' => 'Pat Reader']);
+    [, $project, $task] = mcpAssignedProject($user);
+    $entry = TimeEntry::factory()->create([
+        'user_id' => $user->id,
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => '2026-05-12',
+        'hours' => 1.5,
+        'notes' => 'Sensitive deletion context',
+    ]);
+
+    InternalToolsServer::actingAs($user, 'api')
+        ->tool(DeleteTimeEntry::class, ['time_entry_id' => $entry->id])
+        ->assertOk()
+        ->assertSee('approval_url');
+
+    $pending = McpPendingAction::firstOrFail();
+
+    $this->actingAs($user)
+        ->get(route('mcp.pending-actions.show', $pending->approval_token))
+        ->assertOk()
+        ->assertSee('Pat Reader')
+        ->assertSee('Acme')
+        ->assertSee('Website rebuild')
+        ->assertSee('Development')
+        ->assertSee('2026-05-12')
+        ->assertSee('1.5')
+        ->assertSee('Sensitive deletion context');
+});
+
+test('approving a stale pending time entry action is rejected without mutating data', function () {
+    $user = User::factory()->create();
+    [, $project, $task] = mcpAssignedProject($user);
+    $entry = TimeEntry::factory()->create([
+        'user_id' => $user->id,
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'hours' => 1.0,
+        'notes' => 'Original note',
+    ]);
+
+    InternalToolsServer::actingAs($user, 'api')
+        ->tool(DeleteTimeEntry::class, ['time_entry_id' => $entry->id])
+        ->assertOk()
+        ->assertSee('approval_url');
+
+    $pending = McpPendingAction::firstOrFail();
+    $entry->update(['notes' => 'Changed after approval request']);
+
+    $this->actingAs($user)
+        ->post(route('mcp.pending-actions.approve', $pending->approval_token))
+        ->assertSessionHasErrors('action');
+
+    expect(TimeEntry::whereKey($entry->id)->exists())->toBeTrue()
+        ->and($entry->fresh()->notes)->toBe('Changed after approval request')
+        ->and($pending->refresh()->status)->toBe('stale');
+});
+
+test('archiving clients and projects through MCP requires approval', function () {
+    $admin = User::factory()->admin()->create();
+    $client = Client::factory()->create(['is_archived' => false]);
+    $project = Project::factory()->create(['client_id' => $client->id, 'is_archived' => false]);
+
+    InternalToolsServer::actingAs($admin, 'api')
+        ->tool(ArchiveClient::class, [
+            'client_id' => $client->id,
+            'archive' => true,
+        ])
+        ->assertOk()
+        ->assertSee('approval_url');
+
+    expect($client->fresh()->is_archived)->toBeFalse();
+
+    $clientPending = McpPendingAction::where('action', 'archive_client')->firstOrFail();
+
+    $this->actingAs($admin)
+        ->post(route('mcp.pending-actions.approve', $clientPending->approval_token))
+        ->assertRedirect(route('mcp.pending-actions.show', $clientPending->approval_token));
+
+    expect($client->fresh()->is_archived)->toBeTrue();
+
+    InternalToolsServer::actingAs($admin, 'api')
+        ->tool(ArchiveProject::class, [
+            'project_id' => $project->id,
+            'archive' => true,
+        ])
+        ->assertOk()
+        ->assertSee('approval_url');
+
+    expect($project->fresh()->is_archived)->toBeFalse();
+
+    $projectPending = McpPendingAction::where('action', 'archive_project')->firstOrFail();
+
+    $this->actingAs($admin)
+        ->post(route('mcp.pending-actions.approve', $projectPending->approval_token))
+        ->assertRedirect(route('mcp.pending-actions.show', $projectPending->approval_token));
+
+    expect($project->fresh()->is_archived)->toBeTrue();
+});
+
+test('mcp audit logs redact free-text notes while retaining a forensic hash', function () {
+    $user = User::factory()->create();
+    [, $project, $task] = mcpAssignedProject($user);
+
+    InternalToolsServer::actingAs($user, 'api')
+        ->tool(LogTimeEntry::class, [
+            'project_id' => $project->id,
+            'task_id' => $task->id,
+            'spent_on' => '2026-05-04',
+            'hours' => '1:30',
+            'notes' => 'Do not persist this raw note',
+        ])
+        ->assertOk();
+
+    $log = McpAuditLog::where('action', 'log_time_entry')->firstOrFail();
+
+    expect(json_encode($log->input))->not->toContain('Do not persist this raw note')
+        ->and($log->input['_hash'])->not->toBeNull()
+        ->and($log->input['data']['notes'])->toBe('[redacted]');
 });
 
 test('admin project and client writes audit immediately without approval', function () {

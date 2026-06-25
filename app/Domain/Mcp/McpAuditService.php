@@ -9,6 +9,21 @@ use Illuminate\Database\Eloquent\Model;
 
 final class McpAuditService
 {
+    private const SENSITIVE_KEYS = [
+        'access_token',
+        'body',
+        'client_secret',
+        'comment',
+        'description',
+        'google_access_token',
+        'google_refresh_token',
+        'notes',
+        'password',
+        'refresh_token',
+        'secret',
+        'token',
+    ];
+
     /**
      * @param  array<string, mixed>|null  $input
      * @param  array<string, mixed>|null  $result
@@ -33,9 +48,43 @@ final class McpAuditService
             'action' => $action,
             'risk_level' => $riskLevel,
             'status' => $status,
-            'input' => $input,
-            'result' => $result,
+            'input' => $this->preparePayloadForStorage($input),
+            'result' => $this->preparePayloadForStorage($result),
             'created_at' => now(),
         ]);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $payload
+     * @return array<string, mixed>|null
+     */
+    public function preparePayloadForStorage(?array $payload): ?array
+    {
+        if ($payload === null) {
+            return null;
+        }
+
+        return [
+            '_hash' => McpPayloadHasher::hash($payload),
+            'data' => $this->redact($payload),
+        ];
+    }
+
+    private function redact(mixed $value, ?string $key = null): mixed
+    {
+        if ($key !== null && in_array(strtolower($key), self::SENSITIVE_KEYS, true)) {
+            return '[redacted]';
+        }
+
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        $redacted = [];
+        foreach ($value as $itemKey => $itemValue) {
+            $redacted[$itemKey] = $this->redact($itemValue, is_string($itemKey) ? $itemKey : null);
+        }
+
+        return $redacted;
     }
 }

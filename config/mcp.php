@@ -12,5 +12,7 @@ return [
 
     'authorization_server' => env('MCP_AUTHORIZATION_SERVER'),
 
+    'oauth_registration_limit_per_minute' => (int) env('MCP_OAUTH_REGISTRATION_LIMIT_PER_MINUTE', 10),
+
     'pending_action_ttl_minutes' => (int) env('MCP_PENDING_ACTION_TTL_MINUTES', 60),
 ];

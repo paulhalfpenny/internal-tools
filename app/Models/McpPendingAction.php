@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Crypt;
 
 /**
  * @property int $id
@@ -17,6 +18,9 @@ use Illuminate\Support\Carbon;
  * @property string $action
  * @property string $status
  * @property array<string, mixed> $payload
+ * @property string|null $payload_hash
+ * @property string|null $subject_state_hash
+ * @property array<string, mixed>|null $subject_snapshot
  * @property array<string, mixed>|null $result
  * @property Carbon|null $expires_at
  * @property Carbon|null $approved_at
@@ -36,6 +40,9 @@ class McpPendingAction extends Model
         'action',
         'status',
         'payload',
+        'payload_hash',
+        'subject_state_hash',
+        'subject_snapshot',
         'result',
         'expires_at',
         'approved_at',
@@ -46,6 +53,7 @@ class McpPendingAction extends Model
     {
         return [
             'payload' => 'array',
+            'subject_snapshot' => 'array',
             'result' => 'array',
             'expires_at' => 'datetime',
             'approved_at' => 'datetime',
@@ -80,5 +88,55 @@ class McpPendingAction extends Model
     {
         return $this->status === 'pending'
             && ($this->expires_at === null || $this->expires_at->isFuture());
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public static function encryptedEnvelope(array $payload): array
+    {
+        return [
+            '_encrypted' => true,
+            'ciphertext' => Crypt::encryptString(json_encode(
+                $payload,
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION,
+            )),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function payloadData(): array
+    {
+        return self::decryptEnvelope($this->payload ?? []);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function subjectSnapshotData(): ?array
+    {
+        if ($this->subject_snapshot === null) {
+            return null;
+        }
+
+        return self::decryptEnvelope($this->subject_snapshot);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private static function decryptEnvelope(array $payload): array
+    {
+        if (($payload['_encrypted'] ?? false) !== true || ! is_string($payload['ciphertext'] ?? null)) {
+            return $payload;
+        }
+
+        $decrypted = json_decode(Crypt::decryptString($payload['ciphertext']), true, flags: JSON_THROW_ON_ERROR);
+
+        return is_array($decrypted) ? $decrypted : [];
     }
 }
