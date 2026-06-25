@@ -11,6 +11,7 @@ use App\Mcp\Tools\CreateProject;
 use App\Mcp\Tools\DeleteTimeEntry;
 use App\Mcp\Tools\GetProjectBudget;
 use App\Mcp\Tools\GetRunningTimer;
+use App\Mcp\Tools\ListAsanaTasks;
 use App\Mcp\Tools\ListClients;
 use App\Mcp\Tools\ListProjects;
 use App\Mcp\Tools\ListTasks;
@@ -34,6 +35,8 @@ use Laravel\Mcp\Server\Attributes\Version;
 #[Instructions('Use this server to read and update Filter internal time tracking, project, client, task, team, reporting, and budget data. High-impact writes return an approval_url and must be approved in the web app before execution.')]
 class InternalToolsServer extends Server
 {
+    public int $defaultPaginationLength = 50;
+
     protected array $tools = [
         AccountInfo::class,
         ListClients::class,
@@ -46,6 +49,7 @@ class InternalToolsServer extends Server
         ArchiveProject::class,
         AssignProjectMember::class,
         UnassignProjectMember::class,
+        ListAsanaTasks::class,
         ListTasks::class,
         ListUsers::class,
         ListTimeEntries::class,

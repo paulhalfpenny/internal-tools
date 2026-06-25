@@ -430,7 +430,7 @@ final class InternalMcpActions
     {
         $this->assertActive($actor);
 
-        $query = Project::with(['client', 'tasks', 'users'])->orderBy('name');
+        $query = Project::with(['client', 'tasks', 'users', 'asanaProjects'])->orderBy('name');
 
         if (! $includeArchived) {
             $query->where('is_archived', false);
@@ -457,6 +457,46 @@ final class InternalMcpActions
         }
 
         return $query->get()->all();
+    }
+
+    /**
+     * @return array{asana_project_gids: array<int, string>, tasks: array<int, AsanaTask>}
+     */
+    public function listAsanaTasks(User $actor, int $projectId, ?string $asanaProjectGid = null, bool $includeCompleted = false): array
+    {
+        $this->assertActive($actor);
+
+        $project = Project::with(['users', 'asanaProjects'])->findOrFail($projectId);
+
+        if (! $actor->isManager() && ! $project->users->contains('id', $actor->id)) {
+            throw new AuthorizationException('You are not allowed to view Asana tasks for this project.');
+        }
+
+        $linkedBoardGids = $project->asanaProjects
+            ->sortBy('name')
+            ->pluck('gid')
+            ->values()
+            ->all();
+
+        if ($asanaProjectGid !== null && $asanaProjectGid !== '') {
+            if (! in_array($asanaProjectGid, $linkedBoardGids, true)) {
+                throw ValidationException::withMessages(['asana_project_gid' => 'The selected Asana board is not linked to this project.']);
+            }
+
+            $linkedBoardGids = [$asanaProjectGid];
+        }
+
+        $query = AsanaTask::whereIn('asana_project_gid', $linkedBoardGids)
+            ->orderBy('name');
+
+        if (! $includeCompleted) {
+            $query->where('is_completed', false);
+        }
+
+        return [
+            'asana_project_gids' => $linkedBoardGids,
+            'tasks' => $query->get()->all(),
+        ];
     }
 
     /**
@@ -599,7 +639,11 @@ final class InternalMcpActions
 
     public function serializeProject(Project $project): array
     {
-        $project->loadMissing(['client', 'tasks', 'users']);
+        $project->loadMissing(['client', 'tasks', 'users', 'asanaProjects']);
+
+        $asanaProjects = $project->asanaProjects
+            ->sortBy('name')
+            ->values();
 
         return [
             'id' => $project->id,
@@ -613,6 +657,15 @@ final class InternalMcpActions
             'ends_on' => $project->ends_on?->toDateString(),
             'is_archived' => (bool) $project->is_archived,
             'asana_task_required' => (bool) $project->asana_task_required,
+            'asana_project_gids' => $asanaProjects->pluck('gid')->values()->all(),
+            'asana_projects' => $asanaProjects
+                ->map(fn ($asanaProject): array => [
+                    'gid' => $asanaProject->gid,
+                    'workspace_gid' => $asanaProject->workspace_gid,
+                    'name' => $asanaProject->name,
+                    'is_archived' => (bool) $asanaProject->is_archived,
+                ])
+                ->all(),
             'task_ids' => $project->tasks->pluck('id')->values()->all(),
             'user_ids' => $project->users->pluck('id')->values()->all(),
         ];
@@ -627,6 +680,17 @@ final class InternalMcpActions
             'colour' => $task->colour,
             'sort_order' => $task->sort_order,
             'is_archived' => (bool) $task->is_archived,
+        ];
+    }
+
+    public function serializeAsanaTask(AsanaTask $task): array
+    {
+        return [
+            'gid' => $task->gid,
+            'asana_project_gid' => $task->asana_project_gid,
+            'name' => $task->name,
+            'is_completed' => (bool) $task->is_completed,
+            'parent_gid' => $task->parent_gid,
         ];
     }
 

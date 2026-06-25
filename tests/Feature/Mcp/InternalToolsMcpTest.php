@@ -7,6 +7,8 @@ use App\Mcp\Tools\AssignProjectMember;
 use App\Mcp\Tools\CreateClient;
 use App\Mcp\Tools\CreateProject;
 use App\Mcp\Tools\DeleteTimeEntry;
+use App\Mcp\Tools\ListAsanaTasks;
+use App\Mcp\Tools\ListProjects;
 use App\Mcp\Tools\LogTimeEntry;
 use App\Mcp\Tools\UpdateTimeEntry;
 use App\Models\AsanaProject;
@@ -24,11 +26,15 @@ use Laravel\Passport\Passport;
 
 uses(RefreshDatabase::class);
 
-function mcpAssignedProject(User $user): array
-{
-    $client = Client::factory()->create(['name' => 'Acme']);
-    $project = Project::factory()->create(['client_id' => $client->id, 'name' => 'Website rebuild']);
-    $task = Task::factory()->create(['name' => 'Development']);
+function mcpAssignedProject(
+    User $user,
+    string $clientName = 'Acme',
+    string $projectName = 'Website rebuild',
+    string $taskName = 'Development',
+): array {
+    $client = Client::factory()->create(['name' => $clientName]);
+    $project = Project::factory()->create(['client_id' => $client->id, 'name' => $projectName]);
+    $task = Task::factory()->create(['name' => $taskName]);
 
     $project->tasks()->attach($task->id, ['is_billable' => true, 'hourly_rate_override' => null, 'rate_id' => null]);
     $project->users()->attach($user->id, ['hourly_rate_override' => null, 'rate_id' => null]);
@@ -40,6 +46,12 @@ function logTimeEntryToolFrom(array $tools): array
 {
     return collect($tools)
         ->firstWhere('name', 'log-time-entry');
+}
+
+function mcpToolFrom(array $tools, string $name): ?array
+{
+    return collect($tools)
+        ->firstWhere('name', $name);
 }
 
 function mcpLinkedAsanaProject(User $user, bool $asanaTaskRequired = true, bool $billable = true): array
@@ -195,6 +207,126 @@ test('mcp endpoint requires an OAuth token with the MCP scope', function () {
         ->assertOk()
         ->assertJsonPath('jsonrpc', '2.0')
         ->assertJsonPath('id', 'init-1');
+});
+
+test('list projects exposes linked Asana board mapping for every project', function () {
+    $user = User::factory()->create();
+    [, $linkedProject] = mcpLinkedAsanaProject($user);
+    [, $unlinkedProject] = mcpAssignedProject(
+        $user,
+        clientName: 'Unlinked client',
+        projectName: 'Unlinked project',
+        taskName: 'Strategy',
+    );
+
+    InternalToolsServer::actingAs($user, 'api')
+        ->tool(ListProjects::class)
+        ->assertOk()
+        ->assertStructuredContent(function ($json) use ($linkedProject, $unlinkedProject) {
+            $json->has('projects');
+
+            $projects = collect($json->toArray()['projects']);
+            $linked = $projects->firstWhere('id', $linkedProject->id);
+            $unlinked = $projects->firstWhere('id', $unlinkedProject->id);
+
+            expect($linked['asana_project_gids'])->toBe(['AP1'])
+                ->and($linked['asana_projects'])->toBe([[
+                    'gid' => 'AP1',
+                    'workspace_gid' => 'WS1',
+                    'name' => 'Asana board',
+                    'is_archived' => false,
+                ]])
+                ->and($unlinked['asana_project_gids'])->toBe([])
+                ->and($unlinked['asana_projects'])->toBe([]);
+        });
+});
+
+test('list asana tasks advertises input schema for MCP clients', function () {
+    Passport::actingAs(User::factory()->create(), ['mcp:use']);
+
+    $response = $this->postJson('/mcp', [
+        'jsonrpc' => '2.0',
+        'id' => 'tools-1',
+        'method' => 'tools/list',
+        'params' => [],
+    ])->assertOk();
+
+    $tool = mcpToolFrom($response->json('result.tools'), 'list-asana-tasks');
+
+    expect($tool)->not->toBeNull();
+
+    $schema = $tool['inputSchema'];
+    expect(array_keys($schema['properties']))->toEqualCanonicalizing([
+        'asana_project_gid',
+        'include_completed',
+        'project_id',
+    ])
+        ->and($schema['required'])->toEqualCanonicalizing(['project_id'])
+        ->and($schema['properties']['project_id']['type'])->toBe('integer')
+        ->and($schema['properties']['asana_project_gid']['type'])->toBe('string')
+        ->and($schema['properties']['include_completed']['type'])->toBe('boolean');
+});
+
+test('list asana tasks returns cached tasks from linked boards for an assigned project', function () {
+    $user = User::factory()->create();
+    [, $project] = mcpLinkedAsanaProject($user);
+
+    AsanaTask::create([
+        'gid' => 'AT2',
+        'asana_project_gid' => 'AP1',
+        'name' => 'Completed Asana task',
+        'is_completed' => true,
+        'parent_gid' => 'AT1',
+    ]);
+
+    AsanaProject::create([
+        'gid' => 'AP2',
+        'workspace_gid' => 'WS1',
+        'name' => 'Unlinked Asana board',
+        'is_archived' => false,
+    ]);
+
+    AsanaTask::create([
+        'gid' => 'AT3',
+        'asana_project_gid' => 'AP2',
+        'name' => 'Task from another board',
+        'is_completed' => false,
+    ]);
+
+    InternalToolsServer::actingAs($user, 'api')
+        ->tool(ListAsanaTasks::class, [
+            'project_id' => $project->id,
+        ])
+        ->assertOk()
+        ->assertStructuredContent([
+            'project_id' => $project->id,
+            'asana_project_gids' => ['AP1'],
+            'asana_tasks' => [[
+                'gid' => 'AT1',
+                'asana_project_gid' => 'AP1',
+                'name' => 'Asana task',
+                'is_completed' => false,
+                'parent_gid' => null,
+            ]],
+        ]);
+
+    InternalToolsServer::actingAs($user, 'api')
+        ->tool(ListAsanaTasks::class, [
+            'project_id' => $project->id,
+            'asana_project_gid' => 'AP1',
+            'include_completed' => true,
+        ])
+        ->assertOk()
+        ->assertStructuredContent(function ($json) use ($project) {
+            $json->where('project_id', $project->id)
+                ->where('asana_project_gids', ['AP1'])
+                ->has('asana_tasks', 2);
+
+            $tasks = collect($json->toArray()['asana_tasks']);
+
+            expect($tasks->pluck('gid')->all())->toBe(['AT1', 'AT2'])
+                ->and($tasks->firstWhere('gid', 'AT2')['parent_gid'])->toBe('AT1');
+        });
 });
 
 test('log time entry advertises input schema for MCP clients', function () {
