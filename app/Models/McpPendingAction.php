@@ -1,0 +1,84 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Carbon;
+
+/**
+ * @property int $id
+ * @property string $approval_token
+ * @property int $requested_by_user_id
+ * @property int|null $approved_by_user_id
+ * @property string $tool_name
+ * @property string $action
+ * @property string $status
+ * @property array<string, mixed> $payload
+ * @property array<string, mixed>|null $result
+ * @property Carbon|null $expires_at
+ * @property Carbon|null $approved_at
+ * @property Carbon|null $rejected_at
+ * @property User $requestedBy
+ * @property User|null $approvedBy
+ */
+class McpPendingAction extends Model
+{
+    protected $fillable = [
+        'approval_token',
+        'requested_by_user_id',
+        'approved_by_user_id',
+        'subject_type',
+        'subject_id',
+        'tool_name',
+        'action',
+        'status',
+        'payload',
+        'result',
+        'expires_at',
+        'approved_at',
+        'rejected_at',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'payload' => 'array',
+            'result' => 'array',
+            'expires_at' => 'datetime',
+            'approved_at' => 'datetime',
+            'rejected_at' => 'datetime',
+        ];
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function requestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requested_by_user_id');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by_user_id');
+    }
+
+    public function subject(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    /** @return HasMany<McpAuditLog, $this> */
+    public function mcpAuditLogs(): HasMany
+    {
+        return $this->hasMany(McpAuditLog::class, 'pending_action_id');
+    }
+
+    public function isPending(): bool
+    {
+        return $this->status === 'pending'
+            && ($this->expires_at === null || $this->expires_at->isFuture());
+    }
+}

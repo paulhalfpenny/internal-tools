@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Integrations\AsanaOAuthController;
+use App\Http\Controllers\Mcp\PendingActionController as McpPendingActionController;
 use App\Livewire\Admin\Clients\Index as AdminClients;
 use App\Livewire\Admin\Integrations\AsanaSettings as AdminAsanaSettings;
 use App\Livewire\Admin\Notifications\Index as AdminNotifications;
@@ -117,6 +118,14 @@ Route::middleware('auth')->group(function () {
     // Profile / personal integrations
     Route::get('/profile/asana', ProfileAsanaConnection::class)->name('profile.asana');
     Route::get('/profile/api-tokens', ProfileApiTokens::class)->name('profile.api-tokens');
+
+    // MCP high-impact write approvals. These use the web session and CSRF
+    // protection; OAuth clients can request approvals but cannot approve them.
+    Route::prefix('mcp/pending-actions')->name('mcp.pending-actions.')->group(function () {
+        Route::get('/{pendingAction:approval_token}', [McpPendingActionController::class, 'show'])->name('show');
+        Route::post('/{pendingAction:approval_token}/approve', [McpPendingActionController::class, 'approve'])->name('approve');
+        Route::post('/{pendingAction:approval_token}/reject', [McpPendingActionController::class, 'reject'])->name('reject');
+    });
 
     // Asana OAuth
     Route::prefix('integrations/asana')->name('integrations.asana.')->group(function () {

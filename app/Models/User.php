@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Laravel\Passport\Contracts\OAuthenticatable;
+use Laravel\Passport\HasApiTokens;
 
 /**
  * @property Role $role
@@ -41,12 +43,12 @@ use Illuminate\Support\Carbon;
  * @property ?User $manager
  * @property Collection<int, User> $directReports
  */
-class User extends Authenticatable
+class User extends Authenticatable implements OAuthenticatable
 {
     public const DEFAULT_WEEKLY_TARGET_HOURS = 40.0;
 
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
         'google_sub',
