@@ -6,6 +6,7 @@ use App\Domain\Mcp\McpApprovalService;
 use App\Mcp\Tools\Concerns\InteractsWithInternalTools;
 use App\Models\TimeEntry;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -17,6 +18,18 @@ use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 class DeleteTimeEntry extends Tool
 {
     use InteractsWithInternalTools;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'time_entry_id' => $schema->integer()
+                ->description('Internal Tools time entry ID to delete. Deletion always requires web approval before execution.')
+                ->required(),
+        ];
+    }
 
     public function handle(Request $request, McpApprovalService $approvals)
     {

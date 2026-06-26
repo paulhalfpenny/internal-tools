@@ -7,6 +7,7 @@ use App\Domain\Mcp\McpAuditService;
 use App\Mcp\Tools\Concerns\InteractsWithInternalTools;
 use App\Models\Project;
 use App\Models\User;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
@@ -15,6 +16,21 @@ use Laravel\Mcp\Server\Tool;
 class AssignProjectMember extends Tool
 {
     use InteractsWithInternalTools;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'project_id' => $schema->integer()
+                ->description('Internal Tools project ID to assign the user to.')
+                ->required(),
+            'user_id' => $schema->integer()
+                ->description('Internal Tools user ID to assign to the project.')
+                ->required(),
+        ];
+    }
 
     public function handle(Request $request, InternalMcpActions $actions, McpAuditService $audit)
     {

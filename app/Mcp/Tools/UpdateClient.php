@@ -6,6 +6,7 @@ use App\Domain\Mcp\InternalMcpActions;
 use App\Domain\Mcp\McpAuditService;
 use App\Mcp\Tools\Concerns\InteractsWithInternalTools;
 use App\Models\Client;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Arr;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -15,6 +16,28 @@ use Laravel\Mcp\Server\Tool;
 class UpdateClient extends Tool
 {
     use InteractsWithInternalTools;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'client_id' => $schema->integer()
+                ->description('Internal Tools client ID to update.')
+                ->required(),
+            'name' => $schema->string()
+                ->description('Optional replacement client name.')
+                ->max(255),
+            'code' => $schema->string()
+                ->description('Optional replacement unique client code, up to 20 characters. Send null to clear it.')
+                ->max(20)
+                ->nullable(),
+            'default_task_ids' => $schema->array()
+                ->description('Optional replacement list of default Internal Tools task IDs for this client.')
+                ->items($schema->integer()),
+        ];
+    }
 
     public function handle(Request $request, InternalMcpActions $actions, McpAuditService $audit)
     {

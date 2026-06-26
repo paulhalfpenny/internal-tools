@@ -7,6 +7,7 @@ use App\Domain\Mcp\McpApprovalService;
 use App\Domain\Mcp\McpAuditService;
 use App\Mcp\Tools\Concerns\InteractsWithInternalTools;
 use App\Models\Client;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
 use Laravel\Mcp\Server\Attributes\Description;
@@ -18,6 +19,20 @@ use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 class ArchiveClient extends Tool
 {
     use InteractsWithInternalTools;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'client_id' => $schema->integer()
+                ->description('Internal Tools client ID to archive or unarchive.')
+                ->required(),
+            'archive' => $schema->boolean()
+                ->description('Whether to archive the client. Defaults to true. Archiving requires web approval; unarchiving executes immediately.'),
+        ];
+    }
 
     public function handle(
         Request $request,

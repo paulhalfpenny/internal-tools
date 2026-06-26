@@ -118,6 +118,7 @@ Route::middleware('auth')->group(function () {
     // Profile / personal integrations
     Route::get('/profile/asana', ProfileAsanaConnection::class)->name('profile.asana');
     Route::get('/profile/api-tokens', ProfileApiTokens::class)->name('profile.api-tokens');
+    Route::view('/profile/mcp', 'profile.mcp')->name('profile.mcp');
 
     // MCP high-impact write approvals. These use the web session and CSRF
     // protection; OAuth clients can request approvals but cannot approve them.

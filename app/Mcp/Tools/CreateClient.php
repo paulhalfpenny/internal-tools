@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Domain\Mcp\InternalMcpActions;
 use App\Domain\Mcp\McpAuditService;
 use App\Mcp\Tools\Concerns\InteractsWithInternalTools;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
@@ -13,6 +14,26 @@ use Laravel\Mcp\Server\Tool;
 class CreateClient extends Tool
 {
     use InteractsWithInternalTools;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'name' => $schema->string()
+                ->description('Client name.')
+                ->max(255)
+                ->required(),
+            'code' => $schema->string()
+                ->description('Optional unique client code, up to 20 characters.')
+                ->max(20)
+                ->nullable(),
+            'default_task_ids' => $schema->array()
+                ->description('Optional default Internal Tools task IDs to associate with this client.')
+                ->items($schema->integer()),
+        ];
+    }
 
     public function handle(Request $request, InternalMcpActions $actions, McpAuditService $audit)
     {

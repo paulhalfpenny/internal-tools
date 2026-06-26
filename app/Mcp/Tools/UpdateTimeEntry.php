@@ -8,6 +8,7 @@ use App\Domain\Mcp\McpAuditService;
 use App\Mcp\Tools\Concerns\InteractsWithInternalTools;
 use App\Models\TimeEntry;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Support\Arr;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -18,6 +19,34 @@ use Laravel\Mcp\Server\Tool;
 class UpdateTimeEntry extends Tool
 {
     use InteractsWithInternalTools;
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'time_entry_id' => $schema->integer()
+                ->description('Internal Tools time entry ID to update.')
+                ->required(),
+            'project_id' => $schema->integer()
+                ->description('Optional replacement Internal Tools project ID.'),
+            'task_id' => $schema->integer()
+                ->description('Optional replacement Internal Tools task ID.'),
+            'spent_on' => $schema->string()
+                ->format('date')
+                ->description('Optional replacement entry date in YYYY-MM-DD format.'),
+            'hours' => $schema->string()
+                ->description('Optional replacement hours as a string. Accepts decimal hours like "1.5", h:mm like "1:30", or minutes like "90m".'),
+            'notes' => $schema->string()
+                ->description('Optional replacement notes. Send null to clear notes.')
+                ->max(2000)
+                ->nullable(),
+            'asana_task_gid' => $schema->string()
+                ->description('Optional replacement Asana task GID. Send null to clear it.')
+                ->nullable(),
+        ];
+    }
 
     public function handle(
         Request $request,

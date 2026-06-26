@@ -241,6 +241,62 @@ test('list projects exposes linked Asana board mapping for every project', funct
         });
 });
 
+test('list projects advertises all projects filter and lets admins request org-wide projects', function () {
+    Passport::actingAs(User::factory()->admin()->create(), ['mcp:use']);
+
+    $response = $this->postJson('/mcp', [
+        'jsonrpc' => '2.0',
+        'id' => 'tools-1',
+        'method' => 'tools/list',
+        'params' => [],
+    ])->assertOk();
+
+    $tool = mcpToolFrom($response->json('result.tools'), 'list-projects');
+
+    expect($tool)->not->toBeNull();
+
+    $schema = $tool['inputSchema'];
+    expect(array_keys($schema['properties']))->toEqualCanonicalizing([
+        'all',
+        'include_archived',
+    ])
+        ->and($schema['properties']['all']['type'])->toBe('boolean')
+        ->and($schema['properties']['include_archived']['type'])->toBe('boolean');
+
+    $admin = User::factory()->admin()->create();
+    [, $assignedProject] = mcpAssignedProject($admin);
+    [, $unassignedProject] = mcpAssignedProject(
+        User::factory()->create(),
+        clientName: 'Another client',
+        projectName: 'Unassigned project',
+        taskName: 'Strategy',
+    );
+
+    InternalToolsServer::actingAs($admin, 'api')
+        ->tool(ListProjects::class)
+        ->assertOk()
+        ->assertStructuredContent(function ($json) use ($assignedProject, $unassignedProject) {
+            $json->has('projects');
+
+            $projectIds = collect($json->toArray()['projects'])->pluck('id')->all();
+
+            expect($projectIds)->toContain($assignedProject->id)
+                ->and($projectIds)->not->toContain($unassignedProject->id);
+        });
+
+    InternalToolsServer::actingAs($admin, 'api')
+        ->tool(ListProjects::class, ['all' => true])
+        ->assertOk()
+        ->assertStructuredContent(function ($json) use ($assignedProject, $unassignedProject) {
+            $json->has('projects');
+
+            $projectIds = collect($json->toArray()['projects'])->pluck('id')->all();
+
+            expect($projectIds)->toContain($assignedProject->id)
+                ->and($projectIds)->toContain($unassignedProject->id);
+        });
+});
+
 test('list asana tasks advertises input schema for MCP clients', function () {
     Passport::actingAs(User::factory()->create(), ['mcp:use']);
 
@@ -329,6 +385,49 @@ test('list asana tasks returns cached tasks from linked boards for an assigned p
         });
 });
 
+test('create project advertises input schema and non destructive hint for MCP clients', function () {
+    Passport::actingAs(User::factory()->create(), ['mcp:use']);
+
+    $response = $this->postJson('/mcp', [
+        'jsonrpc' => '2.0',
+        'id' => 'tools-1',
+        'method' => 'tools/list',
+        'params' => [],
+    ])->assertOk();
+
+    $tool = mcpToolFrom($response->json('result.tools'), 'create-project');
+
+    expect($tool)->not->toBeNull();
+
+    $schema = $tool['inputSchema'];
+    expect($tool['annotations']['destructiveHint'])->toBeFalse()
+        ->and(array_keys($schema['properties']))->toEqualCanonicalizing([
+            'asana_task_required',
+            'budget_amount',
+            'budget_hours',
+            'budget_starts_on',
+            'budget_type',
+            'client_id',
+            'code',
+            'default_hourly_rate',
+            'ends_on',
+            'is_billable',
+            'manager_user_id',
+            'name',
+            'starts_on',
+            'task_ids',
+            'user_ids',
+        ])
+        ->and($schema['required'])->toEqualCanonicalizing(['client_id', 'code', 'name'])
+        ->and($schema['properties']['client_id']['type'])->toBe('integer')
+        ->and($schema['properties']['code']['type'])->toBe('string')
+        ->and($schema['properties']['name']['type'])->toBe('string')
+        ->and($schema['properties']['task_ids']['type'])->toBe('array')
+        ->and($schema['properties']['task_ids']['items']['type'])->toBe('integer')
+        ->and($schema['properties']['user_ids']['type'])->toBe('array')
+        ->and($schema['properties']['user_ids']['items']['type'])->toBe('integer');
+});
+
 test('log time entry advertises input schema for MCP clients', function () {
     Passport::actingAs(User::factory()->create(), ['mcp:use']);
 
@@ -358,6 +457,187 @@ test('log time entry advertises input schema for MCP clients', function () {
             'spent_at',
             'task_id',
         ]);
+});
+
+test('mcp tools advertise complete input schemas for accepted arguments', function () {
+    Passport::actingAs(User::factory()->admin()->create(), ['mcp:use']);
+
+    $response = $this->postJson('/mcp', [
+        'jsonrpc' => '2.0',
+        'id' => 'tools-1',
+        'method' => 'tools/list',
+        'params' => [],
+    ])->assertOk();
+
+    $tools = collect($response->json('result.tools'))->keyBy('name');
+
+    $expectations = [
+        'archive-client' => [
+            'required' => ['client_id'],
+            'properties' => [
+                'archive' => ['type' => 'boolean'],
+                'client_id' => ['type' => 'integer'],
+            ],
+        ],
+        'archive-project' => [
+            'required' => ['project_id'],
+            'properties' => [
+                'archive' => ['type' => 'boolean'],
+                'project_id' => ['type' => 'integer'],
+            ],
+        ],
+        'assign-project-member' => [
+            'required' => ['project_id', 'user_id'],
+            'properties' => [
+                'project_id' => ['type' => 'integer'],
+                'user_id' => ['type' => 'integer'],
+            ],
+        ],
+        'create-client' => [
+            'required' => ['name'],
+            'properties' => [
+                'code' => ['type' => 'string'],
+                'default_task_ids' => ['type' => 'array', 'items' => 'integer'],
+                'name' => ['type' => 'string'],
+            ],
+        ],
+        'delete-time-entry' => [
+            'required' => ['time_entry_id'],
+            'properties' => [
+                'time_entry_id' => ['type' => 'integer'],
+            ],
+        ],
+        'get-project-budget' => [
+            'required' => ['project_id'],
+            'properties' => [
+                'project_id' => ['type' => 'integer'],
+            ],
+        ],
+        'list-clients' => [
+            'required' => [],
+            'properties' => [
+                'include_archived' => ['type' => 'boolean'],
+            ],
+        ],
+        'list-tasks' => [
+            'required' => [],
+            'properties' => [
+                'include_archived' => ['type' => 'boolean'],
+            ],
+        ],
+        'list-time-entries' => [
+            'required' => [],
+            'properties' => [
+                'from' => ['type' => 'string'],
+                'limit' => ['type' => 'integer'],
+                'project_id' => ['type' => 'integer'],
+                'task_id' => ['type' => 'integer'],
+                'to' => ['type' => 'string'],
+                'user_id' => ['type' => 'integer'],
+            ],
+        ],
+        'list-users' => [
+            'required' => [],
+            'properties' => [
+                'include_inactive' => ['type' => 'boolean'],
+            ],
+        ],
+        'start-timer' => [
+            'required' => ['project_id', 'spent_on', 'task_id'],
+            'properties' => [
+                'asana_task_gid' => ['type' => 'string'],
+                'notes' => ['type' => 'string'],
+                'project_id' => ['type' => 'integer'],
+                'spent_on' => ['type' => 'string'],
+                'task_id' => ['type' => 'integer'],
+            ],
+        ],
+        'time-report' => [
+            'required' => ['from', 'to'],
+            'properties' => [
+                'billable_only' => ['type' => 'boolean'],
+                'client_id' => ['type' => 'integer'],
+                'from' => ['type' => 'string'],
+                'group_by' => ['type' => 'string', 'enum' => ['client', 'project', 'task', 'user']],
+                'project_id' => ['type' => 'integer'],
+                'task_id' => ['type' => 'integer'],
+                'to' => ['type' => 'string'],
+                'user_id' => ['type' => 'integer'],
+            ],
+        ],
+        'unassign-project-member' => [
+            'required' => ['project_id', 'user_id'],
+            'properties' => [
+                'project_id' => ['type' => 'integer'],
+                'user_id' => ['type' => 'integer'],
+            ],
+        ],
+        'update-client' => [
+            'required' => ['client_id'],
+            'properties' => [
+                'client_id' => ['type' => 'integer'],
+                'code' => ['type' => 'string'],
+                'default_task_ids' => ['type' => 'array', 'items' => 'integer'],
+                'name' => ['type' => 'string'],
+            ],
+        ],
+        'update-project' => [
+            'required' => ['project_id'],
+            'properties' => [
+                'asana_task_required' => ['type' => 'boolean'],
+                'budget_amount' => ['type' => 'number'],
+                'budget_hours' => ['type' => 'number'],
+                'budget_starts_on' => ['type' => 'string'],
+                'budget_type' => ['type' => 'string', 'enum' => ['fixed_fee', 'monthly_ci']],
+                'client_id' => ['type' => 'integer'],
+                'code' => ['type' => 'string'],
+                'default_hourly_rate' => ['type' => 'number'],
+                'ends_on' => ['type' => 'string'],
+                'is_billable' => ['type' => 'boolean'],
+                'manager_user_id' => ['type' => 'integer'],
+                'name' => ['type' => 'string'],
+                'project_id' => ['type' => 'integer'],
+                'starts_on' => ['type' => 'string'],
+                'task_ids' => ['type' => 'array', 'items' => 'integer'],
+                'user_ids' => ['type' => 'array', 'items' => 'integer'],
+            ],
+        ],
+        'update-time-entry' => [
+            'required' => ['time_entry_id'],
+            'properties' => [
+                'asana_task_gid' => ['type' => 'string'],
+                'hours' => ['type' => 'string'],
+                'notes' => ['type' => 'string'],
+                'project_id' => ['type' => 'integer'],
+                'spent_on' => ['type' => 'string'],
+                'task_id' => ['type' => 'integer'],
+                'time_entry_id' => ['type' => 'integer'],
+            ],
+        ],
+    ];
+
+    foreach ($expectations as $toolName => $expectation) {
+        $tool = $tools->get($toolName);
+        expect($tool)->not->toBeNull();
+
+        $schema = $tool['inputSchema'];
+        expect(array_keys($schema['properties'] ?? []))->toEqualCanonicalizing(array_keys($expectation['properties']))
+            ->and($schema['required'] ?? [])->toEqualCanonicalizing($expectation['required']);
+
+        foreach ($expectation['properties'] as $propertyName => $propertyExpectation) {
+            $property = $schema['properties'][$propertyName] ?? null;
+            expect($property)->not->toBeNull()
+                ->and((array) $property['type'])->toContain($propertyExpectation['type']);
+
+            if (array_key_exists('items', $propertyExpectation)) {
+                expect($property['items']['type'])->toBe($propertyExpectation['items']);
+            }
+
+            if (array_key_exists('enum', $propertyExpectation)) {
+                expect($property['enum'])->toEqualCanonicalizing($propertyExpectation['enum']);
+            }
+        }
+    }
 });
 
 test('log time entry schema uses scalar property types for Claude connectors', function () {
