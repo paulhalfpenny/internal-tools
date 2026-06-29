@@ -57,7 +57,7 @@
             </div>
 
             <div class="flex items-center gap-4">
-                @if(auth()->user()->isAdmin())
+                @canany(['access-admin', 'manage-projects'])
                 <div class="relative" x-data="{ open: false }" @click.outside="open = false">
                     <button @click="open = !open"
                             class="text-sm font-medium text-white flex items-center gap-1 {{ request()->routeIs('admin.*') ? 'opacity-100 font-semibold' : 'opacity-70 hover:opacity-100' }}">
@@ -65,9 +65,14 @@
                     </button>
                     <div x-show="open" x-cloak
                          class="absolute top-full right-0 mt-1 w-40 bg-white border border-gray-200 rounded shadow-md z-50 py-1">
+                        @can('access-admin')
                         <a href="{{ route('admin.users') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Users</a>
                         <a href="{{ route('admin.clients') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Clients</a>
+                        @endcan
+                        @can('manage-projects')
                         <a href="{{ route('admin.projects') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Projects</a>
+                        @endcan
+                        @can('access-admin')
                         <a href="{{ route('admin.teams') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Teams</a>
                         <a href="{{ route('admin.tasks') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Tasks</a>
                         <hr class="my-1 border-gray-100">
@@ -77,9 +82,10 @@
                         <hr class="my-1 border-gray-100">
                         <a href="{{ route('admin.integrations.asana') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Asana integration</a>
                         <a href="{{ route('admin.notifications') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Notifications</a>
+                        @endcan
                     </div>
                 </div>
-                @endif
+                @endcanany
 
                 <div class="relative" x-data="{ open: false }" @click.outside="open = false">
                 <button @click="open = !open"

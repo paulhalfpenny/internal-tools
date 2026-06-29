@@ -34,6 +34,53 @@ test('projects search filters by name, code and client name', function () {
         ->assertDontSee('Unrelated Build');
 });
 
+test('managers can access the admin projects area but not other admin areas', function () {
+    $manager = User::factory()->create(['role' => Role::Manager]);
+    $regularUser = User::factory()->create(['role' => Role::User]);
+    $client = Client::factory()->create();
+    $project = Project::factory()->create(['client_id' => $client->id]);
+
+    $this->actingAs($manager);
+
+    $this->get(route('admin.projects'))->assertOk();
+    $this->get(route('admin.projects.edit', $project))->assertOk();
+    $this->get(route('admin.users'))->assertForbidden();
+
+    $this->get(route('timesheet'))
+        ->assertSee('Admin')
+        ->assertSee('href="'.route('admin.projects').'"', false)
+        ->assertDontSee('href="'.route('admin.users').'"', false);
+
+    $this->actingAs($regularUser)
+        ->get(route('admin.projects'))
+        ->assertForbidden();
+});
+
+test('managers can create and edit projects from the admin projects area', function () {
+    $manager = User::factory()->create(['role' => Role::Manager]);
+    $client = Client::factory()->create();
+
+    $this->actingAs($manager);
+
+    Livewire::test(AdminProjects::class)
+        ->set('clientId', $client->id)
+        ->set('code', 'MGR-001')
+        ->set('name', 'Manager-created project')
+        ->set('isBillable', '1')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $project = Project::where('code', 'MGR-001')->firstOrFail();
+    expect($project->name)->toBe('Manager-created project');
+
+    Livewire::test(AdminProjectEdit::class, ['project' => $project])
+        ->set('name', 'Manager-updated project')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($project->fresh()->name)->toBe('Manager-updated project');
+});
+
 test('clients search filters by name', function () {
     $admin = User::factory()->create(['role' => Role::Admin]);
     $this->actingAs($admin);

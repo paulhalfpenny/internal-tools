@@ -37,9 +37,14 @@ class Index extends Component
 
     public string $budgetStartsOn = '';
 
+    public function mount(): void
+    {
+        Gate::authorize('manage-projects');
+    }
+
     public function save(): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         $this->validate([
             'clientId' => 'required|exists:clients,id',
@@ -79,7 +84,7 @@ class Index extends Component
 
     public function toggleArchive(int $projectId): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         $project = Project::findOrFail($projectId);
         $project->update(['is_archived' => ! $project->is_archived]);
@@ -87,7 +92,7 @@ class Index extends Component
 
     public function duplicate(int $projectId): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         $original = Project::with(['tasks', 'users'])->findOrFail($projectId);
 

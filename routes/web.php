@@ -98,13 +98,16 @@ Route::middleware('auth')->group(function () {
     });
 
     // Admin routes
+    Route::middleware('can:manage-projects')->prefix('admin')->name('admin.')->group(function () {
+        Route::get('/projects', AdminProjects::class)->name('projects');
+        Route::get('/projects/{project}/edit', AdminProjectEdit::class)->name('projects.edit');
+    });
+
     Route::middleware('can:access-admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/users', AdminUsers::class)->name('users');
         Route::get('/clients', AdminClients::class)->name('clients');
         Route::get('/tasks', AdminTasks::class)->name('tasks');
         Route::get('/teams', AdminTeams::class)->name('teams');
-        Route::get('/projects', AdminProjects::class)->name('projects');
-        Route::get('/projects/{project}/edit', AdminProjectEdit::class)->name('projects.edit');
         Route::redirect('/rates', '/admin/rates/library')->name('rates');
         Route::get('/rates/library', AdminRatesLibrary::class)->name('rates.library');
         Route::get('/timesheets', AdminTimesheets::class)->name('timesheets');

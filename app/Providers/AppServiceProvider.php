@@ -35,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Gate::define('access-admin', fn (User $user) => $user->isAdmin());
+        Gate::define('manage-projects', fn (User $user) => $user->isManager());
         Gate::define('access-reports', fn (User $user) => $user->isManager());
 
         // Allowed to look (read-only) at another user's timesheet:

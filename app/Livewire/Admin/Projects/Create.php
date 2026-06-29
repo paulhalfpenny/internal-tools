@@ -31,9 +31,14 @@ class Create extends Component
 
     public string $budgetStartsOn = '';
 
+    public function mount(): void
+    {
+        Gate::authorize('manage-projects');
+    }
+
     public function save(): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         $this->validate([
             'clientId' => 'required|exists:clients,id',

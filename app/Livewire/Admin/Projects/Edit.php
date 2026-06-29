@@ -67,7 +67,7 @@ class Edit extends Component
 
     public function mount(Project $project): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         $this->project = $project->load(['tasks', 'users', 'asanaProjects']);
         $this->clientId = $project->client_id;
@@ -174,7 +174,7 @@ class Edit extends Component
 
     public function confirmAddUsers(): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         // Include the dropdown's current value if the admin hit Save without
         // pressing Add another first.
@@ -210,7 +210,7 @@ class Edit extends Component
 
     public function confirmRemoveUser(): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         if ($this->confirmRemoveUserId === null) {
             return;
@@ -222,7 +222,7 @@ class Edit extends Component
 
     public function removeUser(int $userId): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         // Used by tests; UI flow goes through openRemoveUserModal → confirmRemoveUser.
         $this->project->users()->detach($userId);
@@ -231,7 +231,7 @@ class Edit extends Component
 
     public function save(AsanaService $asana): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         $this->validate([
             'clientId' => 'required|exists:clients,id',
@@ -344,7 +344,7 @@ class Edit extends Component
 
     public function addAsanaBoard(): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         $gid = trim($this->pendingAsanaProjectGid);
         if ($gid === '') {
@@ -361,7 +361,7 @@ class Edit extends Component
 
     public function removeAsanaBoard(string $gid): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         $this->asanaProjectGids = array_values(array_filter(
             $this->asanaProjectGids,
@@ -371,7 +371,7 @@ class Edit extends Component
 
     public function refreshAsanaTasks(): void
     {
-        Gate::authorize('access-admin');
+        Gate::authorize('manage-projects');
 
         $authUser = $this->authUser();
         if (! $authUser->asanaConnected()) {
