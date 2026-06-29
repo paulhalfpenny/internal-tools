@@ -158,16 +158,5 @@
         </a>
 
     </div>
-
-<script>
-  window.FeedbackFlowConfig = {
-    endpoint: 'https://bugfeed.co.uk/api/feedback',
-    projectId: 'Xgd8K5hykzc3Q-MI',
-    position: 'bottom-right',
-    primaryColor: '#e1236c',
-    theme: 'dark'
-  };
-</script>
-<script src="https://bugfeed.co.uk/widget.js" defer></script>
 </body>
 </html>
