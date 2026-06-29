@@ -42,13 +42,13 @@ class Index extends Component
 
     public string $editWeeklyCapacity = '';
 
-    /** @var array<int, int|string> */
-    public array $editScheduleWorkDays = [1, 2, 3, 4, 5];
+    /** @var array<int, string> */
+    public array $editScheduleWorkDays = ['1', '2', '3', '4', '5'];
 
     /** @var array<int, int|string> */
     public array $editTeamIds = [''];
 
-    public bool $editIsContractor = false;
+    public string $editIsContractor = '0';
 
     public ?int $editReportsToUserId = null;
 
@@ -72,9 +72,11 @@ class Index extends Component
         $this->editRoleTitle = $user->role_title ?? '';
         $this->editRateId = $user->rate_id;
         $this->editWeeklyCapacity = (string) $user->weekly_capacity_hours;
-        $this->editScheduleWorkDays = $user->effectiveScheduleWorkDays();
+        $this->editScheduleWorkDays = collect($user->effectiveScheduleWorkDays())
+            ->map(fn (int $day): string => (string) $day)
+            ->all();
         $this->editTeamIds = $this->teamRowsFromIds($user->teams()->pluck('teams.id')->all());
-        $this->editIsContractor = $user->is_contractor;
+        $this->editIsContractor = $user->is_contractor ? '1' : '0';
         $this->editReportsToUserId = $user->reports_to_user_id;
         $this->editNotificationsPausedUntil = $user->notifications_paused_until?->toDateString() ?? '';
         $this->editEmailNotificationsEnabled = $user->email_notifications_enabled;
@@ -86,7 +88,7 @@ class Index extends Component
     {
         Gate::authorize('access-admin');
 
-        $this->editScheduleWorkDays = collect($this->editScheduleWorkDays)
+        $scheduleWorkDays = collect($this->editScheduleWorkDays)
             ->map(fn ($day) => (int) $day)
             ->filter(fn (int $day) => $day >= 1 && $day <= 7)
             ->unique()
@@ -101,6 +103,8 @@ class Index extends Component
             'editRateId' => 'nullable|exists:rates,id',
             'editWeeklyCapacity' => 'required|numeric|min:0|max:168',
             'editScheduleWorkDays' => 'required|array|min:1',
+            'editScheduleWorkDays.*' => 'integer|between:1,7',
+            'editIsContractor' => 'boolean',
             'editTeamIds' => 'array',
             'editTeamIds.*' => [
                 'integer',
@@ -142,8 +146,8 @@ class Index extends Component
             'role_title' => $this->editRoleTitle ?: null,
             'rate_id' => $this->editRateId,
             'weekly_capacity_hours' => (float) $this->editWeeklyCapacity,
-            'schedule_work_days' => $this->editScheduleWorkDays,
-            'is_contractor' => $this->editIsContractor,
+            'schedule_work_days' => $scheduleWorkDays,
+            'is_contractor' => $this->editIsContractor === '1',
             'reports_to_user_id' => $this->editReportsToUserId,
             'notifications_paused_until' => $this->editNotificationsPausedUntil !== '' ? $this->editNotificationsPausedUntil : null,
             'email_notifications_enabled' => $this->editEmailNotificationsEnabled,

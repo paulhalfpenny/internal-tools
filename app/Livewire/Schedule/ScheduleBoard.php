@@ -106,8 +106,8 @@ class ScheduleBoard extends Component
 
     public string $placeholderWeeklyCapacity = '40';
 
-    /** @var array<int, int|string> */
-    public array $placeholderWorkDays = [1, 2, 3, 4, 5];
+    /** @var array<int, string> */
+    public array $placeholderWorkDays = ['1', '2', '3', '4', '5'];
 
     public bool $showShiftModal = false;
 
@@ -509,7 +509,9 @@ class ScheduleBoard extends Component
         $this->placeholderName = $placeholder->name;
         $this->placeholderRoleTitle = $placeholder->role_title ?? '';
         $this->placeholderWeeklyCapacity = (string) $placeholder->weekly_capacity_hours;
-        $this->placeholderWorkDays = $placeholder->effectiveScheduleWorkDays();
+        $this->placeholderWorkDays = collect($placeholder->effectiveScheduleWorkDays())
+            ->map(fn (int $day): string => (string) $day)
+            ->all();
         $this->showPlaceholderModal = true;
     }
 
@@ -517,7 +519,7 @@ class ScheduleBoard extends Component
     {
         Gate::authorize('access-admin');
 
-        $this->placeholderWorkDays = collect($this->placeholderWorkDays)
+        $placeholderWorkDays = collect($this->placeholderWorkDays)
             ->map(fn ($day) => (int) $day)
             ->filter(fn (int $day) => $day >= 1 && $day <= 7)
             ->unique()
@@ -530,13 +532,14 @@ class ScheduleBoard extends Component
             'placeholderRoleTitle' => 'nullable|string|max:255',
             'placeholderWeeklyCapacity' => 'required|numeric|min:0|max:168',
             'placeholderWorkDays' => 'required|array|min:1',
+            'placeholderWorkDays.*' => 'integer|between:1,7',
         ]);
 
         $values = [
             'name' => $this->placeholderName,
             'role_title' => $this->placeholderRoleTitle !== '' ? $this->placeholderRoleTitle : null,
             'weekly_capacity_hours' => (float) $this->placeholderWeeklyCapacity,
-            'schedule_work_days' => $this->placeholderWorkDays,
+            'schedule_work_days' => $placeholderWorkDays,
         ];
 
         if ($this->editingPlaceholderId !== null) {
@@ -937,7 +940,7 @@ class ScheduleBoard extends Component
         $this->placeholderName = '';
         $this->placeholderRoleTitle = '';
         $this->placeholderWeeklyCapacity = '40';
-        $this->placeholderWorkDays = [1, 2, 3, 4, 5];
+        $this->placeholderWorkDays = ['1', '2', '3', '4', '5'];
         $this->resetErrorBag();
     }
 

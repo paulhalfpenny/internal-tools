@@ -200,6 +200,16 @@ test('admin creates placeholders and time off', function () {
     expect($timeOff->label)->toBe('Holiday');
 });
 
+test('placeholder modal exposes work days as checkbox option values', function () {
+    $admin = User::factory()->admin()->create();
+    $placeholder = SchedulePlaceholder::factory()->create(['schedule_work_days' => [1, 3, 5]]);
+
+    Livewire::actingAs($admin)
+        ->test(ScheduleBoard::class)
+        ->call('editPlaceholder', $placeholder->id)
+        ->assertSetStrict('placeholderWorkDays', ['1', '3', '5']);
+});
+
 test('team schedule can be filtered by role title', function () {
     $admin = User::factory()->admin()->create();
     User::factory()->create(['name' => 'Dev One', 'role_title' => 'Developer']);

@@ -27,7 +27,7 @@ class Index extends Component
 
     public string $name = '';
 
-    public bool $isBillable = true;
+    public string $isBillable = '1';
 
     public string $budgetType = '';
 
@@ -56,7 +56,7 @@ class Index extends Component
             'client_id' => (int) $this->clientId,
             'code' => $this->code,
             'name' => $this->name,
-            'is_billable' => $this->isBillable,
+            'is_billable' => $this->isBillable === '1',
             'budget_type' => $this->budgetType !== '' ? BudgetType::from($this->budgetType) : null,
             'budget_amount' => $this->budgetType !== '' && $this->budgetAmount !== '' ? (float) $this->budgetAmount : null,
             'budget_hours' => $this->budgetType !== '' && $this->budgetHours !== '' ? (float) $this->budgetHours : null,

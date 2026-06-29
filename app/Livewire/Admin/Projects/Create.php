@@ -19,7 +19,7 @@ class Create extends Component
 
     public string $name = '';
 
-    public bool $isBillable = true;
+    public string $isBillable = '1';
 
     public string $defaultRate = '';
 
@@ -51,7 +51,7 @@ class Create extends Component
             'client_id' => (int) $this->clientId,
             'code' => $this->code,
             'name' => $this->name,
-            'is_billable' => $this->isBillable,
+            'is_billable' => $this->isBillable === '1',
             'default_hourly_rate' => $this->defaultRate !== '' ? (float) $this->defaultRate : null,
             'budget_type' => $this->budgetType !== '' ? BudgetType::from($this->budgetType) : null,
             'budget_amount' => $this->budgetType !== '' && $this->budgetAmount !== '' ? (float) $this->budgetAmount : null,

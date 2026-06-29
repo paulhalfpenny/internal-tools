@@ -28,7 +28,7 @@ class Index extends Component
 
     public string $editCode = '';
 
-    /** @var array<int, int> */
+    /** @var array<int, string> */
     public array $editDefaultTaskIds = [];
 
     public function create(): void
@@ -57,7 +57,10 @@ class Index extends Component
         $this->editingId = $clientId;
         $this->editName = $client->name;
         $this->editCode = $client->code ?? '';
-        $this->editDefaultTaskIds = $client->defaultTasks->pluck('id')->all();
+        $this->editDefaultTaskIds = $client->defaultTasks
+            ->pluck('id')
+            ->map(fn (int $id): string => (string) $id)
+            ->all();
     }
 
     public function save(): void

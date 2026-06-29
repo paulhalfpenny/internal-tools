@@ -52,7 +52,27 @@ test('edit sets editingId and populates fields', function () {
         ->assertSet('editRoleTitle', 'Designer')
         ->assertSet('editRateId', $rate->id)
         ->assertSet('editWeeklyCapacity', '37.50')
-        ->assertSet('editIsContractor', false);
+        ->assertSet('editIsContractor', '0');
+});
+
+test('user edit exposes employment type as select option value', function () {
+    $admin = User::factory()->admin()->create();
+    $contractor = User::factory()->create(['is_contractor' => true]);
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->call('edit', $contractor->id)
+        ->assertSetStrict('editIsContractor', '1');
+});
+
+test('user edit exposes schedule work days as checkbox option values', function () {
+    $admin = User::factory()->admin()->create();
+    $other = User::factory()->create(['schedule_work_days' => [1, 3, 5]]);
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->call('edit', $other->id)
+        ->assertSetStrict('editScheduleWorkDays', ['1', '3', '5']);
 });
 
 test('cancel clears editingId', function () {

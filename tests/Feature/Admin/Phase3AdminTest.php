@@ -2,6 +2,7 @@
 
 use App\Enums\Role;
 use App\Livewire\Admin\Clients\Index as AdminClients;
+use App\Livewire\Admin\Projects\Create as AdminProjectCreate;
 use App\Livewire\Admin\Projects\Edit as AdminProjectEdit;
 use App\Livewire\Admin\Projects\Index as AdminProjects;
 use App\Livewire\Admin\Users\Index as AdminUsers;
@@ -44,6 +45,23 @@ test('clients search filters by name', function () {
         ->set('search', 'acm')
         ->assertSee('Acme')
         ->assertDontSee('Beta');
+});
+
+test('client edit exposes default task ids as checkbox option values', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $this->actingAs($admin);
+
+    $client = Client::factory()->create();
+    $defaultA = Task::factory()->create();
+    $defaultB = Task::factory()->create();
+    $client->defaultTasks()->attach([
+        $defaultA->id => ['sort_order' => 0],
+        $defaultB->id => ['sort_order' => 1],
+    ]);
+
+    Livewire::test(AdminClients::class)
+        ->call('edit', $client->id)
+        ->assertSetStrict('editDefaultTaskIds', [(string) $defaultA->id, (string) $defaultB->id]);
 });
 
 test('user edit can flip employment between Employee and Contractor via select', function () {
@@ -163,6 +181,17 @@ test('project edit exposes non billable value as select option value', function 
         ->assertSetStrict('isBillable', '0');
 });
 
+test('project create forms expose billable value as select option value', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $this->actingAs($admin);
+
+    Livewire::test(AdminProjects::class)
+        ->assertSetStrict('isBillable', '1');
+
+    Livewire::test(AdminProjectCreate::class)
+        ->assertSetStrict('isBillable', '1');
+});
+
 test('saving a project with an Asana gid that another project already uses returns a validation error, not a 500', function () {
     $admin = User::factory()->create(['role' => Role::Admin]);
     $this->actingAs($admin);
@@ -201,7 +230,7 @@ test('creating a project for a client pre-attaches the clients default tasks', f
         ->set('clientId', $client->id)
         ->set('code', 'NEW-001')
         ->set('name', 'New project')
-        ->set('isBillable', true)
+        ->set('isBillable', '1')
         ->call('save');
 
     $project = Project::where('code', 'NEW-001')->firstOrFail();
