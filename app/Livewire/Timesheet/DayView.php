@@ -6,6 +6,7 @@ use App\Domain\TimeTracking\CalendarEventAssociationService;
 use App\Domain\TimeTracking\HoursFormatter;
 use App\Domain\TimeTracking\HoursParser;
 use App\Domain\TimeTracking\TimeEntryService;
+use App\Models\AsanaProject;
 use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\Task;
@@ -643,7 +644,7 @@ class DayView extends Component
             ->values()
             ->all();
 
-        $asanaProjectNames = \App\Models\AsanaProject::query()
+        $asanaProjectNames = AsanaProject::query()
             ->whereIn('gid', $linkedAsanaProjectGids)
             ->pluck('name', 'gid');
 

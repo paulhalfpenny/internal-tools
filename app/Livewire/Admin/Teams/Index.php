@@ -4,6 +4,7 @@ namespace App\Livewire\Admin\Teams;
 
 use App\Models\Team;
 use App\Models\User;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -248,9 +249,9 @@ class Index extends Component
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, User>  $users
+     * @param  Collection<int, User>  $users
      * @param  array<int, int>  $selectedIds
-     * @return \Illuminate\Support\Collection<int, User>
+     * @return Collection<int, User>
      */
     private function availableUsers($users, array $selectedIds, string $search)
     {
