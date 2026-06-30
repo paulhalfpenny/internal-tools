@@ -1,12 +1,14 @@
 <?php
 
 use App\Domain\TimeTracking\TimeEntryService;
+use App\Livewire\Timesheet\DayView;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
@@ -130,6 +132,23 @@ test('timer state persists across simulated page reloads', function () {
 
     expect($reloaded?->is_running)->toBeTrue()
         ->and($reloaded?->timer_started_at)->not->toBeNull();
+});
+
+test('day view renders elapsed time for a running timer', function () {
+    Carbon::setTestNow(Carbon::parse('2026-06-30 10:00:00'));
+
+    try {
+        [$user, $project, $task] = makeUserWithBillableProject();
+        $entry = makeEntry($user, $project, $task, 0.25);
+        putRunning($entry, Carbon::parse('2026-06-30 09:15:00'));
+
+        $this->actingAs($user);
+
+        Livewire::test(DayView::class)
+            ->assertSeeInOrder(['Running', '1:00']);
+    } finally {
+        Carbon::setTestNow();
+    }
 });
 
 // ─── at-most-one-running-timer enforcement ──────────────────────────────────

@@ -14,9 +14,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\Asana\AsanaService;
 use Illuminate\Database\Eloquent\Relations\Pivot;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -250,11 +248,7 @@ class Edit extends Component
                 'string',
                 'distinct',
                 'exists:asana_projects,gid',
-                Rule::unique('project_asana_links', 'asana_project_gid')
-                    ->where(fn ($q) => $q->where('project_id', '!=', $this->project->id)),
             ],
-        ], [
-            'asanaProjectGids.*.unique' => 'One of the selected Asana boards is already linked to another project.',
         ]);
 
         $previousGids = $this->project->asanaProjects()->pluck('gid')->all();
@@ -393,18 +387,10 @@ class Edit extends Component
         $authUser = $this->authUser();
         $workspaceGid = $authUser->asana_workspace_gid;
 
-        // Boards already linked to *another* project should be hidden from the picker;
-        // boards linked to this project must still appear so the current selection
-        // can be re-rendered.
-        $linkedToOtherGids = DB::table('project_asana_links')
-            ->where('project_id', '!=', $this->project->id)
-            ->pluck('asana_project_gid');
-
         $asanaProjects = $workspaceGid !== null
             ? AsanaProject::query()
                 ->where('workspace_gid', $workspaceGid)
                 ->where('is_archived', false)
-                ->whereNotIn('gid', $linkedToOtherGids)
                 ->orderBy('name')
                 ->get()
             : collect();

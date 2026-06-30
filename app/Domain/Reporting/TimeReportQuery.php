@@ -152,10 +152,8 @@ final class TimeReportQuery
     private function baseQuery(): Builder
     {
         $query = TimeEntry::query()
-            ->whereBetween('time_entries.spent_on', [
-                $this->from->toDateString(),
-                $this->to->toDateString(),
-            ]);
+            ->where('time_entries.spent_on', '>=', $this->from->toDateString())
+            ->where('time_entries.spent_on', '<', $this->to->addDay()->toDateString());
 
         if ($this->userId !== null) {
             $query->where('time_entries.user_id', $this->userId);

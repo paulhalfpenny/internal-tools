@@ -21,6 +21,9 @@
     @if(session('week_saved'))
         <div class="mb-4 px-4 py-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">Saved.</div>
     @endif
+    @if(session('copy_rows_message'))
+        <div class="mb-4 px-4 py-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">{{ session('copy_rows_message') }}</div>
+    @endif
 
     {{-- Day header --}}
     <div class="flex items-center justify-between mb-4">
@@ -198,6 +201,15 @@
 
     @unless($isReadOnly)
         <div class="mt-4 flex items-center gap-3">
+            @if($canCopyRowsFromPriorWeek)
+                <button wire:click="copyRowsFromMostRecentWeek"
+                        class="inline-flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/>
+                    </svg>
+                    Copy rows from most recent week
+                </button>
+            @endif
             <button wire:click="openAddRowModal"
                     class="inline-flex items-center gap-1.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
@@ -285,25 +297,31 @@
                         filtered.forEach(p => { (groups[p.client_name || '—'] ??= []).push(p); });
                         return Object.entries(groups).sort(([a],[b]) => a.localeCompare(b));
                     },
+                    closePickers() {
+                        this.projectOpen = false;
+                        this.taskOpen = false;
+                        this.asanaTaskOpen = false;
+                    },
                     pickProject(id) {
                         this.selectedProjectId = id;
                         this.selectedTaskId = null;
                         this.selectedAsanaTaskGid = '';
+                        this.projectSearch = '';
+                        this.closePickers();
                         $wire.set('newRowProjectId', id);
                         $wire.set('newRowTaskId', null);
                         $wire.set('newRowAsanaTaskGid', '');
-                        this.projectSearch = '';
-                        this.projectOpen = false;
                     },
                     pickTask(id) {
                         this.selectedTaskId = id;
+                        this.closePickers();
                         $wire.set('newRowTaskId', id);
-                        this.taskOpen = false;
                     },
                     pickAsanaTask(gid) {
                         this.selectedAsanaTaskGid = gid;
+                        this.asanaTaskSearch = '';
+                        this.closePickers();
                         $wire.set('newRowAsanaTaskGid', gid);
-                        this.asanaTaskOpen = false;
                     },
                 }"
                 @click.stop
@@ -334,7 +352,7 @@
                     <div class="relative z-30">
                         <button
                             type="button"
-                            @click="projectOpen = !projectOpen; taskOpen = false"
+                            @click="projectOpen = !projectOpen; taskOpen = false; asanaTaskOpen = false"
                             class="w-full flex items-center justify-between border border-gray-300 rounded-lg px-4 py-3 text-left bg-white hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500"
                         >
                             <template x-if="selectedProject">
@@ -408,7 +426,7 @@
                                 <div>
                                     <button
                                         type="button"
-                                        @click="asanaTaskOpen = !asanaTaskOpen"
+                                        @click="asanaTaskOpen = !asanaTaskOpen; projectOpen = false; taskOpen = false"
                                         class="w-full flex items-center justify-between border border-gray-300 rounded-lg px-4 py-2.5 text-left bg-white hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500"
                                     >
                                         <template x-if="selectedAsanaTask">
@@ -474,7 +492,7 @@
                     <div class="relative z-10">
                         <button
                             type="button"
-                            @click="if (selectedProjectId) { taskOpen = !taskOpen; projectOpen = false; }"
+                            @click="if (selectedProjectId) { taskOpen = !taskOpen; projectOpen = false; asanaTaskOpen = false; }"
                             :class="selectedProjectId ? 'border-gray-300 bg-white hover:border-gray-400' : 'border-gray-200 bg-gray-50 cursor-not-allowed'"
                             class="w-full flex items-center justify-between border rounded-lg px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-green-500"
                         >

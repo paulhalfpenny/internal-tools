@@ -140,4 +140,18 @@ final class TimeEntryService
             'billable_amount' => $resolution->billableAmount,
         ]);
     }
+
+    public function currentHours(TimeEntry $entry, ?Carbon $now = null): float
+    {
+        $hours = (float) $entry->hours;
+
+        if (! $entry->is_running || $entry->timer_started_at === null) {
+            return $hours;
+        }
+
+        $elapsedSeconds = $entry->timer_started_at->diffInSeconds($now ?? Carbon::now(), false);
+        $elapsedHours = max(0.0, $elapsedSeconds) / 3600;
+
+        return min(24.0, $hours + $elapsedHours);
+    }
 }

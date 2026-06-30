@@ -239,7 +239,7 @@ test('project create forms expose billable value as select option value', functi
         ->assertSetStrict('isBillable', '1');
 });
 
-test('saving a project with an Asana gid that another project already uses returns a validation error, not a 500', function () {
+test('saving a project with an Asana gid that another project already uses links both projects', function () {
     $admin = User::factory()->create(['role' => Role::Admin]);
     $this->actingAs($admin);
 
@@ -258,9 +258,9 @@ test('saving a project with an Asana gid that another project already uses retur
     Livewire::test(AdminProjectEdit::class, ['project' => $target])
         ->set('asanaProjectGids', ['shared-gid'])
         ->call('save')
-        ->assertHasErrors(['asanaProjectGids.0']);
+        ->assertHasNoErrors();
 
-    expect($target->fresh()->asanaProjects()->count())->toBe(0);
+    expect($target->fresh()->asanaProjects()->pluck('gid')->all())->toBe(['shared-gid']);
     expect($taken->fresh()->asanaProjects()->pluck('gid')->all())->toBe(['shared-gid']);
 });
 

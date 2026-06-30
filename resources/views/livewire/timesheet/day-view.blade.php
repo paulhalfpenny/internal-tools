@@ -235,7 +235,7 @@
                                 Running
                             </span>
                         @endif
-                        <span class="text-gray-700 font-medium tabular-nums">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) $entry->hours) }}</span>
+                        <span class="text-gray-700 font-medium tabular-nums">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) ($entryDisplayHours[$entry->id] ?? $entry->hours)) }}</span>
                     </div>
 
                     {{-- Actions --}}
@@ -478,25 +478,31 @@
                         filtered.forEach(p => { (groups[p.client_name] ??= []).push(p); });
                         return Object.entries(groups).sort(([a],[b]) => a.localeCompare(b));
                     },
+                    closePickers() {
+                        this.projectOpen = false;
+                        this.taskOpen = false;
+                        this.asanaTaskOpen = false;
+                    },
                     pickProject(id) {
                         this.selectedProjectId = id;
                         this.selectedTaskId = null;
                         this.selectedAsanaTaskGid = '';
+                        this.projectSearch = '';
+                        this.closePickers();
                         $wire.selectedProjectId = id;
                         $wire.selectedTaskId = null;
                         $wire.selectedAsanaTaskGid = '';
-                        this.projectSearch = '';
-                        this.projectOpen = false;
                     },
                     pickTask(id) {
                         this.selectedTaskId = id;
+                        this.closePickers();
                         $wire.selectedTaskId = id;
-                        this.taskOpen = false;
                     },
                     pickAsanaTask(gid) {
                         this.selectedAsanaTaskGid = gid;
+                        this.asanaTaskSearch = '';
+                        this.closePickers();
                         $wire.selectedAsanaTaskGid = gid;
-                        this.asanaTaskOpen = false;
                     },
                     doSave(isTimer) {
                         isTimer ? $wire.startTimerFromModal() : $wire.save();
@@ -537,7 +543,7 @@
                     <div class="relative z-30">
                         <button
                             type="button"
-                            @click="projectOpen = !projectOpen; taskOpen = false"
+                            @click="projectOpen = !projectOpen; taskOpen = false; asanaTaskOpen = false"
                             class="w-full flex items-center justify-between border border-gray-300 rounded-lg px-4 py-3 text-left bg-white hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500"
                         >
                             <template x-if="selectedProject">
@@ -611,7 +617,7 @@
                                 <div>
                                     <button
                                         type="button"
-                                        @click="asanaTaskOpen = !asanaTaskOpen"
+                                        @click="asanaTaskOpen = !asanaTaskOpen; projectOpen = false; taskOpen = false"
                                         class="w-full flex items-center justify-between border border-gray-300 rounded-lg px-4 py-2.5 text-left bg-white hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500"
                                     >
                                         <template x-if="selectedAsanaTask">
@@ -686,7 +692,7 @@
                     <div class="relative z-10">
                         <button
                             type="button"
-                            @click="if (selectedProjectId) { taskOpen = !taskOpen; projectOpen = false; }"
+                            @click="if (selectedProjectId) { taskOpen = !taskOpen; projectOpen = false; asanaTaskOpen = false; }"
                             :class="selectedProjectId ? 'border-gray-300 bg-white hover:border-gray-400' : 'border-gray-200 bg-gray-50 cursor-not-allowed'"
                             class="w-full flex items-center justify-between border rounded-lg px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-green-500"
                         >

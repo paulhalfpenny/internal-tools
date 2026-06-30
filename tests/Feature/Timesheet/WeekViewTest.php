@@ -8,6 +8,7 @@ use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -86,6 +87,39 @@ test('addRow flow appends an empty row to the timesheet', function () {
         ->call('addRow')
         ->assertSet('showAddRowModal', false)
         ->assertSet('extraRows.0', $project->id.':'.$task->id.':');
+});
+
+test('copy rows from most recent week adds blank rows without creating entries', function () {
+    [$user, $project, $task] = weekViewSetup();
+    $this->actingAs($user);
+
+    $sourceWeekStart = Carbon::parse('2026-06-16')->startOfWeek();
+    app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => $sourceWeekStart->toDateString(),
+        'hours' => 1.0,
+        'notes' => null,
+    ]);
+    app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => $sourceWeekStart->copy()->addDays(2)->toDateString(),
+        'hours' => 2.0,
+        'notes' => null,
+    ]);
+
+    $rowKey = $project->id.':'.$task->id.':';
+
+    Livewire::test(WeekView::class)
+        ->set('selectedDate', '2026-06-30')
+        ->assertSee('Copy rows from most recent week')
+        ->call('copyRowsFromMostRecentWeek')
+        ->assertSet('extraRows.0', $rowKey)
+        ->assertSet("cellValues.{$rowKey}", ['', '', '', '', '', '', ''])
+        ->assertSee('Copied 1 row from week of');
+
+    expect(TimeEntry::count())->toBe(2);
 });
 
 test('removeRow deletes the row plus any of its entries this week', function () {

@@ -111,6 +111,21 @@ test('totals excludes entries outside the date range', function () {
     expect($totals->totalHours)->toBe(2.0);
 });
 
+test('totals includes entries on the final date of the range', function () {
+    $user = User::factory()->create();
+    $project = Project::factory()->create([]);
+    $task = Task::factory()->create();
+
+    entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 2.5, 'spent_on' => '2026-04-30']);
+
+    $totals = (new TimeReportQuery(
+        from: CarbonImmutable::parse('2026-04-01'),
+        to: CarbonImmutable::parse('2026-04-30'),
+    ))->totals();
+
+    expect($totals->totalHours)->toBe(2.5);
+});
+
 // ─── groupBy ────────────────────────────────────────────────────────────────
 
 test('groupBy Client aggregates correctly', function () {

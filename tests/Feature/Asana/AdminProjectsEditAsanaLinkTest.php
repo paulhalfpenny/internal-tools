@@ -110,6 +110,40 @@ test('linking to multiple Asana boards persists every link and dispatches a pull
     Bus::assertDispatched(PullAsanaTasksJob::class, fn ($j) => $j->asanaProjectGid === 'AP2');
 });
 
+test('one Asana board can be linked to multiple internal projects', function () {
+    config([
+        'services.asana.client_id' => 'c',
+        'services.asana.client_secret' => 's',
+        'services.asana.redirect' => 'http://localhost/cb',
+        'services.asana.custom_field_name' => 'Hours tracked (Internal Tools)',
+    ]);
+
+    Bus::fake([PullAsanaTasksJob::class]);
+    Http::fake([
+        'app.asana.com/api/1.0/projects/AP1/custom_field_settings*' => Http::response(['data' => []]),
+        'app.asana.com/api/1.0/workspaces/WS1/custom_fields*' => Http::response(['data' => [['gid' => 'CF1', 'name' => 'Hours tracked (Internal Tools)']]]),
+    ]);
+
+    $admin = asanaTestAdminWithAsana();
+    AsanaProject::create(['gid' => 'AP1', 'workspace_gid' => 'WS1', 'name' => 'Shared Asana Board', 'is_archived' => false]);
+    $sourceProject = Project::factory()->create();
+    $sourceProject->asanaProjects()->attach('AP1', ['asana_custom_field_gid' => 'CF1']);
+    $targetProject = Project::factory()->create();
+
+    $this->actingAs($admin);
+
+    Livewire::test(Edit::class, ['project' => $targetProject])
+        ->assertSee('Shared Asana Board')
+        ->set('asanaProjectGids', ['AP1'])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($sourceProject->fresh()->asanaProjects()->pluck('gid')->all())->toBe(['AP1']);
+    expect($targetProject->fresh()->asanaProjects()->pluck('gid')->all())->toBe(['AP1']);
+
+    Bus::assertDispatched(PullAsanaTasksJob::class, fn ($j) => $j->asanaProjectGid === 'AP1');
+});
+
 test('asana_task_required toggle persists from the project edit form', function () {
     config(['services.asana.custom_field_name' => 'Hours tracked (Internal Tools)']);
 

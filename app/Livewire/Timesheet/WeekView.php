@@ -223,6 +223,100 @@ class WeekView extends Component
         $this->closeAddRowModal();
     }
 
+    public function copyRowsFromMostRecentWeek(): void
+    {
+        if ($this->isReadOnly || $this->cellValues !== []) {
+            return;
+        }
+
+        $user = $this->viewedUser();
+        $weekStart = CarbonImmutable::parse($this->selectedDate)->startOfWeek();
+        $weekEnd = $weekStart->addDays(6);
+
+        $alreadyHasEntries = TimeEntry::where('user_id', $user->id)
+            ->whereBetween('spent_on', [$weekStart->toDateString(), $weekEnd->toDateString()])
+            ->exists();
+        if ($alreadyHasEntries) {
+            return;
+        }
+
+        $mostRecentPrior = TimeEntry::where('user_id', $user->id)
+            ->where('spent_on', '<', $weekStart->toDateString())
+            ->orderByDesc('spent_on')
+            ->value('spent_on');
+
+        if (! $mostRecentPrior) {
+            return;
+        }
+
+        $sourceWeekStart = CarbonImmutable::parse($mostRecentPrior)->startOfWeek();
+        $sourceWeekEnd = $sourceWeekStart->addDays(6);
+        $sourceEntries = TimeEntry::with(['project.tasks', 'project.users', 'project.asanaProjects'])
+            ->where('user_id', $user->id)
+            ->whereBetween('spent_on', [$sourceWeekStart->toDateString(), $sourceWeekEnd->toDateString()])
+            ->orderBy('created_at')
+            ->get();
+
+        $copied = 0;
+        $skippedMissingAsanaTask = 0;
+
+        foreach ($sourceEntries as $source) {
+            $project = $source->project;
+            if ($project->is_archived) {
+                continue;
+            }
+            if (! $project->users->contains('id', $user->id)) {
+                continue;
+            }
+            if (! $project->tasks->contains('id', $source->task_id)) {
+                continue;
+            }
+
+            $asanaGid = $source->asana_task_gid;
+            if ($project->asanaLinked()) {
+                $linkedBoardGids = $project->asanaProjects->pluck('gid')->all();
+
+                if ($asanaGid !== null) {
+                    $stillValid = AsanaTask::where('gid', $asanaGid)
+                        ->whereIn('asana_project_gid', $linkedBoardGids)
+                        ->exists();
+                    if (! $stillValid) {
+                        $asanaGid = null;
+                    }
+                }
+
+                if ($asanaGid === null && (bool) $project->asana_task_required) {
+                    $skippedMissingAsanaTask++;
+
+                    continue;
+                }
+            } else {
+                $asanaGid = null;
+            }
+
+            $key = $this->buildRowKey($source->project_id, $source->task_id, $asanaGid);
+            if (isset($this->cellValues[$key])) {
+                continue;
+            }
+
+            $this->extraRows[] = $key;
+            $this->cellValues[$key] = array_fill(0, 7, '');
+            $copied++;
+        }
+
+        $sourceWeekLabel = $sourceWeekStart->format('j M Y');
+        if ($copied > 0) {
+            $message = 'Copied '.$copied.' row'.($copied === 1 ? '' : 's').' from week of '.$sourceWeekLabel.'.';
+            if ($skippedMissingAsanaTask > 0) {
+                $message .= ' '.$skippedMissingAsanaTask.' row'.($skippedMissingAsanaTask === 1 ? '' : 's')
+                    .' '.($skippedMissingAsanaTask === 1 ? 'needs' : 'need').' an Asana task and can be added manually.';
+            }
+            session()->flash('copy_rows_message', $message);
+        } else {
+            session()->flash('copy_rows_message', 'No rows could be copied from week of '.$sourceWeekLabel.'.');
+        }
+    }
+
     private function asanaIntegrationAvailable(): bool
     {
         return User::query()
@@ -448,6 +542,12 @@ class WeekView extends Component
             ->values()
             ->all();
 
+        $canCopyRowsFromPriorWeek = ! $this->isReadOnly
+            && $sortedRows === []
+            && TimeEntry::where('user_id', $user->id)
+                ->where('spent_on', '<', $weekStart->toDateString())
+                ->exists();
+
         // Per-day totals across all rows (live: derived from $cellValues, not DB).
         $dayTotals = array_fill(0, 7, 0.0);
         foreach ($this->cellValues as $perDay) {
@@ -509,6 +609,7 @@ class WeekView extends Component
             'asanaTasksByProject' => $asanaTasksByProject,
             'asanaAvailable' => $this->asanaIntegrationAvailable(),
             'teamMembers' => $teamMembers,
+            'canCopyRowsFromPriorWeek' => $canCopyRowsFromPriorWeek,
             'viewedUser' => $user,
         ]);
     }

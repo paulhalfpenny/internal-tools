@@ -186,7 +186,7 @@
                         </button>
                     </div>
                     @if($availableBoards->isEmpty() && $linkedBoards->isNotEmpty())
-                        <p class="text-xs text-gray-400 mt-2">All available Asana boards in your workspace are already linked.</p>
+                        <p class="text-xs text-gray-400 mt-2">All cached Asana boards in your workspace are already linked to this project.</p>
                     @endif
 
                     @error('asanaProjectGids.*')<p class="text-red-600 text-xs mt-2">{{ $message }}</p>@enderror

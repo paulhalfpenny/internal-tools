@@ -579,6 +579,8 @@ class DayView extends Component
     public function render(): View
     {
         $user = $this->viewedUser();
+        $timeEntryService = app(TimeEntryService::class);
+        $currentHours = fn (TimeEntry $entry): float => $timeEntryService->currentHours($entry);
 
         $selectedDay = CarbonImmutable::parse($this->selectedDate);
         $weekStart = $selectedDay->startOfWeek(); // Monday
@@ -588,13 +590,13 @@ class DayView extends Component
 
         $weekEntries = TimeEntry::where('user_id', $user->id)
             ->whereBetween('spent_on', [$weekStart->toDateString(), $weekStart->addDays(6)->toDateString()])
-            ->select(['spent_on', 'hours'])
+            ->select(['spent_on', 'hours', 'is_running', 'timer_started_at'])
             ->get();
 
         $dayTotals = $weekEntries->groupBy(fn (TimeEntry $e) => $e->spent_on->toDateString())
-            ->map(fn (Collection $group) => $group->sum(fn (TimeEntry $e) => (float) $e->hours));
+            ->map(fn (Collection $group) => $group->sum($currentHours));
 
-        $weekTotal = $weekEntries->sum(fn (TimeEntry $e) => (float) $e->hours);
+        $weekTotal = $weekEntries->sum($currentHours);
 
         // Entries for the selected day. whereDate() instead of where() to keep
         // matching when spent_on is stored as a full datetime (MySQL DATE columns
@@ -605,7 +607,11 @@ class DayView extends Component
             ->orderBy('created_at')
             ->get();
 
-        $dayTotal = $dayEntries->sum(fn (TimeEntry $e) => (float) $e->hours);
+        $entryDisplayHours = $dayEntries
+            ->mapWithKeys(fn (TimeEntry $entry) => [$entry->id => $currentHours($entry)])
+            ->all();
+
+        $dayTotal = array_sum($entryDisplayHours);
 
         /** @var array<int, array{id: int, name: string, client_name: string, asana_project_gids: array<int, string>, asana_task_required: bool, tasks: array<int, array{id: int, name: string, colour: string, is_billable: bool}>}> $projectsForPicker */
         $projectsForPicker = Cache::remember(
@@ -715,6 +721,7 @@ class DayView extends Component
             'dayTotals' => $dayTotals,
             'weekTotal' => $weekTotal,
             'dayEntries' => $dayEntries,
+            'entryDisplayHours' => $entryDisplayHours,
             'dayTotal' => $dayTotal,
             'canCopyFromPrior' => $canCopyFromPrior,
             'projectsForPicker' => $projectsForPicker,
