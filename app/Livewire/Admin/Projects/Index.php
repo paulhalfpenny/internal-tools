@@ -151,18 +151,23 @@ class Index extends Component
 
     public function render(): View
     {
-        $query = Project::with('client')->orderBy('name');
+        $query = Project::query()
+            ->select('projects.*')
+            ->with('client')
+            ->join('clients', 'clients.id', '=', 'projects.client_id')
+            ->orderBy('clients.name')
+            ->orderBy('projects.name');
 
         if (! $this->showArchived) {
-            $query->where('is_archived', false);
+            $query->where('projects.is_archived', false);
         }
 
         $term = trim($this->search);
         if ($term !== '') {
             $query->where(function ($q) use ($term) {
-                $q->where('name', 'like', "%{$term}%")
-                    ->orWhere('code', 'like', "%{$term}%")
-                    ->orWhereHas('client', fn ($c) => $c->where('name', 'like', "%{$term}%"));
+                $q->where('projects.name', 'like', "%{$term}%")
+                    ->orWhere('projects.code', 'like', "%{$term}%")
+                    ->orWhere('clients.name', 'like', "%{$term}%");
             });
         }
 

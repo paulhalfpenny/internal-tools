@@ -34,6 +34,25 @@ test('projects search filters by name, code and client name', function () {
         ->assertDontSee('Unrelated Build');
 });
 
+test('projects index sorts projects by client name then project name', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $this->actingAs($admin);
+
+    $alphaClient = Client::factory()->create(['name' => 'Alpha Client']);
+    $betaClient = Client::factory()->create(['name' => 'Beta Client']);
+
+    Project::factory()->create(['client_id' => $betaClient->id, 'name' => 'Alpha Build', 'code' => 'BET-ALPHA']);
+    Project::factory()->create(['client_id' => $alphaClient->id, 'name' => 'Zulu Build', 'code' => 'ALP-ZULU']);
+    Project::factory()->create(['client_id' => $alphaClient->id, 'name' => 'Apple Build', 'code' => 'ALP-APPLE']);
+
+    Livewire::test(AdminProjects::class)
+        ->assertSeeInOrder([
+            'Apple Build',
+            'Zulu Build',
+            'Alpha Build',
+        ]);
+});
+
 test('managers can access the admin projects area but not other admin areas', function () {
     $manager = User::factory()->create(['role' => Role::Manager]);
     $regularUser = User::factory()->create(['role' => Role::User]);
