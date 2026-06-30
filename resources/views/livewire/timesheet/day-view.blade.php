@@ -408,6 +408,7 @@
                     asanaTaskOpen: false,
                     asanaTaskSearch: '',
                     projectSearch: '',
+                    taskSearch: '',
                     selectedProjectId: $wire.selectedProjectId,
                     selectedTaskId: $wire.selectedTaskId,
                     selectedAsanaTaskGid: $wire.selectedAsanaTaskGid ?? '',
@@ -429,6 +430,7 @@
                                 this.taskOpen = false;
                                 this.asanaTaskOpen = false;
                                 this.projectSearch = '';
+                                this.taskSearch = '';
                                 this.asanaTaskSearch = '';
                             }
                         });
@@ -438,6 +440,21 @@
                     },
                     get selectedTask() {
                         return this.selectedProject?.tasks.find(t => t.id === this.selectedTaskId) ?? null;
+                    },
+                    get filteredTasks() {
+                        const tasks = this.selectedProject?.tasks ?? [];
+                        const q = this.taskSearch.toLowerCase();
+                        const filtered = q
+                            ? tasks.filter(t => t.name.toLowerCase().includes(q))
+                            : tasks;
+
+                        return [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+                    },
+                    get filteredBillableTasks() {
+                        return this.filteredTasks.filter(t => t.is_billable);
+                    },
+                    get filteredNonBillableTasks() {
+                        return this.filteredTasks.filter(t => !t.is_billable);
                     },
                     get asanaBoardGids() {
                         return this.selectedProject?.asana_project_gids ?? [];
@@ -488,6 +505,7 @@
                         this.selectedTaskId = null;
                         this.selectedAsanaTaskGid = '';
                         this.projectSearch = '';
+                        this.taskSearch = '';
                         this.closePickers();
                         $wire.selectedProjectId = id;
                         $wire.selectedTaskId = null;
@@ -495,6 +513,7 @@
                     },
                     pickTask(id) {
                         this.selectedTaskId = id;
+                        this.taskSearch = '';
                         this.closePickers();
                         $wire.selectedTaskId = id;
                     },
@@ -692,7 +711,7 @@
                     <div class="relative z-10">
                         <button
                             type="button"
-                            @click="if (selectedProjectId) { taskOpen = !taskOpen; projectOpen = false; asanaTaskOpen = false; }"
+                            @click="if (selectedProjectId) { taskOpen = !taskOpen; projectOpen = false; asanaTaskOpen = false; if (taskOpen) taskSearch = ''; }"
                             :class="selectedProjectId ? 'border-gray-300 bg-white hover:border-gray-400' : 'border-gray-200 bg-gray-50 cursor-not-allowed'"
                             class="w-full flex items-center justify-between border rounded-lg px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-green-500"
                         >
@@ -719,13 +738,25 @@
                             class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
                             style="display: none"
                         >
+                            <div class="p-2 border-b border-gray-100">
+                                <input
+                                    type="text"
+                                    x-model="taskSearch"
+                                    placeholder="Search tasks…"
+                                    class="w-full text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    x-init="$el.focus()"
+                                />
+                            </div>
                             <div class="max-h-60 overflow-y-auto py-1">
                                 <template x-if="selectedProject">
                                     <div>
-                                        <template x-if="selectedProject.tasks.filter(t => t.is_billable).length > 0">
+                                        <template x-if="selectedProject.tasks.length > 0 && filteredTasks.length === 0">
+                                            <p class="text-sm text-gray-400 px-3 py-4 text-center">No tasks match.</p>
+                                        </template>
+                                        <template x-if="filteredBillableTasks.length > 0">
                                             <div>
                                                 <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 py-1.5">Billable</div>
-                                                <template x-for="task in [...selectedProject.tasks].filter(t => t.is_billable).sort((a,b) => a.name.localeCompare(b.name))" :key="task.id">
+                                                <template x-for="task in filteredBillableTasks" :key="task.id">
                                                     <button type="button" @click="pickTask(task.id)"
                                                         class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-green-50 hover:text-green-700 transition flex items-center gap-2">
                                                         <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="'background:' + task.colour"></span>
@@ -734,10 +765,10 @@
                                                 </template>
                                             </div>
                                         </template>
-                                        <template x-if="selectedProject.tasks.filter(t => !t.is_billable).length > 0">
+                                        <template x-if="filteredNonBillableTasks.length > 0">
                                             <div>
                                                 <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 py-1.5">Non-billable</div>
-                                                <template x-for="task in [...selectedProject.tasks].filter(t => !t.is_billable).sort((a,b) => a.name.localeCompare(b.name))" :key="task.id">
+                                                <template x-for="task in filteredNonBillableTasks" :key="task.id">
                                                     <button type="button" @click="pickTask(task.id)"
                                                         class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-50 hover:text-gray-700 transition flex items-center gap-2">
                                                         <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="'background:' + task.colour"></span>

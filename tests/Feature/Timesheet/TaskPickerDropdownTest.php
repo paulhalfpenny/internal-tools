@@ -46,6 +46,19 @@ function assertTaskPickerClosesBeforeLivewireSync(string $html, string $wireSync
     expect($closePosition)->toBeLessThan($wirePosition);
 }
 
+function assertTaskPickerHasSearch(string $html): void
+{
+    $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5);
+
+    expect($html)
+        ->toContain("taskSearch: ''")
+        ->toContain('x-model="taskSearch"')
+        ->toContain('placeholder="Search tasks…"')
+        ->toContain('filteredBillableTasks')
+        ->toContain('filteredNonBillableTasks')
+        ->toContain('No tasks match.');
+}
+
 test('day view closes the task dropdown before syncing the selected task', function () {
     $user = taskPickerDropdownSetup();
     $this->actingAs($user);
@@ -57,6 +70,17 @@ test('day view closes the task dropdown before syncing the selected task', funct
     assertTaskPickerClosesBeforeLivewireSync($html, '$wire.selectedTaskId = id;');
 });
 
+test('day view task dropdown can be searched by typing', function () {
+    $user = taskPickerDropdownSetup();
+    $this->actingAs($user);
+
+    $html = Livewire::test(DayView::class)
+        ->call('openNewModal')
+        ->html();
+
+    assertTaskPickerHasSearch($html);
+});
+
 test('week view closes the task dropdown before syncing the selected task', function () {
     $user = taskPickerDropdownSetup();
     $this->actingAs($user);
@@ -66,4 +90,15 @@ test('week view closes the task dropdown before syncing the selected task', func
         ->html();
 
     assertTaskPickerClosesBeforeLivewireSync($html, "\$wire.set('newRowTaskId', id);");
+});
+
+test('week view task dropdown can be searched by typing', function () {
+    $user = taskPickerDropdownSetup();
+    $this->actingAs($user);
+
+    $html = Livewire::test(WeekView::class)
+        ->call('openAddRowModal')
+        ->html();
+
+    assertTaskPickerHasSearch($html);
 });
