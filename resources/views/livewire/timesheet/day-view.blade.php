@@ -397,7 +397,7 @@
         <div
             class="fixed inset-0 z-50 flex items-start justify-center bg-black/40"
             style="padding-top: 22vh"
-            @click.self="$wire.closeModal()"
+            @mousedown.self="$wire.closeModal()"
             @keydown.escape.window="$wire.closeModal()"
         >
             <div

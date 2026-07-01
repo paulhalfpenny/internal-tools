@@ -140,3 +140,16 @@ test('typing 0:15 saves as 0.25 hours and re-opens as 0:15', function () {
         ->call('openEditModal', $entry->id)
         ->assertSet('hoursInput', '0:15');
 });
+
+test('entry modal backdrop only closes from a mouse down that starts on the backdrop', function () {
+    $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
+    $this->actingAs($user);
+
+    $html = Livewire::test(DayView::class)
+        ->call('openNewModal')
+        ->html();
+
+    expect($html)
+        ->toContain('@mousedown.self="$wire.closeModal()"')
+        ->not->toContain('@click.self="$wire.closeModal()"');
+});
