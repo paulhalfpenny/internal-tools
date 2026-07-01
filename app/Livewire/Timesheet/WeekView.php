@@ -406,13 +406,11 @@ class WeekView extends Component
                 $date = $weekStart->addDays($i)->toDateString();
                 $raw = trim((string) ($perDay[$i] ?? ''));
                 $cellKey = $rowKey.'|'.$date;
-                $existingForCell = $existing->get($cellKey, collect())->first();
+                $existingForCell = $existing->get($cellKey, collect());
 
                 if ($raw === '' || $raw === '0' || $raw === '0:00') {
-                    // Empty cell: delete any existing entry for this slot.
-                    if ($existingForCell) {
-                        $service->delete($existingForCell);
-                    }
+                    // Empty cell: delete any existing entries for this slot.
+                    $existingForCell->each(fn (TimeEntry $entry) => $service->delete($entry));
 
                     continue;
                 }
@@ -423,8 +421,16 @@ class WeekView extends Component
                     continue; // skip invalid input silently
                 }
 
-                if ($existingForCell) {
-                    $service->update($existingForCell, ['hours' => $hours]);
+                if ($existingForCell->isNotEmpty()) {
+                    $storedTotal = round((float) $existingForCell->sum(fn (TimeEntry $entry) => (float) $entry->hours), 2);
+                    if (abs($storedTotal - $hours) < 0.005) {
+                        continue;
+                    }
+
+                    /** @var TimeEntry $firstEntry */
+                    $firstEntry = $existingForCell->first();
+                    $service->update($firstEntry, ['hours' => $hours]);
+                    $existingForCell->skip(1)->each(fn (TimeEntry $entry) => $service->delete($entry));
                 } else {
                     $service->create($user, [
                         'project_id' => $projectId,
@@ -517,6 +523,8 @@ class WeekView extends Component
         // Group into rows by (project, task, asana_task_gid). Each row gets
         // project/task names for display + a 7-cell array of saved hours strings.
         $rowsFromEntries = [];
+        $storedCellHours = [];
+        $currentCellHours = [];
         $runningCellHours = [];
         foreach ($weekEntries as $entry) {
             $key = $this->buildRowKey($entry->project_id, $entry->task_id, $entry->asana_task_gid);
@@ -532,10 +540,12 @@ class WeekView extends Component
             }
             $dayIndex = (int) $weekStart->diffInDays(CarbonImmutable::parse($entry->spent_on));
             if ($dayIndex >= 0 && $dayIndex < 7) {
-                $rowsFromEntries[$key]['cells'][$dayIndex] = HoursFormatter::asTime((float) $entry->hours);
+                $storedCellHours[$key][$dayIndex] = ($storedCellHours[$key][$dayIndex] ?? 0.0) + (float) $entry->hours;
+                $rowsFromEntries[$key]['cells'][$dayIndex] = HoursFormatter::asTime($storedCellHours[$key][$dayIndex]);
 
-                if ($entry->is_running) {
-                    $runningCellHours[$key][$dayIndex] = $timeEntryService->currentHours($entry);
+                $currentCellHours[$key][$dayIndex] = ($currentCellHours[$key][$dayIndex] ?? 0.0) + $timeEntryService->currentHours($entry);
+                if ($currentCellHours[$key][$dayIndex] > $storedCellHours[$key][$dayIndex]) {
+                    $runningCellHours[$key][$dayIndex] = $currentCellHours[$key][$dayIndex];
                 }
             }
         }

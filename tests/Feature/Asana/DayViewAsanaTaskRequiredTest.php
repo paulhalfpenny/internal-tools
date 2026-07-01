@@ -101,6 +101,31 @@ test('non-admin user can queue an Asana task refresh for the selected linked pro
     Bus::assertDispatched(PullAsanaTasksJob::class, fn ($job) => $job->asanaProjectGid === 'AP1' && $job->userId !== $user->id);
 });
 
+test('editing a calendar entry keeps Asana task optional on required linked projects', function () {
+    [$user, $project, $task] = asanaTestDayViewSetup();
+    $this->actingAs($user);
+
+    Livewire::test(DayView::class)
+        ->call('pullFromCalendarEvent', 'Daily standup', 0.5)
+        ->set('selectedProjectId', $project->id)
+        ->set('selectedTaskId', $task->id)
+        ->set('entryDate', now()->toDateString())
+        ->set('selectedAsanaTaskGid', '')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $entry = TimeEntry::firstOrFail();
+
+    Livewire::test(DayView::class)
+        ->call('openEditModal', $entry->id)
+        ->set('hoursInput', '0:45')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($entry->fresh()->hours)->toBe('0.75')
+        ->and($entry->fresh()->asana_task_gid)->toBeNull();
+});
+
 test('save blocked on linked project when no admin has connected Asana', function () {
     [$user, $project, $task] = asanaTestDayViewSetup(adminConnected: false);
     $this->actingAs($user);

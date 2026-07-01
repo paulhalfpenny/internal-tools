@@ -49,6 +49,63 @@ test('week view groups existing entries into rows by (project, task)', function 
         ->assertSet("cellValues.{$rowKey}.1", '');
 });
 
+test('week view sums same-day entries that only differ by notes', function () {
+    [$user, $project, $task] = weekViewSetup();
+    $this->actingAs($user);
+
+    $monday = now()->startOfWeek()->toDateString();
+    app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => $monday,
+        'hours' => 1.0,
+        'notes' => 'First note',
+    ]);
+    app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => $monday,
+        'hours' => 0.5,
+        'notes' => 'Second note',
+    ]);
+
+    $rowKey = weekViewRowKey($project, $task);
+    $component = Livewire::test(WeekView::class)
+        ->assertSet("cellValues.{$rowKey}.0", '1:30');
+
+    expect($component->viewData('dayTotals')[0])->toBe(1.5)
+        ->and($component->viewData('weekTotal'))->toBe(1.5);
+});
+
+test('saving an unchanged summed week cell keeps the existing total', function () {
+    [$user, $project, $task] = weekViewSetup();
+    $this->actingAs($user);
+
+    $monday = now()->startOfWeek()->toDateString();
+    app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => $monday,
+        'hours' => 1.0,
+        'notes' => 'First note',
+    ]);
+    app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => $monday,
+        'hours' => 0.5,
+        'notes' => 'Second note',
+    ]);
+
+    $rowKey = weekViewRowKey($project, $task);
+
+    Livewire::test(WeekView::class)
+        ->assertSet("cellValues.{$rowKey}.0", '1:30')
+        ->call('save');
+
+    expect((float) TimeEntry::whereDate('spent_on', $monday)->sum('hours'))->toBe(1.5);
+});
+
 test('week view totals include elapsed time for a running timer', function () {
     Carbon::setTestNow(Carbon::parse('2026-07-01 10:00:00'));
 

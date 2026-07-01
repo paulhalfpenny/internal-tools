@@ -210,6 +210,7 @@ class DayView extends Component
         $this->hoursInput = HoursFormatter::asTime((float) $entry->hours);
         $this->notes = $entry->notes ?? '';
         $this->entryDate = $entry->spent_on->toDateString();
+        $this->lastCalendarPullTitle = $this->calendarTitleForEntry($entry);
         $this->showModal = true;
     }
 
@@ -388,6 +389,25 @@ class DayView extends Component
         }
 
         return true;
+    }
+
+    private function calendarTitleForEntry(TimeEntry $entry): ?string
+    {
+        $title = trim((string) $entry->notes);
+        if ($title === '') {
+            return null;
+        }
+
+        $association = app(CalendarEventAssociationService::class)->lookup($this->viewedUser(), $title);
+        if ($association === null) {
+            return null;
+        }
+
+        if ($association['project_id'] !== $entry->project_id || $association['task_id'] !== $entry->task_id) {
+            return null;
+        }
+
+        return $title;
     }
 
     private function asanaIntegrationAvailable(): bool
