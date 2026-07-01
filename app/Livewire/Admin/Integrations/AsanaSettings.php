@@ -51,6 +51,11 @@ class AsanaSettings extends Component
             ->orderByDesc('id')
             ->value('created_at');
 
+        $lastSuccessfulTaskPull = AsanaSyncLog::query()
+            ->where('event', 'asana.pull_tasks.completed')
+            ->orderByDesc('id')
+            ->value('created_at');
+
         $recentSuccess = AsanaSyncLog::query()
             ->where('level', 'info')
             ->where('created_at', '>=', now()->subMinutes(15))
@@ -66,6 +71,7 @@ class AsanaSettings extends Component
             'failedAsana' => $failedAsana,
             'entriesWithSyncError' => $entriesWithSyncError,
             'lastSuccessfulSync' => $lastSuccessfulSync,
+            'lastSuccessfulTaskPull' => $lastSuccessfulTaskPull,
             'workerLikelyRunning' => $workerLikelyRunning,
             'recentLogs' => AsanaSyncLog::query()->orderByDesc('id')->limit(20)->get(),
             'connectedUsers' => User::query()

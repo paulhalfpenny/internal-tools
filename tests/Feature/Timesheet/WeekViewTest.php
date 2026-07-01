@@ -2,13 +2,16 @@
 
 use App\Domain\TimeTracking\TimeEntryService;
 use App\Enums\Role;
+use App\Jobs\Asana\PullAsanaTasksJob;
 use App\Livewire\Timesheet\WeekView;
+use App\Models\AsanaProject;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -161,6 +164,29 @@ test('addRow flow appends an empty row to the timesheet', function () {
         ->call('addRow')
         ->assertSet('showAddRowModal', false)
         ->assertSet('extraRows.0', weekViewRowKey($project, $task));
+});
+
+test('week view can queue an Asana task refresh for the selected linked project', function () {
+    [$user, $project] = weekViewSetup();
+    User::factory()->create([
+        'role' => Role::Admin,
+        'asana_access_token' => 'tok',
+        'asana_token_expires_at' => now()->addHour(),
+        'asana_user_gid' => 'admin-gid',
+        'asana_workspace_gid' => 'WS1',
+    ]);
+    AsanaProject::create(['gid' => 'AP1', 'workspace_gid' => 'WS1', 'name' => 'Asana AP1', 'is_archived' => false]);
+    $project->asanaProjects()->attach('AP1', ['asana_custom_field_gid' => null]);
+    Bus::fake([PullAsanaTasksJob::class]);
+
+    $this->actingAs($user);
+
+    Livewire::test(WeekView::class)
+        ->set('newRowProjectId', $project->id)
+        ->call('refreshNewRowAsanaTasks')
+        ->assertHasNoErrors();
+
+    Bus::assertDispatched(PullAsanaTasksJob::class, fn ($job) => $job->asanaProjectGid === 'AP1' && $job->userId !== $user->id);
 });
 
 test('copy rows from most recent week adds blank rows without creating entries', function () {

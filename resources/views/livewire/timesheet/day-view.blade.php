@@ -680,15 +680,27 @@
                                         class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
                                         style="display: none"
                                     >
-                                        <div class="p-2 border-b border-gray-100">
+                                        <div class="p-2 border-b border-gray-100 flex items-center gap-2">
                                             <input
                                                 type="text"
                                                 x-model="asanaTaskSearch"
                                                 placeholder="Search Asana tasks…"
-                                                class="w-full text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                                                class="flex-1 min-w-0 text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                                                 x-init="$el.focus()"
                                             />
+                                            <button
+                                                type="button"
+                                                wire:click="refreshSelectedProjectAsanaTasks"
+                                                class="px-3 py-2 text-xs font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50"
+                                            >
+                                                Refresh
+                                            </button>
                                         </div>
+                                        @if(session('asana_task_refresh_message'))
+                                            <p class="px-3 py-2 text-xs text-green-700 bg-green-50 border-b border-green-100">
+                                                {{ session('asana_task_refresh_message') }}
+                                            </p>
+                                        @endif
                                         <div class="max-h-60 overflow-y-auto py-1">
                                             <template x-if="!asanaRequired">
                                                 <button
@@ -700,7 +712,7 @@
                                             <template x-if="filteredAsanaTasks.length === 0">
                                                 <p class="text-sm text-gray-400 px-3 py-4 text-center">
                                                     <template x-if="linkedAsanaTasks.length === 0">
-                                                        <span>No Asana tasks cached for this project. An admin can refresh tasks on the project edit page.</span>
+                                                        <span>No Asana tasks cached for this project. Try Refresh, then reopen this picker in a minute.</span>
                                                     </template>
                                                     <template x-if="linkedAsanaTasks.length > 0 && asanaTasks.length === 0 && asanaTaskSearch.trim() === ''">
                                                         <span>No Asana tasks match this project. Search to see all linked board tasks.</span>

@@ -28,7 +28,7 @@
 
     <div class="bg-white rounded-lg border border-gray-200 p-6 mb-6">
         <h2 class="text-sm font-semibold text-gray-700 mb-4">Queue health</h2>
-        <div class="grid grid-cols-4 gap-6">
+        <div class="grid grid-cols-5 gap-6">
             <div>
                 <p class="text-xs text-gray-500 uppercase tracking-wide">Pending Asana jobs</p>
                 <p class="text-2xl font-semibold {{ $pendingAsana > 50 ? 'text-yellow-600' : 'text-gray-900' }} mt-1">{{ $pendingAsana }}</p>
@@ -45,6 +45,12 @@
                 <p class="text-xs text-gray-500 uppercase tracking-wide">Last hours sync</p>
                 <p class="text-sm font-medium text-gray-900 mt-1">
                     {{ $lastSuccessfulSync ? \Carbon\Carbon::parse($lastSuccessfulSync)->diffForHumans() : '—' }}
+                </p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-500 uppercase tracking-wide">Last task refresh</p>
+                <p class="text-sm font-medium text-gray-900 mt-1">
+                    {{ $lastSuccessfulTaskPull ? \Carbon\Carbon::parse($lastSuccessfulTaskPull)->diffForHumans() : '—' }}
                 </p>
             </div>
         </div>

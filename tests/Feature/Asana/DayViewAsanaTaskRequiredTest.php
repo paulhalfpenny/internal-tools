@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\Role;
+use App\Jobs\Asana\PullAsanaTasksJob;
 use App\Jobs\Asana\SyncAsanaTaskHoursJob;
 use App\Livewire\Timesheet\DayView;
 use App\Models\AsanaProject;
@@ -84,6 +85,20 @@ test('non-admin user can save time on linked project as long as an admin has con
 
     $entry = TimeEntry::firstOrFail();
     expect($entry->asana_task_gid)->toBe('AT1');
+});
+
+test('non-admin user can queue an Asana task refresh for the selected linked project', function () {
+    [$user, $project] = asanaTestDayViewSetup();
+    Bus::fake([SyncAsanaTaskHoursJob::class, PullAsanaTasksJob::class]);
+
+    $this->actingAs($user);
+
+    Livewire::test(DayView::class)
+        ->set('selectedProjectId', $project->id)
+        ->call('refreshSelectedProjectAsanaTasks')
+        ->assertHasNoErrors();
+
+    Bus::assertDispatched(PullAsanaTasksJob::class, fn ($job) => $job->asanaProjectGid === 'AP1' && $job->userId !== $user->id);
 });
 
 test('save blocked on linked project when no admin has connected Asana', function () {

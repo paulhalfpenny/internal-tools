@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\Asana\PullAsanaTasksJob;
 use App\Models\User;
+use App\Services\Asana\AsanaTaskRefreshDispatcher;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -13,7 +13,7 @@ class AsanaRefreshTasksCommand extends Command
 
     protected $description = 'Queue a tasks pull for every Internal Tools project linked to an Asana project.';
 
-    public function handle(): int
+    public function handle(AsanaTaskRefreshDispatcher $dispatcher): int
     {
         $connectedUsers = User::query()
             ->whereNotNull('asana_access_token')
@@ -38,18 +38,10 @@ class AsanaRefreshTasksCommand extends Command
             )
             ->get();
 
-        $dispatched = 0;
-        foreach ($links as $link) {
-            /** @var User|null $actor */
-            $actor = $connectedUsers->firstWhere('asana_workspace_gid', $link->workspace_gid);
-            if ($actor === null) {
-                continue;
-            }
-            PullAsanaTasksJob::dispatch($link->board_gid, $actor->id);
-            $dispatched++;
-        }
+        $boardGids = $links->pluck('board_gid')->unique()->values();
+        $dispatched = $dispatcher->dispatchForBoardGids($boardGids);
 
-        $this->info(sprintf('Dispatched %d task pull(s) across %d linked board(s).', $dispatched, $links->count()));
+        $this->info(sprintf('Dispatched %d task pull(s) across %d linked board(s).', $dispatched, $boardGids->count()));
 
         return self::SUCCESS;
     }

@@ -12,6 +12,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\Asana\AsanaTaskRefreshDispatcher;
 use App\Services\CalendarService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\Pivot;
@@ -396,6 +397,30 @@ class DayView extends Component
             ->whereNotNull('asana_user_gid')
             ->where('is_active', true)
             ->exists();
+    }
+
+    public function refreshSelectedProjectAsanaTasks(AsanaTaskRefreshDispatcher $dispatcher): void
+    {
+        if ($this->isReadOnly || $this->selectedProjectId === null) {
+            return;
+        }
+
+        $project = Project::query()
+            ->whereKey($this->selectedProjectId)
+            ->whereHas('users', fn ($query) => $query->where('users.id', $this->viewedUser()->id))
+            ->first();
+
+        if ($project === null || ! $project->asanaLinked()) {
+            return;
+        }
+
+        if ($dispatcher->dispatchForProject($project) === 0) {
+            $this->addError('selectedAsanaTaskGid', 'No connected Asana user is available to refresh tasks for this project.');
+
+            return;
+        }
+
+        session()->flash('asana_task_refresh_message', 'Refreshing Asana tasks in the background.');
     }
 
     public function copyRowsFromMostRecent(): void

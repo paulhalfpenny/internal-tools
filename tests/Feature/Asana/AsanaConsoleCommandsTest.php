@@ -7,6 +7,7 @@ use App\Models\AsanaSyncLog;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 
 uses(RefreshDatabase::class);
@@ -50,6 +51,15 @@ test('asana:refresh-projects no-ops when no users connected', function () {
     $this->artisan('asana:refresh-projects')->assertExitCode(0);
 
     Bus::assertNothingDispatched();
+});
+
+test('asana task refresh is scheduled every fifteen minutes', function () {
+    Artisan::call('schedule:list');
+
+    $schedule = Artisan::output();
+
+    expect($schedule)->toContain('php artisan asana:refresh-tasks');
+    expect(preg_match('/\*\/15\s+\*\s+\*\s+\*\s+\*\s+php artisan asana:refresh-tasks/', $schedule))->toBe(1);
 });
 
 test('asana:refresh-tasks dispatches a pull for each linked, non-archived project', function () {

@@ -70,8 +70,8 @@ reclaimed and post-deploy code gets picked up after `queue:restart`.
 
 ### 4. Add the scheduler cron line
 
-The hourly Asana task refresh, daily project refresh, and daily log prune
-all rely on Laravel's scheduler. The scheduler itself runs from cron.
+The 15-minute Asana task refresh, daily project refresh, and daily log
+prune all rely on Laravel's scheduler. The scheduler itself runs from cron.
 
 ```bash
 sudo crontab -u <deploy-user> -e
@@ -121,7 +121,7 @@ running pre-deploy code until its `--max-time` cycle ends.
 - `tail -f /var/log/internal-tools-worker.log` → jobs being processed.
 - `php artisan schedule:list` → shows the three Asana scheduled commands
   with a sensible "Next Due" time.
-- After ~1 hour: `asana.pull_tasks.completed` entries appear in the
+- After ~15 minutes: `asana.pull_tasks.completed` entries appear in the
   recent sync log on the admin page.
 - After 24h: `asana.pull_projects.completed` entries appear too.
 
@@ -130,7 +130,7 @@ running pre-deploy code until its `--max-time` cycle ends.
 | Command                  | When               | What it does                              |
 | ------------------------ | ------------------ | ----------------------------------------- |
 | `asana:refresh-projects` | daily, 06:00       | Re-pulls Asana project lists per workspace |
-| `asana:refresh-tasks`    | hourly             | Re-pulls tasks for every linked project    |
+| `asana:refresh-tasks`    | every 15 minutes   | Re-pulls tasks for every linked project    |
 | `asana:prune-logs`       | daily, 03:00       | Deletes `asana_sync_logs` older than 30 days |
 
 ## Rollback
@@ -151,8 +151,11 @@ schema in place to disable the feature without code changes.
 ## Related runbook bits
 
 If you also need to re-pull a single Asana project's tasks on demand (e.g.
-after someone renames an Asana task and a user can't find it in the
-picker), an admin can:
+after someone renames an Asana task, adds an ad hoc support ticket, or a
+user can't find it in the picker), the user can click **Refresh** in the
+Asana task picker and reopen the picker after the background job runs.
+
+An admin can also:
 
 1. Open `/admin/projects/{id}/edit`.
 2. Click **Refresh tasks** in the Asana section.

@@ -8,6 +8,7 @@ use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
@@ -181,4 +182,27 @@ test('unselecting a previously linked board detaches the pivot row', function ()
         ->call('save');
 
     expect($project->fresh()->asanaProjects()->count())->toBe(0);
+});
+
+test('saving changed Asana links clears assigned users project picker caches', function () {
+    config(['services.asana.custom_field_name' => 'Hours tracked (Internal Tools)']);
+
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $user = User::factory()->create();
+    AsanaProject::create(['gid' => 'AP1', 'workspace_gid' => 'WS1', 'name' => 'Asana A', 'is_archived' => false]);
+    $project = Project::factory()->create();
+    $project->users()->attach($user->id, ['hourly_rate_override' => null, 'rate_id' => null]);
+
+    Cache::put("projects_picker_{$user->id}", ['stale' => true], now()->addMinutes(10));
+    Cache::put("projects_picker_eloquent_{$user->id}", collect(['stale']), now()->addMinutes(10));
+
+    $this->actingAs($admin);
+
+    Livewire::test(Edit::class, ['project' => $project])
+        ->set('asanaProjectGids', ['AP1'])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(Cache::has("projects_picker_{$user->id}"))->toBeFalse()
+        ->and(Cache::has("projects_picker_eloquent_{$user->id}"))->toBeFalse();
 });

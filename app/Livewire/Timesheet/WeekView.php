@@ -10,6 +10,7 @@ use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\Asana\AsanaTaskRefreshDispatcher;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -325,6 +326,30 @@ class WeekView extends Component
             ->whereNotNull('asana_user_gid')
             ->where('is_active', true)
             ->exists();
+    }
+
+    public function refreshNewRowAsanaTasks(AsanaTaskRefreshDispatcher $dispatcher): void
+    {
+        if ($this->isReadOnly || $this->newRowProjectId === null) {
+            return;
+        }
+
+        $project = Project::query()
+            ->whereKey($this->newRowProjectId)
+            ->whereHas('users', fn ($query) => $query->where('users.id', $this->viewedUser()->id))
+            ->first();
+
+        if ($project === null || ! $project->asanaLinked()) {
+            return;
+        }
+
+        if ($dispatcher->dispatchForProject($project) === 0) {
+            $this->addError('newRowAsanaTaskGid', 'No connected Asana user is available to refresh tasks for this project.');
+
+            return;
+        }
+
+        session()->flash('asana_task_refresh_message', 'Refreshing Asana tasks in the background.');
     }
 
     public function removeRow(string $rowKey): void

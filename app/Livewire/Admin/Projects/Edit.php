@@ -13,7 +13,9 @@ use App\Models\Rate;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\Asana\AsanaService;
+use App\Services\Asana\AsanaTaskRefreshDispatcher;
 use Illuminate\Database\Eloquent\Relations\Pivot;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
@@ -252,6 +254,7 @@ class Edit extends Component
         ]);
 
         $previousGids = $this->project->asanaProjects()->pluck('gid')->all();
+        $previousUserIds = $this->project->users()->pluck('users.id')->all();
         $selectedGids = array_values(array_unique($this->asanaProjectGids));
         $addedGids = array_values(array_diff($selectedGids, $previousGids));
         $removedGids = array_values(array_diff($previousGids, $selectedGids));
@@ -335,6 +338,10 @@ class Edit extends Component
         }
         $this->project->users()->sync($userSync);
 
+        if ($addedGids !== [] || $removedGids !== []) {
+            $this->forgetProjectPickerCaches(array_merge($previousUserIds, array_keys($this->userAssignments)));
+        }
+
         session()->flash('status', 'Project saved.');
     }
 
@@ -365,21 +372,11 @@ class Edit extends Component
         ));
     }
 
-    public function refreshAsanaTasks(): void
+    public function refreshAsanaTasks(AsanaTaskRefreshDispatcher $dispatcher): void
     {
         Gate::authorize('manage-projects');
 
-        $authUser = $this->authUser();
-        if (! $authUser->asanaConnected()) {
-            return;
-        }
-
-        $linkedGids = $this->project->asanaProjects()->pluck('gid');
-        foreach ($linkedGids as $gid) {
-            PullAsanaTasksJob::dispatch($gid, $authUser->id);
-        }
-
-        if ($linkedGids->isNotEmpty()) {
+        if ($dispatcher->dispatchForProject($this->project) > 0) {
             session()->flash('status', 'Refreshing Asana tasks in the background.');
         }
     }
@@ -415,5 +412,20 @@ class Edit extends Component
         $user = auth()->user();
 
         return $user;
+    }
+
+    /**
+     * @param  array<int, int|string>  $userIds
+     */
+    private function forgetProjectPickerCaches(array $userIds): void
+    {
+        collect($userIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->each(function (int $userId): void {
+                Cache::forget("projects_picker_{$userId}");
+                Cache::forget("projects_picker_eloquent_{$userId}");
+            });
     }
 }

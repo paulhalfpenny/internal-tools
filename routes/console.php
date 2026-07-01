@@ -14,7 +14,7 @@ Schedule::command('asana:refresh-projects')
     ->onOneServer();
 
 Schedule::command('asana:refresh-tasks')
-    ->hourly()
+    ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->onOneServer();
 
