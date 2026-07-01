@@ -33,7 +33,7 @@ function taskPickerMethodBody(string $html): string
     return $matches['body'];
 }
 
-function assertTaskPickerClosesBeforeLivewireSync(string $html, string $wireSyncStatement): void
+function assertTaskPickerClosesAfterLivewireSync(string $html, string $wireSyncStatement): void
 {
     $methodBody = taskPickerMethodBody($html);
 
@@ -43,7 +43,7 @@ function assertTaskPickerClosesBeforeLivewireSync(string $html, string $wireSync
     $wirePosition = strpos($methodBody, $wireSyncStatement);
 
     expect($wirePosition)->not->toBeFalse();
-    expect($closePosition)->toBeLessThan($wirePosition);
+    expect($closePosition)->toBeGreaterThan($wirePosition);
 }
 
 function assertTaskPickerHasSearch(string $html): void
@@ -59,7 +59,7 @@ function assertTaskPickerHasSearch(string $html): void
         ->toContain('No tasks match.');
 }
 
-test('day view closes the task dropdown before syncing the selected task', function () {
+test('day view closes the task dropdown after syncing the selected task', function () {
     $user = taskPickerDropdownSetup();
     $this->actingAs($user);
 
@@ -67,7 +67,7 @@ test('day view closes the task dropdown before syncing the selected task', funct
         ->call('openNewModal')
         ->html();
 
-    assertTaskPickerClosesBeforeLivewireSync($html, '$wire.selectedTaskId = id;');
+    assertTaskPickerClosesAfterLivewireSync($html, '$wire.selectedTaskId = id;');
 });
 
 test('day view task dropdown can be searched by typing', function () {
@@ -81,7 +81,7 @@ test('day view task dropdown can be searched by typing', function () {
     assertTaskPickerHasSearch($html);
 });
 
-test('week view closes the task dropdown before syncing the selected task', function () {
+test('week view closes the task dropdown after syncing the selected task', function () {
     $user = taskPickerDropdownSetup();
     $this->actingAs($user);
 
@@ -89,7 +89,7 @@ test('week view closes the task dropdown before syncing the selected task', func
         ->call('openAddRowModal')
         ->html();
 
-    assertTaskPickerClosesBeforeLivewireSync($html, "\$wire.set('newRowTaskId', id);");
+    assertTaskPickerClosesAfterLivewireSync($html, "\$wire.set('newRowTaskId', id);");
 });
 
 test('week view task dropdown can be searched by typing', function () {

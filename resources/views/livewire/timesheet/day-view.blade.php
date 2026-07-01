@@ -514,8 +514,8 @@
                     pickTask(id) {
                         this.selectedTaskId = id;
                         this.taskSearch = '';
-                        this.closePickers();
                         $wire.selectedTaskId = id;
+                        this.closePickers();
                     },
                     pickAsanaTask(gid) {
                         this.selectedAsanaTaskGid = gid;
