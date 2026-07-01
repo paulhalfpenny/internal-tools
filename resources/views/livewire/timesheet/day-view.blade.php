@@ -201,7 +201,7 @@
                     {{-- Main content --}}
                     <div class="flex-1 min-w-0">
                         <div class="flex items-baseline gap-2 flex-wrap">
-                            <span class="font-semibold text-gray-900">{{ $entry->project->name }}</span>
+                            <span class="font-semibold text-gray-900">{{ $entry->project->timesheetDisplayName() }}</span>
                             <span class="text-gray-400 text-sm">{{ $entry->project->client->name }}</span>
                         </div>
                         <div class="text-sm text-gray-600 mt-0.5">{{ $entry->task->name }}</div>
@@ -459,12 +459,15 @@
                     get asanaBoardGids() {
                         return this.selectedProject?.asana_project_gids ?? [];
                     },
+                    get asanaTaskMatchTerms() {
+                        return this.selectedProject?.asana_task_match_terms ?? [];
+                    },
                     get asanaRequired() {
                         if (this.asanaBoardGids.length === 0) return false;
                         if ($wire.lastCalendarPullTitle) return false;
                         return this.selectedProject?.asana_task_required ?? true;
                     },
-                    get asanaTasks() {
+                    get linkedAsanaTasks() {
                         if (this.asanaBoardGids.length === 0) return [];
                         const out = [];
                         for (const gid of this.asanaBoardGids) {
@@ -472,10 +475,23 @@
                         }
                         return out;
                     },
+                    get asanaTasks() {
+                        return this.filterAsanaTasks('');
+                    },
                     get filteredAsanaTasks() {
-                        const q = this.asanaTaskSearch.toLowerCase();
-                        if (!q) return this.asanaTasks;
-                        return this.asanaTasks.filter(t =>
+                        return this.filterAsanaTasks(this.asanaTaskSearch);
+                    },
+                    filterAsanaTasks(query) {
+                        const filter = window.asanaTaskFilter?.filterAsanaTasksForProject;
+
+                        if (filter) {
+                            return filter(this.linkedAsanaTasks, this.asanaTaskMatchTerms, query);
+                        }
+
+                        const q = (query ?? '').toLowerCase();
+                        if (!q) return this.linkedAsanaTasks;
+
+                        return this.linkedAsanaTasks.filter(t =>
                             t.name.toLowerCase().includes(q) ||
                             (t.board_name ?? '').toLowerCase().includes(q)
                         );
@@ -484,12 +500,16 @@
                         return this.asanaBoardGids.length > 1;
                     },
                     get selectedAsanaTask() {
-                        return this.asanaTasks.find(t => t.gid === this.selectedAsanaTaskGid) ?? null;
+                        return this.linkedAsanaTasks.find(t => t.gid === this.selectedAsanaTaskGid) ?? null;
                     },
                     get groupedProjects() {
                         const q = this.projectSearch.toLowerCase();
                         const filtered = q
-                            ? this.projects.filter(p => p.name.toLowerCase().includes(q) || p.client_name.toLowerCase().includes(q))
+                            ? this.projects.filter(p =>
+                                (p.display_name ?? p.name).toLowerCase().includes(q) ||
+                                (p.code ?? '').toLowerCase().includes(q) ||
+                                p.client_name.toLowerCase().includes(q)
+                            )
                             : this.projects;
                         const groups = {};
                         filtered.forEach(p => { (groups[p.client_name] ??= []).push(p); });
@@ -568,7 +588,7 @@
                             <template x-if="selectedProject">
                                 <div class="min-w-0">
                                     <div class="text-xs text-gray-500 leading-none mb-0.5" x-text="selectedProject.client_name"></div>
-                                    <div class="font-semibold text-gray-900 text-sm leading-none" x-text="selectedProject.name"></div>
+                                    <div class="font-semibold text-gray-900 text-sm leading-none" x-text="selectedProject.display_name ?? selectedProject.name"></div>
                                 </div>
                             </template>
                             <template x-if="!selectedProject">
@@ -609,7 +629,7 @@
                                                 type="button"
                                                 @click="pickProject(project.id)"
                                                 class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-green-50 hover:text-green-700 transition"
-                                                x-text="project.name"
+                                                x-text="project.display_name ?? project.name"
                                             ></button>
                                         </template>
                                     </div>
@@ -679,10 +699,13 @@
                                             </template>
                                             <template x-if="filteredAsanaTasks.length === 0">
                                                 <p class="text-sm text-gray-400 px-3 py-4 text-center">
-                                                    <template x-if="asanaTasks.length === 0">
+                                                    <template x-if="linkedAsanaTasks.length === 0">
                                                         <span>No Asana tasks cached for this project. An admin can refresh tasks on the project edit page.</span>
                                                     </template>
-                                                    <template x-if="asanaTasks.length > 0">
+                                                    <template x-if="linkedAsanaTasks.length > 0 && asanaTasks.length === 0 && asanaTaskSearch.trim() === ''">
+                                                        <span>No Asana tasks match this project. Search to see all linked board tasks.</span>
+                                                    </template>
+                                                    <template x-if="linkedAsanaTasks.length > 0 && (asanaTasks.length > 0 || asanaTaskSearch.trim() !== '')">
                                                         <span>No tasks match.</span>
                                                     </template>
                                                 </p>

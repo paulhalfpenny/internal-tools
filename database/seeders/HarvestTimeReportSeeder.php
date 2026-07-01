@@ -97,6 +97,7 @@ class HarvestTimeReportSeeder extends Seeder
         foreach ($tasks as $name => $billable) {
             $task = Task::firstOrCreate(['name' => $name], [
                 'is_default_billable' => $billable,
+                'is_jdw_default_billable' => $billable,
                 'colour' => $colours[$order % count($colours)],
                 'sort_order' => $order,
                 'is_archived' => false,
@@ -125,7 +126,7 @@ class HarvestTimeReportSeeder extends Seeder
                 $toAttach = [];
                 foreach ($taskModels as $task) {
                     if (! in_array($task->id, $existingTaskIds, true)) {
-                        $toAttach[$task->id] = ['is_billable' => $task->is_default_billable];
+                        $toAttach[$task->id] = ['is_billable' => $task->defaultBillableForProject($project)];
                     }
                 }
                 if (! empty($toAttach)) {

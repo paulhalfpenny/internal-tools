@@ -149,6 +149,7 @@ class HarvestImportSeeder extends Seeder
         foreach ($tasks as [$name, $billable]) {
             Task::firstOrCreate(['name' => $name], [
                 'is_default_billable' => $billable,
+                'is_jdw_default_billable' => $billable,
                 'colour' => $colours[$order % count($colours)],
                 'sort_order' => $order,
                 'is_archived' => false,

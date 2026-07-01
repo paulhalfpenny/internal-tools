@@ -9,6 +9,7 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -309,6 +310,7 @@ final class McpApprovalService
     }
 
     /**
+     * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
     private function requestedChanges(string $action, array $payload): array
@@ -337,7 +339,7 @@ final class McpApprovalService
                 'user_id' => $subject->user_id,
                 'project_id' => $subject->project_id,
                 'task_id' => $subject->task_id,
-                'spent_on' => $subject->spent_on?->toDateString(),
+                'spent_on' => $subject->spent_on->toDateString(),
                 'hours' => (string) $subject->hours,
                 'notes' => $subject->notes,
                 'is_running' => (bool) $subject->is_running,
@@ -366,7 +368,7 @@ final class McpApprovalService
             default => [
                 'type' => $subject->getMorphClass(),
                 'id' => $subject->getKey(),
-                'updated_at' => $subject->updated_at?->toIso8601String(),
+                'updated_at' => $this->modelUpdatedAt($subject),
             ],
         };
     }
@@ -387,7 +389,7 @@ final class McpApprovalService
                 'client_name' => $subject->project->client->name,
                 'project_name' => $subject->project->name,
                 'task_name' => $subject->task->name,
-                'spent_on' => $subject->spent_on?->toDateString(),
+                'spent_on' => $subject->spent_on->toDateString(),
                 'hours' => (float) $subject->hours,
                 'notes' => $subject->notes,
                 'asana_task_gid' => $subject->asana_task_gid,
@@ -423,7 +425,14 @@ final class McpApprovalService
         return [
             'type' => $subject->getMorphClass(),
             'id' => $subject->getKey(),
-            'updated_at' => $subject->updated_at?->toIso8601String(),
+            'updated_at' => $this->modelUpdatedAt($subject),
         ];
+    }
+
+    private function modelUpdatedAt(Model $subject): ?string
+    {
+        $updatedAt = $subject->getAttribute('updated_at');
+
+        return $updatedAt instanceof Carbon ? $updatedAt->toIso8601String() : null;
     }
 }

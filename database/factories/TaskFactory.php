@@ -15,6 +15,7 @@ class TaskFactory extends Factory
         return [
             'name' => fake()->unique()->word(),
             'is_default_billable' => true,
+            'is_jdw_default_billable' => true,
             'colour' => '#3B82F6',
             'sort_order' => 0,
             'is_archived' => false,

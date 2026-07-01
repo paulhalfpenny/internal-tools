@@ -613,22 +613,29 @@ class DayView extends Component
 
         $dayTotal = array_sum($entryDisplayHours);
 
-        /** @var array<int, array{id: int, name: string, client_name: string, asana_project_gids: array<int, string>, asana_task_required: bool, tasks: array<int, array{id: int, name: string, colour: string, is_billable: bool}>}> $projectsForPicker */
+        /** @var array<int, array{id: int, code: string, name: string, display_name: string, client_name: string, asana_project_gids: array<int, string>, asana_task_match_terms: array<int, string>, asana_task_required: bool, tasks: array<int, array{id: int, name: string, colour: string, is_billable: bool}>}> $projectsForPicker */
         $projectsForPicker = Cache::remember(
             "projects_picker_{$user->id}",
             now()->addMinutes(10),
-            fn () => Project::with(['client', 'tasks', 'asanaProjects'])
+            fn () => Project::with([
+                'client',
+                'tasks' => fn ($query) => $query->where('tasks.is_archived', false),
+                'asanaProjects',
+            ])
                 ->where('is_archived', false)
                 ->whereHas('users', fn ($q) => $q->where('users.id', $user->id))
                 ->orderBy('name')
                 ->get()
                 ->map(fn (Project $p) => [
                     'id' => $p->id,
+                    'code' => $p->code,
                     'name' => $p->name,
+                    'display_name' => $p->timesheetDisplayName(),
                     'client_name' => $p->client->name,
                     'asana_project_gids' => $p->asanaProjects->pluck('gid')->values()->all(),
+                    'asana_task_match_terms' => $p->asanaTaskMatchTerms(),
                     'asana_task_required' => (bool) $p->asana_task_required,
-                    'tasks' => $p->tasks->map(function (Task $t) {
+                    'tasks' => $p->tasks->map(function (Task $t) use ($p) {
                         /** @var Pivot $pivot */
                         $pivot = $t->getRelation('pivot');
 
@@ -636,7 +643,7 @@ class DayView extends Component
                             'id' => $t->id,
                             'name' => $t->name,
                             'colour' => $t->colour,
-                            'is_billable' => (bool) $pivot->getAttribute('is_billable'),
+                            'is_billable' => (bool) $p->is_billable && (bool) $pivot->getAttribute('is_billable'),
                         ];
                     })->values()->all(),
                 ])

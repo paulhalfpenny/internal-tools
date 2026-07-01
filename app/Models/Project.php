@@ -46,6 +46,31 @@ class Project extends Model
     /** @use HasFactory<ProjectFactory> */
     use HasFactory;
 
+    /** @var array<int, string> */
+    private const ASANA_TASK_MATCH_STOP_WORDS = [
+        'a',
+        'an',
+        'and',
+        'app',
+        'apps',
+        'build',
+        'development',
+        'for',
+        'maintenance',
+        'monthly',
+        'ongoing',
+        'phase',
+        'project',
+        'projects',
+        'retainer',
+        'site',
+        'support',
+        'the',
+        'website',
+        'with',
+        'work',
+    ];
+
     protected $fillable = [
         'client_id', 'manager_user_id', 'code', 'name', 'is_billable', 'default_hourly_rate', 'rate_id',
         'budget_type', 'budget_amount', 'budget_hours', 'budget_starts_on',
@@ -144,5 +169,121 @@ class Project extends Model
     public function asanaLinked(): bool
     {
         return $this->asanaProjects()->exists();
+    }
+
+    public function timesheetDisplayName(): string
+    {
+        $code = trim((string) $this->code);
+
+        if ($code === '' || $this->belongsToJdwClient()) {
+            return $this->name;
+        }
+
+        return "[{$code}] {$this->name}";
+    }
+
+    /** @return array<int, string> */
+    public function asanaTaskMatchTerms(): array
+    {
+        $terms = [];
+        $addTerm = function (?string $term) use (&$terms): void {
+            $normalized = $this->normalizeAsanaTaskMatchTerm($term);
+
+            if ($normalized !== '' && ! $this->isGenericAsanaTaskMatchTerm($normalized)) {
+                $terms[] = $normalized;
+            }
+        };
+
+        $addTerm($this->code);
+        $addTerm($this->compactAsanaTaskMatchTerm($this->code));
+
+        $clientName = $this->client->name;
+        $addTerm($clientName);
+        $addTerm($this->compactAsanaTaskMatchTerm($clientName));
+
+        foreach ($this->asanaTaskMatchSegments($this->name) as $segment) {
+            $normalizedSegment = $this->normalizeAsanaTaskMatchTerm($segment);
+
+            if ($normalizedSegment === '' || $this->isGenericAsanaTaskMatchTerm($normalizedSegment)) {
+                continue;
+            }
+
+            $addTerm($normalizedSegment);
+            $addTerm($this->compactAsanaTaskMatchTerm($normalizedSegment));
+
+            foreach ($this->domainBasesForAsanaTaskMatch($normalizedSegment) as $domainBase) {
+                $addTerm($domainBase);
+            }
+
+            foreach ($this->tokensForAsanaTaskMatch($normalizedSegment) as $token) {
+                $addTerm($token);
+            }
+        }
+
+        return array_values(array_unique($terms));
+    }
+
+    public function belongsToJdwClient(): bool
+    {
+        $clientName = strtolower(trim($this->client->name));
+
+        return str_starts_with($clientName, 'jdw');
+    }
+
+    /** @return array<int, string> */
+    private function asanaTaskMatchSegments(?string $value): array
+    {
+        $parts = preg_split('/\s*[-\/:|]\s*/', (string) $value) ?: [];
+
+        return array_values(array_filter($parts, fn (string $part) => trim($part) !== ''));
+    }
+
+    /** @return array<int, string> */
+    private function domainBasesForAsanaTaskMatch(string $value): array
+    {
+        preg_match_all('/\b([a-z0-9][a-z0-9-]*)\.[a-z]{2,}(?:\.[a-z]{2,})?\b/i', $value, $matches);
+
+        return $matches[1];
+    }
+
+    /** @return array<int, string> */
+    private function tokensForAsanaTaskMatch(string $value): array
+    {
+        $tokens = preg_split('/[^a-z0-9]+/i', strtolower($value)) ?: [];
+
+        return array_values(array_filter($tokens, function (string $token): bool {
+            if (in_array($token, self::ASANA_TASK_MATCH_STOP_WORDS, true)) {
+                return false;
+            }
+
+            return strlen($token) >= 4 || preg_match('/^[a-z]{2,5}\d{0,3}$/', $token) === 1;
+        }));
+    }
+
+    private function normalizeAsanaTaskMatchTerm(?string $value): string
+    {
+        $normalized = strtolower(trim((string) $value));
+        $normalized = preg_replace('/[^a-z0-9.]+/', ' ', $normalized) ?? '';
+        $normalized = preg_replace('/\s+/', ' ', $normalized) ?? '';
+
+        return trim($normalized);
+    }
+
+    private function compactAsanaTaskMatchTerm(?string $value): string
+    {
+        return preg_replace('/[^a-z0-9]+/', '', strtolower((string) $value)) ?? '';
+    }
+
+    private function isGenericAsanaTaskMatchTerm(string $term): bool
+    {
+        if (strlen($term) < 3) {
+            return true;
+        }
+
+        $words = preg_split('/[^a-z0-9]+/', $term) ?: [];
+        $words = array_values(array_filter($words, fn (string $word) => $word !== ''));
+
+        return $words !== []
+            && collect($words)->every(fn (string $word) => in_array($word, self::ASANA_TASK_MATCH_STOP_WORDS, true));
     }
 }

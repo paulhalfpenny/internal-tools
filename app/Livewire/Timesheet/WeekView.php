@@ -5,6 +5,7 @@ namespace App\Livewire\Timesheet;
 use App\Domain\TimeTracking\HoursFormatter;
 use App\Domain\TimeTracking\HoursParser;
 use App\Domain\TimeTracking\TimeEntryService;
+use App\Models\AsanaProject;
 use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -425,6 +426,14 @@ class WeekView extends Component
      */
     private function parseRowKey(string $rowKey): array
     {
+        if (preg_match('/^p(?P<project>\d+)_t(?P<task>\d+)_a(?P<asana>[A-Za-z0-9]+|none)$/', $rowKey, $matches) === 1) {
+            return [
+                (int) $matches['project'],
+                (int) $matches['task'],
+                $matches['asana'] === 'none' ? null : $matches['asana'],
+            ];
+        }
+
         $parts = explode(':', $rowKey, 3);
         if (count($parts) < 2 || ! ctype_digit($parts[0]) || ! ctype_digit($parts[1])) {
             return [null, null, null];
@@ -436,7 +445,7 @@ class WeekView extends Component
 
     private function buildRowKey(int $projectId, int $taskId, ?string $asanaGid): string
     {
-        return $projectId.':'.$taskId.':'.($asanaGid ?? '');
+        return 'p'.$projectId.'_t'.$taskId.'_a'.($asanaGid ?? 'none');
     }
 
     public function render(): View
@@ -449,6 +458,7 @@ class WeekView extends Component
             ->where('user_id', $user->id)
             ->whereBetween('spent_on', [$weekStart->toDateString(), $weekStart->addDays(6)->toDateString()])
             ->get();
+        $timeEntryService = app(TimeEntryService::class);
 
         // Pull projects (with client + tasks) the user has access to.
         // Note: separate cache key from DayView's "projects_picker_{id}" which
@@ -456,7 +466,11 @@ class WeekView extends Component
         $projects = Cache::remember(
             "projects_picker_eloquent_{$user->id}",
             now()->addMinutes(10),
-            fn () => Project::with(['client', 'tasks', 'asanaProjects'])
+            fn () => Project::with([
+                'client',
+                'tasks' => fn ($query) => $query->where('tasks.is_archived', false),
+                'asanaProjects',
+            ])
                 ->where('is_archived', false)
                 ->whereHas('users', fn ($q) => $q->where('users.id', $user->id))
                 ->orderBy('name')
@@ -471,16 +485,20 @@ class WeekView extends Component
             ->orderBy('name')
             ->get(['gid', 'asana_project_gid', 'name'])
             ->keyBy('gid');
+        $asanaProjectNames = AsanaProject::query()
+            ->whereIn('gid', $linkedAsanaProjectGids)
+            ->pluck('name', 'gid');
 
         // Group into rows by (project, task, asana_task_gid). Each row gets
         // project/task names for display + a 7-cell array of saved hours strings.
         $rowsFromEntries = [];
+        $runningCellHours = [];
         foreach ($weekEntries as $entry) {
             $key = $this->buildRowKey($entry->project_id, $entry->task_id, $entry->asana_task_gid);
             if (! isset($rowsFromEntries[$key])) {
                 $rowsFromEntries[$key] = [
                     'key' => $key,
-                    'project_name' => $entry->project->name,
+                    'project_name' => $entry->project->timesheetDisplayName(),
                     'client_name' => $entry->project->client->name,
                     'task_name' => $entry->task->name,
                     'asana_task_name' => $entry->asana_task_gid ? ($asanaTasksByGid[$entry->asana_task_gid]->name ?? null) : null,
@@ -490,6 +508,10 @@ class WeekView extends Component
             $dayIndex = (int) $weekStart->diffInDays(CarbonImmutable::parse($entry->spent_on));
             if ($dayIndex >= 0 && $dayIndex < 7) {
                 $rowsFromEntries[$key]['cells'][$dayIndex] = HoursFormatter::asTime((float) $entry->hours);
+
+                if ($entry->is_running) {
+                    $runningCellHours[$key][$dayIndex] = $timeEntryService->currentHours($entry);
+                }
             }
         }
 
@@ -508,7 +530,7 @@ class WeekView extends Component
             }
             $rowsFromEntries[$extraKey] = [
                 'key' => $extraKey,
-                'project_name' => $project->name,
+                'project_name' => $project->timesheetDisplayName(),
                 'client_name' => $project->client?->name,
                 'task_name' => $task->name,
                 'asana_task_name' => $asanaGid ? ($asanaTasksByGid[$asanaGid]->name ?? null) : null,
@@ -548,19 +570,19 @@ class WeekView extends Component
                 ->where('spent_on', '<', $weekStart->toDateString())
                 ->exists();
 
-        // Per-day totals across all rows (live: derived from $cellValues, not DB).
+        // Per-day totals across all rows, with running timers using live elapsed hours.
         $dayTotals = array_fill(0, 7, 0.0);
-        foreach ($this->cellValues as $perDay) {
+        foreach ($this->cellValues as $rowKey => $perDay) {
             for ($i = 0; $i < 7; $i++) {
                 $raw = trim((string) ($perDay[$i] ?? ''));
-                if ($raw === '') {
-                    continue;
-                }
+                $hours = 0.0;
                 try {
-                    $dayTotals[$i] += HoursParser::parse($raw);
+                    $hours = $raw !== '' ? HoursParser::parse($raw) : 0.0;
                 } catch (\InvalidArgumentException) {
                     // ignore invalid input in totals
                 }
+
+                $dayTotals[$i] += max($hours, (float) ($runningCellHours[$rowKey][$i] ?? 0.0));
             }
         }
         $weekTotal = array_sum($dayTotals);
@@ -584,6 +606,7 @@ class WeekView extends Component
             ->map(fn ($group) => $group->map(fn (AsanaTask $t) => [
                 'gid' => $t->gid,
                 'name' => $t->name,
+                'board_name' => $asanaProjectNames[$t->asana_project_gid] ?? null,
             ])->values()->all())
             ->all();
 
@@ -591,20 +614,27 @@ class WeekView extends Component
             'weekStart' => $weekStart,
             'weekDays' => $weekDays,
             'rows' => $sortedRows,
+            'runningCellHours' => $runningCellHours,
             'dayTotals' => $dayTotals,
             'weekTotal' => $weekTotal,
             'projectsForPicker' => $projects->map(fn ($p) => [
                 'id' => $p->id,
+                'code' => $p->code,
                 'name' => $p->name,
+                'display_name' => $p->timesheetDisplayName(),
                 'client_name' => $p->client?->name ?? '',
                 'asana_project_gids' => $p->asanaProjects->pluck('gid')->values()->all(),
+                'asana_task_match_terms' => $p->asanaTaskMatchTerms(),
                 'asana_task_required' => (bool) $p->asana_task_required,
-                'tasks' => $p->tasks->map(fn ($t) => [
-                    'id' => $t->id,
-                    'name' => $t->name,
-                    'colour' => $t->colour,
-                    'is_billable' => (bool) $t->pivot->getAttribute('is_billable'),
-                ])->values()->all(),
+                'tasks' => $p->tasks
+                    ->map(fn ($t) => [
+                        'id' => $t->id,
+                        'name' => $t->name,
+                        'colour' => $t->colour,
+                        'is_billable' => (bool) $p->is_billable && (bool) $t->pivot->getAttribute('is_billable'),
+                    ])
+                    ->values()
+                    ->all(),
             ])->values()->all(),
             'asanaTasksByProject' => $asanaTasksByProject,
             'asanaAvailable' => $this->asanaIntegrationAvailable(),

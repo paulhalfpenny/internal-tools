@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * @property int $id
  * @property string $name
  * @property bool $is_default_billable
+ * @property bool $is_jdw_default_billable
  * @property string $colour
  * @property int $sort_order
  * @property bool $is_archived
@@ -22,12 +23,13 @@ class Task extends Model
     /** @use HasFactory<TaskFactory> */
     use HasFactory;
 
-    protected $fillable = ['name', 'is_default_billable', 'colour', 'sort_order', 'is_archived'];
+    protected $fillable = ['name', 'is_default_billable', 'is_jdw_default_billable', 'colour', 'sort_order', 'is_archived'];
 
     protected function casts(): array
     {
         return [
             'is_default_billable' => 'boolean',
+            'is_jdw_default_billable' => 'boolean',
             'is_archived' => 'boolean',
             'sort_order' => 'integer',
         ];
@@ -38,5 +40,12 @@ class Task extends Model
     {
         return $this->belongsToMany(Project::class)
             ->withPivot(['is_billable', 'hourly_rate_override', 'rate_id']);
+    }
+
+    public function defaultBillableForProject(Project $project): bool
+    {
+        return $project->belongsToJdwClient()
+            ? (bool) $this->is_jdw_default_billable
+            : (bool) $this->is_default_billable;
     }
 }

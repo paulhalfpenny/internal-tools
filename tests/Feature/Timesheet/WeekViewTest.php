@@ -24,6 +24,11 @@ function weekViewSetup(): array
     return [$user, $project, $task];
 }
 
+function weekViewRowKey(Project $project, Task $task, ?string $asanaGid = null): string
+{
+    return 'p'.$project->id.'_t'.$task->id.'_a'.($asanaGid ?? 'none');
+}
+
 test('week view groups existing entries into rows by (project, task)', function () {
     [$user, $project, $task] = weekViewSetup();
     $this->actingAs($user);
@@ -34,18 +39,50 @@ test('week view groups existing entries into rows by (project, task)', function 
     app(TimeEntryService::class)->create($user, ['project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => $monday, 'hours' => 1.0, 'notes' => null]);
     app(TimeEntryService::class)->create($user, ['project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => $wednesday, 'hours' => 2.0, 'notes' => null]);
 
-    $rowKey = $project->id.':'.$task->id.':';
+    $rowKey = weekViewRowKey($project, $task);
     Livewire::test(WeekView::class)
         ->assertSet("cellValues.{$rowKey}.0", '1:00')
         ->assertSet("cellValues.{$rowKey}.2", '2:00')
         ->assertSet("cellValues.{$rowKey}.1", '');
 });
 
+test('week view totals include elapsed time for a running timer', function () {
+    Carbon::setTestNow(Carbon::parse('2026-07-01 10:00:00'));
+
+    try {
+        [$user, $project, $task] = weekViewSetup();
+        $this->actingAs($user);
+
+        $entry = app(TimeEntryService::class)->create($user, [
+            'project_id' => $project->id,
+            'task_id' => $task->id,
+            'spent_on' => '2026-07-01',
+            'hours' => 0.25,
+            'notes' => null,
+        ]);
+        $entry->update([
+            'is_running' => true,
+            'timer_started_at' => Carbon::parse('2026-07-01 09:15:00'),
+        ]);
+
+        $rowKey = weekViewRowKey($project, $task);
+        $component = Livewire::test(WeekView::class);
+
+        $dayTotals = $component->viewData('dayTotals');
+
+        $component->assertSet("cellValues.{$rowKey}.2", '0:15');
+        expect($dayTotals[2])->toBe(1.0)
+            ->and($component->viewData('weekTotal'))->toBe(1.0);
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
 test('save creates new entries from filled cells', function () {
     [$user, $project, $task] = weekViewSetup();
     $this->actingAs($user);
 
-    $rowKey = $project->id.':'.$task->id.':';
+    $rowKey = weekViewRowKey($project, $task);
 
     Livewire::test(WeekView::class)
         ->set('extraRows', [$rowKey])
@@ -58,6 +95,43 @@ test('save creates new entries from filled cells', function () {
     expect(TimeEntry::whereDate('spent_on', $wednesday)->where('user_id', $user->id)->first()->hours)->toBe('3.00');
 });
 
+test('week view keys editable rows and cells by row identity', function () {
+    [$user, $project, $meetingTask] = weekViewSetup();
+    $this->actingAs($user);
+
+    $adminTask = Task::factory()->create(['name' => 'Admin']);
+    $project->tasks()->attach($adminTask->id, ['is_billable' => true, 'hourly_rate_override' => null]);
+
+    $wednesday = now()->startOfWeek()->addDays(2)->toDateString();
+    app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $meetingTask->id,
+        'spent_on' => $wednesday,
+        'hours' => 0.25,
+        'notes' => null,
+    ]);
+    app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $adminTask->id,
+        'spent_on' => $wednesday,
+        'hours' => 0.5,
+        'notes' => null,
+    ]);
+
+    $meetingRowKey = weekViewRowKey($project, $meetingTask);
+    $adminRowKey = weekViewRowKey($project, $adminTask);
+
+    $html = Livewire::test(WeekView::class)->html();
+
+    expect($html)
+        ->toContain('wire:key="week-row-'.$meetingRowKey.'"')
+        ->toContain('wire:key="week-row-'.$adminRowKey.'"')
+        ->toContain('wire:key="week-cell-'.$meetingRowKey.'-2"')
+        ->toContain('wire:key="week-cell-'.$adminRowKey.'-2"')
+        ->toContain('wire:model.live.blur="cellValues.'.$meetingRowKey.'.2"')
+        ->toContain('wire:model.live.blur="cellValues.'.$adminRowKey.'.2"');
+});
+
 test('save deletes entries when their cell is cleared', function () {
     [$user, $project, $task] = weekViewSetup();
     $this->actingAs($user);
@@ -67,7 +141,7 @@ test('save deletes entries when their cell is cleared', function () {
 
     expect(TimeEntry::count())->toBe(1);
 
-    $rowKey = $project->id.':'.$task->id.':';
+    $rowKey = weekViewRowKey($project, $task);
     Livewire::test(WeekView::class)
         ->set("cellValues.{$rowKey}", ['', '', '', '', '', '', ''])
         ->call('save');
@@ -86,7 +160,7 @@ test('addRow flow appends an empty row to the timesheet', function () {
         ->set('newRowTaskId', $task->id)
         ->call('addRow')
         ->assertSet('showAddRowModal', false)
-        ->assertSet('extraRows.0', $project->id.':'.$task->id.':');
+        ->assertSet('extraRows.0', weekViewRowKey($project, $task));
 });
 
 test('copy rows from most recent week adds blank rows without creating entries', function () {
@@ -109,7 +183,7 @@ test('copy rows from most recent week adds blank rows without creating entries',
         'notes' => null,
     ]);
 
-    $rowKey = $project->id.':'.$task->id.':';
+    $rowKey = weekViewRowKey($project, $task);
 
     Livewire::test(WeekView::class)
         ->set('selectedDate', '2026-06-30')
@@ -129,7 +203,7 @@ test('removeRow deletes the row plus any of its entries this week', function () 
     $monday = now()->startOfWeek()->toDateString();
     app(TimeEntryService::class)->create($user, ['project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => $monday, 'hours' => 1.0, 'notes' => null]);
 
-    $rowKey = $project->id.':'.$task->id.':';
+    $rowKey = weekViewRowKey($project, $task);
     Livewire::test(WeekView::class)
         ->call('removeRow', $rowKey);
 
@@ -144,7 +218,7 @@ test('manager viewing direct report week is read-only and cannot save', function
     $monday = now()->startOfWeek()->toDateString();
     app(TimeEntryService::class)->create($report, ['project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => $monday, 'hours' => 5.0, 'notes' => null]);
 
-    $rowKey = $project->id.':'.$task->id.':';
+    $rowKey = weekViewRowKey($project, $task);
 
     Livewire::actingAs($manager)
         ->test(WeekView::class, ['user' => $report])

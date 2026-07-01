@@ -10,6 +10,7 @@ use App\Models\Client;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
+use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
@@ -39,7 +40,7 @@ class ArchiveClient extends Tool
         InternalMcpActions $actions,
         McpAuditService $audit,
         McpApprovalService $approvals,
-    ) {
+    ): ResponseFactory {
         $user = $this->user($request);
         $input = $request->validate([
             'client_id' => ['required', 'integer', 'exists:clients,id'],

@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\Role;
+use App\Livewire\Admin\Tasks\Index as AdminTasks;
 use App\Livewire\Timesheet\DayView;
 use App\Livewire\Timesheet\WeekView;
 use App\Models\Project;
@@ -21,6 +22,32 @@ function taskPickerDropdownSetup(): User
     $project->users()->attach($user->id, ['hourly_rate_override' => null]);
 
     return $user;
+}
+
+function taskPickerNonBillableProjectSetup(): User
+{
+    $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
+    $project = Project::factory()->nonBillable()->create(['name' => 'Internal']);
+    $task = Task::factory()->create(['name' => 'Admin']);
+
+    $project->tasks()->attach($task->id, ['is_billable' => true, 'hourly_rate_override' => null]);
+    $project->users()->attach($user->id, ['hourly_rate_override' => null]);
+
+    return $user;
+}
+
+function taskPickerArchivedTaskSetup(): array
+{
+    $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
+    $project = Project::factory()->create(['name' => 'JDW001 Programme Activity']);
+    $activeTask = Task::factory()->create(['name' => 'Implementation', 'is_archived' => false]);
+    $archivedTask = Task::factory()->create(['name' => 'Meeting', 'is_archived' => true]);
+
+    $project->tasks()->attach($activeTask->id, ['is_billable' => true, 'hourly_rate_override' => null]);
+    $project->tasks()->attach($archivedTask->id, ['is_billable' => true, 'hourly_rate_override' => null]);
+    $project->users()->attach($user->id, ['hourly_rate_override' => null]);
+
+    return [$user, $activeTask, $archivedTask];
 }
 
 function taskPickerMethodBody(string $html): string
@@ -101,4 +128,97 @@ test('week view task dropdown can be searched by typing', function () {
         ->html();
 
     assertTaskPickerHasSearch($html);
+});
+
+test('day view picker treats tasks on non-billable projects as non-billable', function () {
+    $user = taskPickerNonBillableProjectSetup();
+    $this->actingAs($user);
+
+    $component = Livewire::test(DayView::class)
+        ->call('openNewModal');
+
+    $projects = $component->viewData('projectsForPicker');
+
+    expect($projects[0]['tasks'][0]['is_billable'])->toBeFalse();
+});
+
+test('day view picker excludes archived project tasks', function () {
+    [$user, $activeTask, $archivedTask] = taskPickerArchivedTaskSetup();
+    $this->actingAs($user);
+
+    $component = Livewire::test(DayView::class)
+        ->call('openNewModal');
+
+    $projects = $component->viewData('projectsForPicker');
+    $taskNames = collect($projects[0]['tasks'])->pluck('name')->all();
+
+    expect($taskNames)
+        ->toContain($activeTask->name)
+        ->not->toContain($archivedTask->name);
+});
+
+test('week view picker excludes archived project tasks', function () {
+    [$user, $activeTask, $archivedTask] = taskPickerArchivedTaskSetup();
+    $this->actingAs($user);
+
+    $component = Livewire::test(WeekView::class)
+        ->call('openAddRowModal');
+
+    $projects = $component->viewData('projectsForPicker');
+    $taskNames = collect($projects[0]['tasks'])->pluck('name')->all();
+
+    expect($taskNames)
+        ->toContain($activeTask->name)
+        ->not->toContain($archivedTask->name);
+});
+
+test('archiving a task clears cached project picker tasks', function () {
+    $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $project = Project::factory()->create(['name' => 'JDW001 Programme Activity']);
+    $task = Task::factory()->create(['name' => 'Meeting', 'is_archived' => false]);
+
+    $project->tasks()->attach($task->id, ['is_billable' => true, 'hourly_rate_override' => null]);
+    $project->users()->attach($user->id, ['hourly_rate_override' => null]);
+
+    $this->actingAs($user);
+
+    $initialDayTaskNames = collect(Livewire::test(DayView::class)
+        ->call('openNewModal')
+        ->viewData('projectsForPicker')[0]['tasks'])->pluck('name')->all();
+    $initialWeekTaskNames = collect(Livewire::test(WeekView::class)
+        ->call('openAddRowModal')
+        ->viewData('projectsForPicker')[0]['tasks'])->pluck('name')->all();
+
+    expect($initialDayTaskNames)->toContain($task->name);
+    expect($initialWeekTaskNames)->toContain($task->name);
+
+    $this->actingAs($admin);
+
+    Livewire::test(AdminTasks::class)
+        ->call('toggleArchive', $task->id);
+
+    $this->actingAs($user);
+
+    $dayTaskNames = collect(Livewire::test(DayView::class)
+        ->call('openNewModal')
+        ->viewData('projectsForPicker')[0]['tasks'])->pluck('name')->all();
+    $weekTaskNames = collect(Livewire::test(WeekView::class)
+        ->call('openAddRowModal')
+        ->viewData('projectsForPicker')[0]['tasks'])->pluck('name')->all();
+
+    expect($dayTaskNames)->not->toContain($task->name);
+    expect($weekTaskNames)->not->toContain($task->name);
+});
+
+test('week view picker treats tasks on non-billable projects as non-billable', function () {
+    $user = taskPickerNonBillableProjectSetup();
+    $this->actingAs($user);
+
+    $component = Livewire::test(WeekView::class)
+        ->call('openAddRowModal');
+
+    $projects = $component->viewData('projectsForPicker');
+
+    expect($projects[0]['tasks'][0]['is_billable'])->toBeFalse();
 });

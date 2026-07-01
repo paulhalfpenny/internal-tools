@@ -9,6 +9,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
+use Laravel\Mcp\ResponseFactory;
 use Laravel\Mcp\Server\Attributes\Description;
 use Laravel\Mcp\Server\Tool;
 use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
@@ -31,7 +32,7 @@ class DeleteTimeEntry extends Tool
         ];
     }
 
-    public function handle(Request $request, McpApprovalService $approvals)
+    public function handle(Request $request, McpApprovalService $approvals): ResponseFactory
     {
         $user = $this->user($request);
         $input = $request->validate([

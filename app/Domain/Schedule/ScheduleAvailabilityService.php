@@ -192,7 +192,7 @@ final class ScheduleAvailabilityService
         $start = CarbonImmutable::parse($startsOn)->startOfDay();
         $end = CarbonImmutable::parse($endsOn)->startOfDay();
 
-        return $end->lt($start) ? 0 : $start->diffInDays($end) + 1;
+        return $end->lt($start) ? 0 : (int) $start->diffInDays($end) + 1;
     }
 
     /**

@@ -602,6 +602,7 @@ final class InternalMcpActions
         ];
     }
 
+    /** @return array<string, mixed> */
     public function serializeTimeEntry(TimeEntry $entry): array
     {
         $entry->loadMissing(['project.client', 'task', 'user']);
@@ -627,6 +628,7 @@ final class InternalMcpActions
         ];
     }
 
+    /** @return array<string, mixed> */
     public function serializeClient(Client $client): array
     {
         return [
@@ -637,6 +639,7 @@ final class InternalMcpActions
         ];
     }
 
+    /** @return array<string, mixed> */
     public function serializeProject(Project $project): array
     {
         $project->loadMissing(['client', 'tasks', 'users', 'asanaProjects']);
@@ -671,18 +674,21 @@ final class InternalMcpActions
         ];
     }
 
+    /** @return array<string, mixed> */
     public function serializeTask(Task $task): array
     {
         return [
             'id' => $task->id,
             'name' => $task->name,
             'is_default_billable' => (bool) $task->is_default_billable,
+            'is_jdw_default_billable' => (bool) $task->is_jdw_default_billable,
             'colour' => $task->colour,
             'sort_order' => $task->sort_order,
             'is_archived' => (bool) $task->is_archived,
         ];
     }
 
+    /** @return array<string, mixed> */
     public function serializeAsanaTask(AsanaTask $task): array
     {
         return [
@@ -694,6 +700,7 @@ final class InternalMcpActions
         ];
     }
 
+    /** @return array<string, mixed> */
     public function serializeUser(User $user): array
     {
         return [
@@ -797,11 +804,13 @@ final class InternalMcpActions
      */
     private function syncProjectTasks(Project $project, array $taskIds): void
     {
-        $defaults = Task::whereIn('id', $taskIds)->pluck('is_default_billable', 'id');
+        $project->load('client');
+        $tasksById = Task::whereIn('id', $taskIds)->get()->keyBy('id');
         $sync = [];
 
         foreach (array_values(array_unique(array_map('intval', $taskIds))) as $taskId) {
-            $sync[$taskId] = ['is_billable' => (bool) ($defaults[$taskId] ?? false)];
+            $task = $tasksById->get($taskId);
+            $sync[$taskId] = ['is_billable' => $task?->defaultBillableForProject($project) ?? false];
         }
 
         $project->tasks()->sync($sync);

@@ -28,9 +28,15 @@
                 <label class="block text-xs font-medium text-gray-600 mb-1">Colour</label>
                 <input wire:model="colour" type="color" class="h-9 w-16 border border-gray-300 rounded cursor-pointer p-0.5">
             </div>
-            <div class="flex items-center gap-1.5 pb-1">
-                <input wire:model="isDefaultBillable" type="checkbox" id="create-billable" class="rounded">
-                <label for="create-billable" class="text-sm text-gray-700">Billable by default</label>
+            <div class="flex items-center gap-4 pb-1">
+                <label class="flex items-center gap-1.5 text-sm text-gray-700">
+                    <input wire:model="isDefaultBillable" type="checkbox" class="rounded">
+                    Agency billable
+                </label>
+                <label class="flex items-center gap-1.5 text-sm text-gray-700">
+                    <input wire:model="isJdwDefaultBillable" type="checkbox" class="rounded">
+                    JDW billable
+                </label>
             </div>
             <button wire:click="create" class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">Add</button>
         </div>
@@ -42,7 +48,8 @@
                 <tr>
                     <th class="px-4 py-3 text-left font-medium text-gray-600 w-8">Order</th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Name</th>
-                    <th class="px-4 py-3 text-center font-medium text-gray-600">Billable</th>
+                    <th class="px-4 py-3 text-center font-medium text-gray-600">Agency</th>
+                    <th class="px-4 py-3 text-center font-medium text-gray-600">JDW</th>
                     <th class="px-4 py-3 text-center font-medium text-gray-600">Colour</th>
                     <th class="px-4 py-3"></th>
                 </tr>
@@ -51,7 +58,7 @@
                 @forelse($tasks as $task)
                     @if($editingId === $task->id)
                         <tr class="bg-blue-50">
-                            <td class="px-4 py-2" colspan="5">
+                            <td class="px-4 py-2" colspan="6">
                                 <div class="flex gap-3 items-end flex-wrap">
                                     <div class="flex-1 min-w-48">
                                         <label class="block text-xs font-medium text-gray-600 mb-1">Name</label>
@@ -62,9 +69,15 @@
                                         <label class="block text-xs font-medium text-gray-600 mb-1">Colour</label>
                                         <input wire:model="editColour" type="color" class="h-9 w-16 border border-gray-300 rounded cursor-pointer p-0.5">
                                     </div>
-                                    <div class="flex items-center gap-1.5 pb-1">
-                                        <input wire:model="editIsDefaultBillable" type="checkbox" id="edit-billable" class="rounded">
-                                        <label for="edit-billable" class="text-sm">Billable</label>
+                                    <div class="flex items-center gap-4 pb-1">
+                                        <label class="flex items-center gap-1.5 text-sm">
+                                            <input wire:model="editIsDefaultBillable" type="checkbox" class="rounded">
+                                            Agency billable
+                                        </label>
+                                        <label class="flex items-center gap-1.5 text-sm">
+                                            <input wire:model="editIsJdwDefaultBillable" type="checkbox" class="rounded">
+                                            JDW billable
+                                        </label>
                                     </div>
                                     <div class="flex gap-2 pb-1">
                                         <button wire:click="save" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">Save</button>
@@ -90,6 +103,13 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 text-center">
+                                @if($task->is_jdw_default_billable)
+                                    <span class="text-green-600 text-xs">Yes</span>
+                                @else
+                                    <span class="text-gray-400 text-xs">No</span>
+                                @endif
+                            </td>
+                            <td class="px-4 py-3 text-center">
                                 <span class="inline-block w-5 h-5 rounded-full border border-gray-200" style="background-color: {{ $task->colour }}"></span>
                             </td>
                             <td class="px-4 py-3 text-right space-x-3">
@@ -101,7 +121,7 @@
                         </tr>
                     @endif
                 @empty
-                    <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">No tasks yet.</td></tr>
+                    <tr><td colspan="6" class="px-4 py-8 text-center text-gray-400 text-sm">No tasks yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

@@ -73,6 +73,7 @@ class McpPendingAction extends Model
         return $this->belongsTo(User::class, 'approved_by_user_id');
     }
 
+    /** @return MorphTo<Model, $this> */
     public function subject(): MorphTo
     {
         return $this->morphTo();

@@ -49,6 +49,7 @@ class TaskSeeder extends Seeder
         foreach ($billable as $name) {
             Task::firstOrCreate(['name' => $name], [
                 'is_default_billable' => true,
+                'is_jdw_default_billable' => true,
                 'colour' => $colours[$order % count($colours)],
                 'sort_order' => $order,
             ]);
@@ -58,6 +59,7 @@ class TaskSeeder extends Seeder
         foreach ($nonBillable as $name) {
             Task::firstOrCreate(['name' => $name], [
                 'is_default_billable' => false,
+                'is_jdw_default_billable' => false,
                 'colour' => $colours[$order % count($colours)],
                 'sort_order' => $order,
             ]);

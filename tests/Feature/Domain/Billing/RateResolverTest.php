@@ -15,11 +15,13 @@ uses(RefreshDatabase::class);
 
 /**
  * @param  array<int, int>  $assignedTaskIds  — list of task ids that are assigned to the project
+ * @param  array<int, bool>  $taskBillabilityById
  * @param  array<int, array{hourly_rate_override: ?float}>  $userPivots
  */
 function makeProject(
     bool $isBillable = true,
     array $assignedTaskIds = [],
+    array $taskBillabilityById = [],
     array $userPivots = [],
 ): Project {
     $project = new Project;
@@ -29,7 +31,9 @@ function makeProject(
     foreach ($assignedTaskIds as $taskId) {
         $task = new Task;
         $task->id = $taskId;
-        $task->setRelation('pivot', new Pivot);
+        $pivot = new Pivot;
+        $pivot->forceFill(['is_billable' => $taskBillabilityById[$taskId] ?? true]);
+        $task->setRelation('pivot', $pivot);
         $tasks->push($task);
     }
     $project->setRelation('tasks', $tasks);
@@ -89,9 +93,9 @@ test('task not assigned to project returns is_billable false', function () {
     expect($result->isBillable)->toBeFalse();
 });
 
-test('task with is_default_billable=false returns is_billable false', function () {
-    $project = makeProject(true, [1]);
-    $task = makeTask(1, isDefaultBillable: false);
+test('project task pivot can make a globally billable task non-billable', function () {
+    $project = makeProject(true, [1], [1 => false]);
+    $task = makeTask(1, isDefaultBillable: true);
     $user = makeUser(1);
 
     $result = (new RateResolver)->resolve($project, $task, $user);
@@ -100,9 +104,9 @@ test('task with is_default_billable=false returns is_billable false', function (
         ->and($result->rateSnapshot)->toBeNull();
 });
 
-test('task with is_default_billable=true returns is_billable true', function () {
-    $project = makeProject(true, [1]);
-    $task = makeTask(1, isDefaultBillable: true);
+test('project task pivot can make a globally non-billable task billable', function () {
+    $project = makeProject(true, [1], [1 => true]);
+    $task = makeTask(1, isDefaultBillable: false);
     $user = makeUser(1);
 
     $result = (new RateResolver)->resolve($project, $task, $user);

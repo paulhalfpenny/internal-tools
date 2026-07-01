@@ -58,6 +58,7 @@ class McpAuditLog extends Model
         return $this->belongsTo(McpPendingAction::class);
     }
 
+    /** @return MorphTo<Model, $this> */
     public function subject(): MorphTo
     {
         return $this->morphTo();

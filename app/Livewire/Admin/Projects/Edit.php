@@ -311,14 +311,16 @@ class Edit extends Component
             session()->flash('asana_warning', 'One or more Asana boards were linked, but the cumulative-hours custom field could not be set up. It will be retried on the first time entry sync.');
         }
 
-        // Sync tasks. Billability is now sourced from task.is_default_billable
-        // (managed on the global Tasks admin page); the pivot column is kept in
-        // sync for backward compat but isn't read by the resolver any more.
+        $this->project->load('client');
+
+        // Sync tasks. Billability is stored on the project-task pivot, using
+        // the task's Agency/JDW default for this project's client.
         $assignedIds = array_values(array_unique(array_map('intval', $this->taskAssignments)));
-        $defaults = Task::whereIn('id', $assignedIds)->pluck('is_default_billable', 'id');
+        $tasksById = Task::whereIn('id', $assignedIds)->get()->keyBy('id');
         $taskSync = [];
         foreach ($assignedIds as $taskId) {
-            $taskSync[$taskId] = ['is_billable' => (bool) ($defaults[$taskId] ?? false)];
+            $task = $tasksById->get($taskId);
+            $taskSync[$taskId] = ['is_billable' => $task?->defaultBillableForProject($this->project) ?? false];
         }
         $this->project->tasks()->sync($taskSync);
 

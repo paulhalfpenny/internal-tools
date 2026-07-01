@@ -8,6 +8,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
+use Laravel\Mcp\ResponseFactory;
 
 trait InteractsWithInternalTools
 {
@@ -25,7 +26,7 @@ trait InteractsWithInternalTools
     /**
      * @param  array<string, mixed>  $data
      */
-    protected function ok(array $data)
+    protected function ok(array $data): ResponseFactory
     {
         return Response::structured([
             'approval_required' => false,

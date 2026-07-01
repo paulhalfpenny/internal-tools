@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
  *
  * Resolution for is_billable:
  *   1. If project.is_billable = false → false (rate is null, amount is £0)
- *   2. Else task.is_default_billable (set globally on the Tasks admin page)
+ *   2. Else project_task.is_billable for this project/task assignment
  *
  * Rates and billability are frozen at save time. Changing project/user/task
  * settings after an entry is saved does NOT change historical entries.
@@ -57,12 +57,16 @@ final class RateResolver
             return false;
         }
 
-        // Task must be assigned to the project
-        if ($project->tasks->firstWhere('id', $task->id) === null) {
+        // Task must be assigned to the project.
+        $projectTask = $project->tasks->firstWhere('id', $task->id);
+        if ($projectTask === null) {
             return false;
         }
 
-        return (bool) $task->is_default_billable;
+        /** @var Pivot $pivot */
+        $pivot = $projectTask->getRelation('pivot');
+
+        return (bool) $pivot->getAttribute('is_billable');
     }
 
     private function resolveRate(Project $project, User $user): float

@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin\Tasks;
 
 use App\Models\Task;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
@@ -15,6 +16,8 @@ class Index extends Component
 
     public bool $isDefaultBillable = true;
 
+    public bool $isJdwDefaultBillable = true;
+
     public string $colour = '#3B82F6';
 
     public ?int $editingId = null;
@@ -22,6 +25,8 @@ class Index extends Component
     public string $editName = '';
 
     public bool $editIsDefaultBillable = true;
+
+    public bool $editIsJdwDefaultBillable = true;
 
     public string $editColour = '#3B82F6';
 
@@ -41,12 +46,14 @@ class Index extends Component
         Task::create([
             'name' => $this->name,
             'is_default_billable' => $this->isDefaultBillable,
+            'is_jdw_default_billable' => $this->isJdwDefaultBillable,
             'colour' => $this->colour,
             'sort_order' => $maxSort + 1,
         ]);
 
         $this->name = '';
         $this->isDefaultBillable = true;
+        $this->isJdwDefaultBillable = true;
         $this->colour = '#3B82F6';
     }
 
@@ -58,6 +65,7 @@ class Index extends Component
         $this->editingId = $taskId;
         $this->editName = $task->name;
         $this->editIsDefaultBillable = $task->is_default_billable;
+        $this->editIsJdwDefaultBillable = $task->is_jdw_default_billable;
         $this->editColour = $task->colour;
     }
 
@@ -70,11 +78,14 @@ class Index extends Component
             'editColour' => 'required|regex:/^#[0-9A-Fa-f]{6}$/',
         ]);
 
-        Task::findOrFail((int) $this->editingId)->update([
+        $task = Task::findOrFail((int) $this->editingId);
+        $task->update([
             'name' => $this->editName,
             'is_default_billable' => $this->editIsDefaultBillable,
+            'is_jdw_default_billable' => $this->editIsJdwDefaultBillable,
             'colour' => $this->editColour,
         ]);
+        $this->forgetProjectPickerCachesForTask($task);
 
         $this->editingId = null;
     }
@@ -120,6 +131,7 @@ class Index extends Component
 
         $task = Task::findOrFail($taskId);
         $task->update(['is_archived' => ! $task->is_archived]);
+        $this->forgetProjectPickerCachesForTask($task);
     }
 
     public function render(): View
@@ -132,5 +144,18 @@ class Index extends Component
         return view('livewire.admin.tasks.index', [
             'tasks' => $query->get(),
         ]);
+    }
+
+    private function forgetProjectPickerCachesForTask(Task $task): void
+    {
+        $task->loadMissing('projects.users:id');
+
+        $task->projects
+            ->flatMap(fn ($project) => $project->users->pluck('id'))
+            ->unique()
+            ->each(function ($userId): void {
+                Cache::forget("projects_picker_{$userId}");
+                Cache::forget("projects_picker_eloquent_{$userId}");
+            });
     }
 }

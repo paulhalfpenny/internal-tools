@@ -52,7 +52,7 @@ class ScheduleBoard extends Component
 
     public string $scheduleFilter = 'metric:availability';
 
-    /** @var array<string, bool> */
+    /** @var array<int|string, bool> */
     public array $expandedProjects = [];
 
     /** @var array<string, bool> */
@@ -232,7 +232,15 @@ class ScheduleBoard extends Component
     public function toggleProject(int $projectId): void
     {
         $key = (string) $projectId;
-        $this->expandedProjects[$key] = ! ($this->expandedProjects[$key] ?? false);
+
+        /** @var array<string, bool> $expandedProjects */
+        $expandedProjects = [];
+        foreach ($this->expandedProjects as $expandedProjectId => $expanded) {
+            $expandedProjects[(string) $expandedProjectId] = (bool) $expanded;
+        }
+
+        $expandedProjects[$key] = ! ($expandedProjects[$key] ?? false);
+        $this->expandedProjects = $expandedProjects;
     }
 
     public function toggleAssignee(string $assigneeKey): void
@@ -767,6 +775,10 @@ class ScheduleBoard extends Component
         DB::transaction(function () use ($assignment, $ranges, $currentAssignee): void {
             $firstRange = array_shift($ranges);
 
+            if ($firstRange === null) {
+                return;
+            }
+
             $assignment->update([
                 ...$currentAssignee,
                 'starts_on' => $firstRange['starts_on']->toDateString(),
@@ -979,7 +991,7 @@ class ScheduleBoard extends Component
                 return [
                     'id' => $project->id,
                     'name' => $project->name,
-                    'client_name' => $project->client?->name ?? '',
+                    'client_name' => $project->client->name,
                     'colour' => $this->projectColour($project->id),
                     'expanded' => $this->expandedProjects[(string) $project->id] ?? false,
                     'assignments' => $assignmentRows,
@@ -1058,7 +1070,7 @@ class ScheduleBoard extends Component
                 'role_title' => $placeholder->role_title,
                 'is_placeholder' => true,
                 'expanded' => $this->expandedAssignees[$key] ?? true,
-                'metrics' => $this->periodMetrics($placeholder, $assigneeAssignments, collect(), $periods, $availability, []),
+                'metrics' => $this->periodMetrics($placeholder, $assigneeAssignments, new EloquentCollection, $periods, $availability, []),
                 'assignments' => $this->groupTeamAssignmentRows($visibleAssignmentRows),
                 'time_off' => [],
             ]);
@@ -1454,7 +1466,7 @@ class ScheduleBoard extends Component
             'id' => $assignment->id,
             'project_id' => $assignment->project_id,
             'project_name' => $assignment->project->name,
-            'client_name' => $assignment->project->client?->name ?? '',
+            'client_name' => $assignment->project->client->name,
             'colour' => $this->projectColour($assignment->project_id),
             'assignee_type' => $assignment->assigneeType(),
             'assignee_id' => $assignment->assigneeId(),

@@ -281,6 +281,7 @@ class HarvestImportReference extends Command
                 $task = Task::create([
                     'name' => $name,
                     'is_default_billable' => $isBillable,
+                    'is_jdw_default_billable' => $isBillable,
                 ]);
                 $this->creationLog[] = "  Created task: {$name}";
             }
