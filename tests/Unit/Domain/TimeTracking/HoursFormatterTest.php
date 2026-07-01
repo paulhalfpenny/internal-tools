@@ -12,6 +12,15 @@ test('formats decimal hours as h:mm', function () {
         ->and(HoursFormatter::asTime(8.75))->toBe('8:45');
 });
 
+test('formats decimal hours with a minimum single decimal place', function () {
+    expect(HoursFormatter::asDecimal(0.0))->toBe('0.0')
+        ->and(HoursFormatter::asDecimal(0.25))->toBe('0.25')
+        ->and(HoursFormatter::asDecimal(0.5))->toBe('0.5')
+        ->and(HoursFormatter::asDecimal(1.0))->toBe('1.0')
+        ->and(HoursFormatter::asDecimal(1.5))->toBe('1.5')
+        ->and(HoursFormatter::asDecimal(8.75))->toBe('8.75');
+});
+
 test('handles 60-minute rollover', function () {
     expect(HoursFormatter::asTime(0.999))->toBe('1:00')
         ->and(HoursFormatter::asTime(1.999))->toBe('2:00');

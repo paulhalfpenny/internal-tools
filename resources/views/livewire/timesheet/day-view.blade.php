@@ -166,7 +166,7 @@
                         {{ $day->format('j') }}
                     </span>
                     <span class="mt-1 text-xs {{ $total > 0 ? 'text-gray-600' : 'text-gray-300' }}">
-                        {{ $total > 0 ? \App\Domain\TimeTracking\HoursFormatter::asTime($total) : '–' }}
+                        {{ $total > 0 ? \App\Domain\TimeTracking\HoursFormatter::asDecimal($total) : '–' }}
                     </span>
                 </button>
             @endforeach
@@ -235,7 +235,7 @@
                                 Running
                             </span>
                         @endif
-                        <span class="text-gray-700 font-medium tabular-nums">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) ($entryDisplayHours[$entry->id] ?? $entry->hours)) }}</span>
+                        <span class="text-gray-700 font-medium tabular-nums">{{ \App\Domain\TimeTracking\HoursFormatter::asDecimal((float) ($entryDisplayHours[$entry->id] ?? $entry->hours)) }}</span>
                     </div>
 
                     {{-- Actions --}}
@@ -306,8 +306,8 @@
             @endif
         </div>
         <div class="flex gap-6">
-            <span>Day: <strong class="text-gray-800">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) $dayTotal) }}</strong></span>
-            <span>Week: <strong class="text-gray-800">{{ \App\Domain\TimeTracking\HoursFormatter::asTime((float) $weekTotal) }}</strong></span>
+            <span>Day: <strong class="text-gray-800">{{ \App\Domain\TimeTracking\HoursFormatter::asDecimal((float) $dayTotal) }}</strong></span>
+            <span>Week: <strong class="text-gray-800">{{ \App\Domain\TimeTracking\HoursFormatter::asDecimal((float) $weekTotal) }}</strong></span>
         </div>
     </div>
 
@@ -361,7 +361,7 @@
                         @php
                             $used = in_array(strtolower($event['title']), $usedEventTitles, true);
                             $hoursLabel = $event['hours'] == 1.0 ? '1 hour'
-                                : \App\Domain\TimeTracking\HoursFormatter::asTime((float) $event['hours']);
+                                : \App\Domain\TimeTracking\HoursFormatter::asDecimal((float) $event['hours']);
                         @endphp
                         <button
                             @if (! $used) wire:click="pullFromCalendarEvent('{{ addslashes($event['title']) }}', {{ $event['hours'] }})" @endif
@@ -834,7 +834,7 @@
                                 type="text"
                                 wire:model.blur="hoursInput"
                                 @input="liveHoursInput = $event.target.value"
-                                placeholder="0.00"
+                                placeholder="0.25"
                                 class="w-full h-full border {{ $hoursError ? 'border-red-400' : 'border-gray-300' }} rounded-lg px-3 py-2.5 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-green-500 placeholder-gray-400"
                             />
                             @if ($hoursError)

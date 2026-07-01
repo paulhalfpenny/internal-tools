@@ -541,7 +541,7 @@ class WeekView extends Component
             $dayIndex = (int) $weekStart->diffInDays(CarbonImmutable::parse($entry->spent_on));
             if ($dayIndex >= 0 && $dayIndex < 7) {
                 $storedCellHours[$key][$dayIndex] = ($storedCellHours[$key][$dayIndex] ?? 0.0) + (float) $entry->hours;
-                $rowsFromEntries[$key]['cells'][$dayIndex] = HoursFormatter::asTime($storedCellHours[$key][$dayIndex]);
+                $rowsFromEntries[$key]['cells'][$dayIndex] = HoursFormatter::asDecimal($storedCellHours[$key][$dayIndex]);
 
                 $currentCellHours[$key][$dayIndex] = ($currentCellHours[$key][$dayIndex] ?? 0.0) + $timeEntryService->currentHours($entry);
                 if ($currentCellHours[$key][$dayIndex] > $storedCellHours[$key][$dayIndex]) {

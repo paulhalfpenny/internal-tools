@@ -16,4 +16,18 @@ final class HoursFormatter
 
         return $h.':'.str_pad((string) $m, 2, '0', STR_PAD_LEFT);
     }
+
+    /**
+     * Format decimal hours with at least one decimal place.
+     */
+    public static function asDecimal(float $hours): string
+    {
+        $formatted = rtrim(number_format($hours, 2, '.', ''), '0');
+
+        if (str_ends_with($formatted, '.')) {
+            $formatted .= '0';
+        }
+
+        return $formatted;
+    }
 }

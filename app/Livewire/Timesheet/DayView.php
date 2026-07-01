@@ -207,7 +207,7 @@ class DayView extends Component
         $this->selectedProjectId = $entry->project_id;
         $this->selectedTaskId = $entry->task_id;
         $this->selectedAsanaTaskGid = $entry->asana_task_gid ?? '';
-        $this->hoursInput = HoursFormatter::asTime((float) $entry->hours);
+        $this->hoursInput = HoursFormatter::asDecimal((float) $entry->hours);
         $this->notes = $entry->notes ?? '';
         $this->entryDate = $entry->spent_on->toDateString();
         $this->lastCalendarPullTitle = $this->calendarTitleForEntry($entry);
@@ -604,7 +604,7 @@ class DayView extends Component
         }
 
         $this->notes = $title;
-        $this->hoursInput = HoursFormatter::asTime($hours);
+        $this->hoursInput = HoursFormatter::asDecimal($hours);
         $this->lastCalendarPullTitle = $title;
 
         // Auto-fill project/task from a previously remembered association for this event title.

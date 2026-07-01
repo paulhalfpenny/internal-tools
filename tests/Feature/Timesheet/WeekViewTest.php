@@ -44,8 +44,8 @@ test('week view groups existing entries into rows by (project, task)', function 
 
     $rowKey = weekViewRowKey($project, $task);
     Livewire::test(WeekView::class)
-        ->assertSet("cellValues.{$rowKey}.0", '1:00')
-        ->assertSet("cellValues.{$rowKey}.2", '2:00')
+        ->assertSet("cellValues.{$rowKey}.0", '1.0')
+        ->assertSet("cellValues.{$rowKey}.2", '2.0')
         ->assertSet("cellValues.{$rowKey}.1", '');
 });
 
@@ -71,7 +71,7 @@ test('week view sums same-day entries that only differ by notes', function () {
 
     $rowKey = weekViewRowKey($project, $task);
     $component = Livewire::test(WeekView::class)
-        ->assertSet("cellValues.{$rowKey}.0", '1:30');
+        ->assertSet("cellValues.{$rowKey}.0", '1.5');
 
     expect($component->viewData('dayTotals')[0])->toBe(1.5)
         ->and($component->viewData('weekTotal'))->toBe(1.5);
@@ -100,7 +100,7 @@ test('saving an unchanged summed week cell keeps the existing total', function (
     $rowKey = weekViewRowKey($project, $task);
 
     Livewire::test(WeekView::class)
-        ->assertSet("cellValues.{$rowKey}.0", '1:30')
+        ->assertSet("cellValues.{$rowKey}.0", '1.5')
         ->call('save');
 
     expect((float) TimeEntry::whereDate('spent_on', $monday)->sum('hours'))->toBe(1.5);
@@ -130,7 +130,7 @@ test('week view totals include elapsed time for a running timer', function () {
 
         $dayTotals = $component->viewData('dayTotals');
 
-        $component->assertSet("cellValues.{$rowKey}.2", '0:15');
+        $component->assertSet("cellValues.{$rowKey}.2", '0.25');
         expect($dayTotals[2])->toBe(1.0)
             ->and($component->viewData('weekTotal'))->toBe(1.0);
     } finally {
@@ -153,6 +153,10 @@ test('save creates new entries from filled cells', function () {
     $wednesday = now()->startOfWeek()->addDays(2)->toDateString();
     expect(TimeEntry::whereDate('spent_on', $monday)->where('user_id', $user->id)->first()->hours)->toBe('2.00');
     expect(TimeEntry::whereDate('spent_on', $wednesday)->where('user_id', $user->id)->first()->hours)->toBe('3.00');
+
+    Livewire::test(WeekView::class)
+        ->assertSet("cellValues.{$rowKey}.0", '2.0')
+        ->assertSet("cellValues.{$rowKey}.2", '3.0');
 });
 
 test('week view keys editable rows and cells by row identity', function () {

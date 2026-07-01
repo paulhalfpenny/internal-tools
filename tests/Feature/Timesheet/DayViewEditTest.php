@@ -12,7 +12,7 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
-test('opening edit modal renders hours as h:mm not decimal', function () {
+test('opening edit modal renders hours as decimal', function () {
     $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
     $this->actingAs($user);
 
@@ -31,7 +31,7 @@ test('opening edit modal renders hours as h:mm not decimal', function () {
 
     Livewire::test(DayView::class)
         ->call('openEditModal', $entry->id)
-        ->assertSet('hoursInput', '0:15')
+        ->assertSet('hoursInput', '0.25')
         ->assertSet('selectedProjectId', $project->id)
         ->assertSet('selectedTaskId', $task->id);
 });
@@ -116,7 +116,7 @@ test('saving an edited entry closes the modal (no quick-add)', function () {
         ->assertSet('showModal', false);             // edit closes as before
 });
 
-test('typing 0:15 saves as 0.25 hours and re-opens as 0:15', function () {
+test('typing 0:15 saves as 0.25 hours and re-opens as decimal', function () {
     $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
     $this->actingAs($user);
 
@@ -138,7 +138,7 @@ test('typing 0:15 saves as 0.25 hours and re-opens as 0:15', function () {
 
     Livewire::test(DayView::class)
         ->call('openEditModal', $entry->id)
-        ->assertSet('hoursInput', '0:15');
+        ->assertSet('hoursInput', '0.25');
 });
 
 test('entry modal backdrop only closes from a mouse down that starts on the backdrop', function () {
