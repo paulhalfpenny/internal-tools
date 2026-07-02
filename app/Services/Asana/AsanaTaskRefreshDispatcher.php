@@ -2,6 +2,7 @@
 
 namespace App\Services\Asana;
 
+use App\Enums\Role;
 use App\Jobs\Asana\PullAsanaTasksJob;
 use App\Models\AsanaProject;
 use App\Models\Project;
@@ -35,7 +36,9 @@ final class AsanaTaskRefreshDispatcher
             ->whereNotNull('asana_user_gid')
             ->whereNotNull('asana_workspace_gid')
             ->where('is_active', true)
-            ->get(['id', 'asana_workspace_gid']);
+            ->orderByRaw('case when role = ? then 0 else 1 end', [Role::Admin->value])
+            ->orderBy('id')
+            ->get(['id', 'role', 'asana_workspace_gid']);
 
         if ($connectedUsers->isEmpty()) {
             return 0;
@@ -43,12 +46,16 @@ final class AsanaTaskRefreshDispatcher
 
         $dispatched = 0;
         foreach ($boards as $board) {
-            $actor = $this->actorForWorkspace($connectedUsers, $board->workspace_gid);
-            if ($actor === null) {
+            $actors = $this->actorsForWorkspace($connectedUsers, $board->workspace_gid);
+            if ($actors->isEmpty()) {
                 continue;
             }
 
-            PullAsanaTasksJob::dispatch($board->gid, $actor->id);
+            /** @var User $actor */
+            $actor = $actors->first();
+            $fallbackUserIds = $actors->skip(1)->pluck('id')->values()->all();
+
+            PullAsanaTasksJob::dispatch($board->gid, $actor->id, $fallbackUserIds);
             $dispatched++;
         }
 
@@ -57,9 +64,12 @@ final class AsanaTaskRefreshDispatcher
 
     /**
      * @param  Collection<int, User>  $connectedUsers
+     * @return Collection<int, User>
      */
-    private function actorForWorkspace(Collection $connectedUsers, string $workspaceGid): ?User
+    private function actorsForWorkspace(Collection $connectedUsers, string $workspaceGid): Collection
     {
-        return $connectedUsers->firstWhere('asana_workspace_gid', $workspaceGid);
+        return $connectedUsers
+            ->where('asana_workspace_gid', $workspaceGid)
+            ->values();
     }
 }

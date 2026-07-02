@@ -45,6 +45,34 @@ test('asana:refresh-projects dispatches one workspace pull per connected workspa
     Bus::assertDispatchedTimes(PullAsanaProjectsJob::class, 2);
 });
 
+test('asana:refresh-projects dispatches all same-workspace actors with admins first', function () {
+    Bus::fake([PullAsanaProjectsJob::class]);
+
+    $regularUser = User::factory()->create([
+        'asana_access_token' => 'tok-user',
+        'asana_user_gid' => 'u1',
+        'asana_workspace_gid' => 'WS1',
+    ]);
+    $admin = User::factory()->admin()->create([
+        'asana_access_token' => 'tok-admin',
+        'asana_user_gid' => 'admin',
+        'asana_workspace_gid' => 'WS1',
+    ]);
+    User::factory()->create([
+        'asana_access_token' => 'tok-other',
+        'asana_user_gid' => 'u2',
+        'asana_workspace_gid' => 'WS2',
+    ]);
+
+    $this->artisan('asana:refresh-projects')->assertExitCode(0);
+
+    Bus::assertDispatched(PullAsanaProjectsJob::class, fn (PullAsanaProjectsJob $job) => $job->workspaceGid === 'WS1'
+        && $job->userId === $admin->id
+        && property_exists($job, 'fallbackUserIds')
+        && $job->fallbackUserIds === [$regularUser->id]
+    );
+});
+
 test('asana:refresh-projects no-ops when no users connected', function () {
     Bus::fake([PullAsanaProjectsJob::class]);
 
@@ -92,6 +120,63 @@ test('asana:refresh-tasks dispatches a pull for each linked, non-archived projec
     Bus::assertDispatched(PullAsanaTasksJob::class, fn ($j) => $j->asanaProjectGid === 'AP2');
     Bus::assertNotDispatched(PullAsanaTasksJob::class, fn ($j) => $j->asanaProjectGid === 'AP-archived');
     Bus::assertNotDispatched(PullAsanaTasksJob::class, fn ($j) => $j->asanaProjectGid === 'AP-no-actor');
+});
+
+test('asana:refresh-tasks ignores cached Asana projects that are not linked', function () {
+    Bus::fake([PullAsanaTasksJob::class]);
+
+    User::factory()->create([
+        'asana_access_token' => 'tok-a',
+        'asana_user_gid' => 'u1',
+        'asana_workspace_gid' => 'WS1',
+    ]);
+
+    AsanaProject::create([
+        'gid' => 'AP-unlinked',
+        'workspace_gid' => 'WS1',
+        'name' => 'Unlinked board',
+        'is_archived' => false,
+    ]);
+
+    $project = Project::factory()->create();
+    linkBoardToProject($project, 'AP-linked', 'WS1');
+
+    $this->artisan('asana:refresh-tasks')->assertExitCode(0);
+
+    Bus::assertDispatchedTimes(PullAsanaTasksJob::class, 1);
+    Bus::assertDispatched(PullAsanaTasksJob::class, fn (PullAsanaTasksJob $job) => $job->asanaProjectGid === 'AP-linked');
+    Bus::assertNotDispatched(PullAsanaTasksJob::class, fn (PullAsanaTasksJob $job) => $job->asanaProjectGid === 'AP-unlinked');
+});
+
+test('asana:refresh-tasks dispatches all same-workspace actors with admins first', function () {
+    Bus::fake([PullAsanaTasksJob::class]);
+
+    $regularUser = User::factory()->create([
+        'asana_access_token' => 'tok-user',
+        'asana_user_gid' => 'u1',
+        'asana_workspace_gid' => 'WS1',
+    ]);
+    $admin = User::factory()->admin()->create([
+        'asana_access_token' => 'tok-admin',
+        'asana_user_gid' => 'admin',
+        'asana_workspace_gid' => 'WS1',
+    ]);
+    User::factory()->create([
+        'asana_access_token' => 'tok-other',
+        'asana_user_gid' => 'u2',
+        'asana_workspace_gid' => 'WS2',
+    ]);
+
+    $project = Project::factory()->create();
+    linkBoardToProject($project, 'AP1', 'WS1');
+
+    $this->artisan('asana:refresh-tasks')->assertExitCode(0);
+
+    Bus::assertDispatched(PullAsanaTasksJob::class, fn (PullAsanaTasksJob $job) => $job->asanaProjectGid === 'AP1'
+        && $job->userId === $admin->id
+        && property_exists($job, 'fallbackUserIds')
+        && $job->fallbackUserIds === [$regularUser->id]
+    );
 });
 
 test('asana:refresh-tasks no-ops when no users connected', function () {
