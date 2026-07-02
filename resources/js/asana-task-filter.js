@@ -6,6 +6,55 @@ function taskText(task) {
     ].filter(Boolean).join(' ');
 }
 
+const ASANA_HOST_PATTERN = /(^|\.)asana\.com$/;
+const ASANA_GID_PATTERN = /^\d{10,}$/;
+
+function addUniqueGid(gids, value) {
+    const gid = String(value ?? '').trim();
+
+    if (ASANA_GID_PATTERN.test(gid) && !gids.includes(gid)) {
+        gids.push(gid);
+    }
+}
+
+export function extractAsanaTaskGids(value) {
+    const raw = String(value ?? '').trim();
+    const gids = [];
+
+    if (ASANA_GID_PATTERN.test(raw)) {
+        addUniqueGid(gids, raw);
+    }
+
+    const urls = raw.match(/https?:\/\/[^\s<>"']+/g) ?? [];
+
+    for (const urlText of urls) {
+        let url;
+
+        try {
+            url = new URL(urlText);
+        } catch {
+            continue;
+        }
+
+        if (!ASANA_HOST_PATTERN.test(url.hostname)) {
+            continue;
+        }
+
+        const segments = url.pathname.split('/').filter(Boolean);
+        const taskSegmentIndex = segments.indexOf('task');
+
+        if (taskSegmentIndex !== -1) {
+            addUniqueGid(gids, segments[taskSegmentIndex + 1]);
+        }
+
+        if (segments[0] === '0') {
+            addUniqueGid(gids, segments[2]);
+        }
+    }
+
+    return gids;
+}
+
 export function normalizeAsanaTaskText(value) {
     return String(value ?? '')
         .normalize('NFKD')
@@ -22,6 +71,12 @@ function compactAsanaTaskText(value) {
 }
 
 export function asanaTaskMatchesText(task, text) {
+    const taskGid = String(task?.gid ?? '');
+
+    if (taskGid !== '' && extractAsanaTaskGids(text).includes(taskGid)) {
+        return true;
+    }
+
     const normalizedText = normalizeAsanaTaskText(text);
 
     if (normalizedText === '') {
@@ -38,9 +93,10 @@ export function asanaTaskMatchesText(task, text) {
 export function filterAsanaTasksForProject(tasks, projectTerms = [], query = '') {
     const taskList = Array.isArray(tasks) ? tasks : [];
     const normalizedQuery = normalizeAsanaTaskText(query);
+    const queryGids = extractAsanaTaskGids(query);
 
-    if (normalizedQuery !== '') {
-        return taskList.filter((task) => asanaTaskMatchesText(task, normalizedQuery));
+    if (normalizedQuery !== '' || queryGids.length > 0) {
+        return taskList.filter((task) => asanaTaskMatchesText(task, query));
     }
 
     const terms = Array.isArray(projectTerms)

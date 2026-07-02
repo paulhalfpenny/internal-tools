@@ -64,7 +64,7 @@ test('day view lists entries even when spent_on is stored as a full datetime str
         ->assertSee('should appear in day view');
 });
 
-test('saving a new entry keeps the modal open with a fresh form (quick-add)', function () {
+test('saving a new entry closes the modal and remembers the project and task', function () {
     $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
     $this->actingAs($user);
 
@@ -82,12 +82,35 @@ test('saving a new entry keeps the modal open with a fresh form (quick-add)', fu
         ->set('entryDate', now()->toDateString())
         ->call('save')
         ->assertHasNoErrors()
-        ->assertSet('showModal', true)               // modal stays open
-        ->assertSet('selectedProjectId', null)        // form cleared
-        ->assertSet('selectedTaskId', null)
+        ->assertSet('showModal', false)
+        ->assertSet('lastSavedProjectId', $project->id)
+        ->assertSet('lastSavedTaskId', $task->id)
         ->assertSet('hoursInput', '')
         ->assertSet('notes', '')
         ->assertSet('editingEntryId', null);
+
+    expect(TimeEntry::count())->toBe(1);
+});
+
+test('opening a new entry after saving remembers the last saved project and task', function () {
+    $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
+    $this->actingAs($user);
+
+    $project = Project::factory()->create(['default_hourly_rate' => 100]);
+    $task = Task::factory()->create();
+    $project->tasks()->attach($task->id, ['is_billable' => true, 'hourly_rate_override' => null]);
+    $project->users()->attach($user->id, ['hourly_rate_override' => null]);
+
+    Livewire::test(DayView::class)
+        ->call('openNewModal')
+        ->set('selectedProjectId', $project->id)
+        ->set('selectedTaskId', $task->id)
+        ->set('hoursInput', '1.0')
+        ->set('entryDate', now()->toDateString())
+        ->call('save')
+        ->call('openNewModal')
+        ->assertSet('selectedProjectId', $project->id)
+        ->assertSet('selectedTaskId', $task->id);
 
     expect(TimeEntry::count())->toBe(1);
 });

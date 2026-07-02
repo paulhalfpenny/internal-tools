@@ -44,6 +44,12 @@ class DayView extends Component
 
     public string $selectedAsanaTaskGid = '';
 
+    #[Locked]
+    public ?int $lastSavedProjectId = null;
+
+    #[Locked]
+    public ?int $lastSavedTaskId = null;
+
     // Entry form fields
     public string $hoursInput = '';
 
@@ -180,6 +186,7 @@ class DayView extends Component
         }
 
         $this->resetModal();
+        $this->restoreLastSavedProjectAndTask();
         $this->entryDate = $this->selectedDate;
         $this->showModal = true;
 
@@ -262,6 +269,7 @@ class DayView extends Component
             'asana_task_gid' => $this->selectedAsanaTaskGid !== '' ? $this->selectedAsanaTaskGid : null,
         ]);
 
+        $this->rememberLastSavedProjectAndTask((int) $this->selectedProjectId, (int) $this->selectedTaskId);
         $service->startTimer($entry);
         $this->closeModal();
     }
@@ -309,13 +317,20 @@ class DayView extends Component
         ];
 
         $isEdit = $this->editingEntryId !== null;
+        $saved = false;
         if ($isEdit && $this->editingEntryId !== null) {
             $entry = $this->guardEntry($this->editingEntryId);
             if ($entry) {
                 $service->update($entry, $data);
+                $saved = true;
             }
         } else {
             $service->create($user, $data);
+            $saved = true;
+        }
+
+        if ($saved) {
+            $this->rememberLastSavedProjectAndTask($projectId, $taskId);
         }
 
         if ($this->lastCalendarPullTitle !== null) {
@@ -330,14 +345,7 @@ class DayView extends Component
             return;
         }
 
-        // Quick-add: clear the form but keep the modal + calendar panel open
-        // so the admin can immediately log the next entry. The day's entry
-        // list re-renders to show what was just saved, and the calendar
-        // sidebar greys out the just-used event.
-        $entryDate = $this->entryDate;
-        $this->resetModal();
-        $this->entryDate = $entryDate;
-        $this->showModal = true;
+        $this->closeModal();
     }
 
     private function validateAsanaTaskRequirement(): bool
@@ -800,6 +808,22 @@ class DayView extends Component
         $this->entryDate = $this->selectedDate;
         $this->lastCalendarPullTitle = null;
         $this->resetErrorBag();
+    }
+
+    private function rememberLastSavedProjectAndTask(int $projectId, int $taskId): void
+    {
+        $this->lastSavedProjectId = $projectId;
+        $this->lastSavedTaskId = $taskId;
+    }
+
+    private function restoreLastSavedProjectAndTask(): void
+    {
+        if ($this->lastSavedProjectId === null || $this->lastSavedTaskId === null) {
+            return;
+        }
+
+        $this->selectedProjectId = $this->lastSavedProjectId;
+        $this->selectedTaskId = $this->lastSavedTaskId;
     }
 
     private function guardEntry(int $entryId): ?TimeEntry

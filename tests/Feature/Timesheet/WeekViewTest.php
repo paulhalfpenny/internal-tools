@@ -235,6 +235,49 @@ test('save creates new entries from filled cells', function () {
         ->assertSet("cellValues.{$rowKey}.2", '3.0');
 });
 
+test('save keeps added rows that do not have time yet', function () {
+    [$user, $project, $task] = weekViewSetup();
+    $this->actingAs($user);
+
+    $rowKey = weekViewRowKey($project, $task);
+
+    $component = Livewire::test(WeekView::class)
+        ->call('openAddRowModal')
+        ->set('newRowProjectId', $project->id)
+        ->set('newRowTaskId', $task->id)
+        ->call('addRow')
+        ->call('save')
+        ->assertSet('extraRows.0', $rowKey)
+        ->assertSet("cellValues.{$rowKey}", ['', '', '', '', '', '', '']);
+
+    $rowKeys = collect($component->viewData('rows'))->pluck('key')->all();
+
+    expect($rowKeys)->toContain($rowKey);
+    expect(TimeEntry::count())->toBe(0);
+});
+
+test('saved empty added rows survive remounting the week view', function () {
+    [$user, $project, $task] = weekViewSetup();
+    $this->actingAs($user);
+
+    $rowKey = weekViewRowKey($project, $task);
+
+    Livewire::test(WeekView::class)
+        ->call('openAddRowModal')
+        ->set('newRowProjectId', $project->id)
+        ->set('newRowTaskId', $task->id)
+        ->call('addRow')
+        ->call('save')
+        ->assertSet('extraRows.0', $rowKey);
+
+    $component = Livewire::test(WeekView::class);
+    $rowKeys = collect($component->viewData('rows'))->pluck('key')->all();
+
+    expect($rowKeys)->toContain($rowKey);
+    $component->assertSet("cellValues.{$rowKey}", ['', '', '', '', '', '', '']);
+    expect(TimeEntry::count())->toBe(0);
+});
+
 test('week view keys editable rows and cells by row identity', function () {
     [$user, $project, $meetingTask] = weekViewSetup();
     $this->actingAs($user);

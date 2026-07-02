@@ -338,9 +338,7 @@ class Edit extends Component
         }
         $this->project->users()->sync($userSync);
 
-        if ($addedGids !== [] || $removedGids !== []) {
-            $this->forgetProjectPickerCaches(array_merge($previousUserIds, array_keys($this->userAssignments)));
-        }
+        $this->forgetProjectPickerCaches(array_merge($previousUserIds, array_keys($this->userAssignments)));
 
         session()->flash('status', 'Project saved.');
     }

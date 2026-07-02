@@ -222,6 +222,7 @@ class WeekView extends Component
 
         $this->extraRows[] = $key;
         $this->cellValues[$key] = array_fill(0, 7, '');
+        $this->persistExtraRowsForWeek(CarbonImmutable::parse($this->selectedDate)->startOfWeek());
         $this->closeAddRowModal();
     }
 
@@ -306,6 +307,10 @@ class WeekView extends Component
             $copied++;
         }
 
+        if ($copied > 0) {
+            $this->persistExtraRowsForWeek($weekStart);
+        }
+
         $sourceWeekLabel = $sourceWeekStart->format('j M Y');
         if ($copied > 0) {
             $message = 'Copied '.$copied.' row'.($copied === 1 ? '' : 's').' from week of '.$sourceWeekLabel.'.';
@@ -359,9 +364,9 @@ class WeekView extends Component
         }
 
         // If the row had any saved entries this week, delete them.
+        $weekStart = CarbonImmutable::parse($this->selectedDate)->startOfWeek();
         [$projectId, $taskId, $asanaGid] = $this->parseRowKey($rowKey);
         if ($projectId !== null && $taskId !== null) {
-            $weekStart = CarbonImmutable::parse($this->selectedDate)->startOfWeek();
             $query = TimeEntry::where('user_id', $this->viewedUser()->id)
                 ->where('project_id', $projectId)
                 ->where('task_id', $taskId)
@@ -376,6 +381,7 @@ class WeekView extends Component
 
         unset($this->cellValues[$rowKey]);
         $this->extraRows = array_values(array_filter($this->extraRows, fn ($k) => $k !== $rowKey));
+        $this->persistExtraRowsForWeek($weekStart);
     }
 
     // --- Save ---
@@ -444,9 +450,18 @@ class WeekView extends Component
             }
         }
 
-        // Clear extraRows now that they're persisted; render() will pick them
-        // up again from the database on the next render.
-        $this->extraRows = [];
+        $persistedRowKeys = TimeEntry::where('user_id', $user->id)
+            ->whereBetween('spent_on', [$weekStart->toDateString(), $weekStart->addDays(6)->toDateString()])
+            ->get(['project_id', 'task_id', 'asana_task_gid'])
+            ->map(fn (TimeEntry $entry) => $this->buildRowKey($entry->project_id, $entry->task_id, $entry->asana_task_gid))
+            ->unique();
+
+        $this->extraRows = collect($this->extraRows)
+            ->reject(fn (string $rowKey) => $persistedRowKeys->contains($rowKey))
+            ->values()
+            ->all();
+        $this->persistExtraRowsForWeek($weekStart);
+
         session()->flash('week_saved', true);
     }
 
@@ -479,11 +494,69 @@ class WeekView extends Component
         return 'p'.$projectId.'_t'.$taskId.'_a'.($asanaGid ?? 'none');
     }
 
+    private function extraRowsSessionKey(CarbonImmutable $weekStart): string
+    {
+        return 'timesheet_week_extra_rows_'.$this->viewedUser()->id.'_'.$weekStart->toDateString();
+    }
+
+    private function loadPersistedExtraRowsForWeek(CarbonImmutable $weekStart): void
+    {
+        if ($this->extraRows !== []) {
+            $this->extraRows = $this->normalizeExtraRowKeys($this->extraRows);
+
+            return;
+        }
+
+        $storedRows = session()->get($this->extraRowsSessionKey($weekStart), []);
+        $this->extraRows = is_array($storedRows)
+            ? $this->normalizeExtraRowKeys($storedRows)
+            : [];
+    }
+
+    private function persistExtraRowsForWeek(CarbonImmutable $weekStart): void
+    {
+        $this->extraRows = $this->normalizeExtraRowKeys($this->extraRows);
+
+        if ($this->extraRows === []) {
+            session()->forget($this->extraRowsSessionKey($weekStart));
+
+            return;
+        }
+
+        session()->put($this->extraRowsSessionKey($weekStart), $this->extraRows);
+    }
+
+    /**
+     * @param  array<mixed>  $rowKeys
+     * @return array<int, string>
+     */
+    private function normalizeExtraRowKeys(array $rowKeys): array
+    {
+        return collect($rowKeys)
+            ->map(function ($rowKey): ?string {
+                if (! is_string($rowKey)) {
+                    return null;
+                }
+
+                [$projectId, $taskId, $asanaGid] = $this->parseRowKey($rowKey);
+                if ($projectId === null || $taskId === null) {
+                    return null;
+                }
+
+                return $this->buildRowKey($projectId, $taskId, $asanaGid);
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     public function render(): View
     {
         $user = $this->viewedUser();
         $weekStart = CarbonImmutable::parse($this->selectedDate)->startOfWeek();
         $weekDays = collect(range(0, 6))->map(fn (int $offset) => $weekStart->addDays($offset));
+        $this->loadPersistedExtraRowsForWeek($weekStart);
 
         $weekEntries = TimeEntry::with(['project.client', 'task'])
             ->where('user_id', $user->id)

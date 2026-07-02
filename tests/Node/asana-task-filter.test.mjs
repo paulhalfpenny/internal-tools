@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+    extractAsanaTaskGids,
     filterAsanaTasksForProject,
     normalizeAsanaTaskText,
 } from '../../resources/js/asana-task-filter.js';
@@ -64,4 +65,55 @@ test('matches compact names across punctuation and spacing differences', () => {
     );
 
     assert.equal(normalizeAsanaTaskText('Carehome.co.uk / Build'), 'carehome co uk build');
+});
+
+test('extracts task gids from supported Asana task URLs', () => {
+    assert.deepEqual(
+        extractAsanaTaskGids('https://app.asana.com/1/155579732034488/project/1204439707387883/task/1216205972827127'),
+        ['1216205972827127'],
+    );
+
+    assert.deepEqual(
+        extractAsanaTaskGids('https://app.asana.com/0/1204439707387883/1216205972827127/f'),
+        ['1216205972827127'],
+    );
+});
+
+test('typing an Asana task URL matches the cached task gid', () => {
+    const tasks = [
+        { gid: '1216205972827127', name: 'Feature: Search Asana task by URL', board_name: 'Internal Tools' },
+        { gid: '1216205885155910', name: 'Feature: Remember previous task', board_name: 'Internal Tools' },
+    ];
+
+    assert.deepEqual(
+        filterAsanaTasksForProject(tasks, [], 'https://app.asana.com/1/155579732034488/project/1204439707387883/task/1216205972827127').map((task) => task.gid),
+        ['1216205972827127'],
+    );
+});
+
+test('typing a bare Asana gid matches the cached task gid', () => {
+    const tasks = [
+        { gid: '1216205972827127', name: 'Feature: Search Asana task by URL', board_name: 'Internal Tools' },
+    ];
+
+    assert.deepEqual(
+        filterAsanaTasksForProject(tasks, [], '1216205972827127').map((task) => task.gid),
+        ['1216205972827127'],
+    );
+});
+
+test('does not treat non-Asana numeric noise as task gid searches', () => {
+    const tasks = [
+        { gid: '1216205972827127', name: 'Feature: Search Asana task by URL', board_name: 'Internal Tools' },
+    ];
+
+    assert.deepEqual(
+        filterAsanaTasksForProject(tasks, [], 'https://example.com/tasks/1216205972827127').map((task) => task.gid),
+        [],
+    );
+
+    assert.deepEqual(
+        filterAsanaTasksForProject(tasks, [], 'Please check 1216205972827127 when you get a minute').map((task) => task.gid),
+        [],
+    );
 });
