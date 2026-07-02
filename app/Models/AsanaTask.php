@@ -10,6 +10,7 @@ use Illuminate\Support\Carbon;
  * @property string $gid
  * @property string $asana_project_gid
  * @property string $name
+ * @property string|null $search_text
  * @property bool $is_completed
  * @property string|null $parent_gid
  * @property Carbon|null $last_synced_at
@@ -23,7 +24,7 @@ class AsanaTask extends Model
 
     public $incrementing = false;
 
-    protected $fillable = ['gid', 'asana_project_gid', 'name', 'is_completed', 'parent_gid', 'last_synced_at'];
+    protected $fillable = ['gid', 'asana_project_gid', 'name', 'search_text', 'is_completed', 'parent_gid', 'last_synced_at'];
 
     protected function casts(): array
     {

@@ -32,6 +32,82 @@ function weekViewRowKey(Project $project, Task $task, ?string $asanaGid = null):
     return 'p'.$project->id.'_t'.$task->id.'_a'.($asanaGid ?? 'none');
 }
 
+test('week day headers link to personal day view dates', function () {
+    [$user] = weekViewSetup();
+
+    $selectedDate = '2026-07-02';
+    $monday = '2026-06-29';
+
+    $html = $this->actingAs($user)
+        ->get(route('timesheet.week', ['date' => $selectedDate]))
+        ->assertOk()
+        ->getContent();
+
+    expect($html)
+        ->toContain('data-week-day-link')
+        ->toContain('href="'.e(route('timesheet', ['date' => $monday])).'"');
+});
+
+test('week day headers link to team day view dates', function () {
+    $manager = User::factory()->create(['role' => Role::Manager]);
+    [$report] = weekViewSetup();
+    $report->update(['reports_to_user_id' => $manager->id]);
+
+    $selectedDate = '2026-07-02';
+    $monday = '2026-06-29';
+
+    $html = $this->actingAs($manager)
+        ->get(route('team.timesheet.week', ['user' => $report, 'date' => $selectedDate]))
+        ->assertOk()
+        ->getContent();
+
+    expect($html)
+        ->toContain('data-week-day-link')
+        ->toContain('href="'.e(route('team.timesheet', ['user' => $report, 'date' => $monday])).'"');
+});
+
+test('week day headers link to admin day view dates', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    [$employee] = weekViewSetup();
+
+    $selectedDate = '2026-07-02';
+    $monday = '2026-06-29';
+
+    $html = $this->actingAs($admin)
+        ->get(route('admin.timesheets.user.week', ['user' => $employee, 'date' => $selectedDate]))
+        ->assertOk()
+        ->getContent();
+
+    expect($html)
+        ->toContain('data-week-day-link')
+        ->toContain('href="'.e(route('admin.timesheets.user', ['user' => $employee, 'date' => $monday])).'"');
+});
+
+test('week day navigation protects unsaved week edits before navigating', function () {
+    [$user, $project, $task] = weekViewSetup();
+    $this->actingAs($user);
+
+    app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => now()->startOfWeek()->toDateString(),
+        'hours' => 1.0,
+        'notes' => null,
+    ]);
+
+    $html = html_entity_decode(Livewire::test(WeekView::class)->html(), ENT_QUOTES | ENT_HTML5);
+
+    expect($html)
+        ->toContain('hasUnsavedWeekChanges: false')
+        ->toContain('markWeekDirty()')
+        ->toContain('confirmWeekDayNavigation(event)')
+        ->toContain('clearWeekDirty()')
+        ->toContain('@click="confirmWeekDayNavigation($event)"')
+        ->toContain('@input="markWeekDirty()"')
+        ->toContain('@change="markWeekDirty()"')
+        ->toContain('@click="$wire.save().then(() => clearWeekDirty())"');
+});
+
 test('week view groups existing entries into rows by (project, task)', function () {
     [$user, $project, $task] = weekViewSetup();
     $this->actingAs($user);

@@ -48,7 +48,8 @@ function assertProjectPickerUsesCodedAgencyLabels(string $html): void
 
     expect($html)
         ->toContain('[TOG013] CRO Improvements - carehome.co.uk - Build Phase')
-        ->toContain('x-text="selectedProject.display_name ?? selectedProject.name"')
+        ->toContain('return this.selectedProject ? (this.selectedProject.display_name ?? this.selectedProject.name) : \'\';')
+        ->toContain(':value="projectOpen ? projectSearch : selectedProjectLabel"')
         ->toContain('x-text="project.display_name ?? project.name"')
         ->not->toContain('[JDW001] Customer App / PWA / App Manager');
 }

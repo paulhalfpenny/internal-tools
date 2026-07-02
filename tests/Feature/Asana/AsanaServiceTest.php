@@ -72,6 +72,34 @@ test('getProjects paginates and filters archived', function () {
     expect($projects[2]['name'])->toBe('Three');
 });
 
+test('getTasks exposes custom field values as searchable text', function () {
+    [, $service] = asanaTestServiceWithUser();
+
+    Http::fake([
+        'app.asana.com/api/1.0/projects/p1/tasks*' => Http::response([
+            'data' => [
+                [
+                    'gid' => 't1',
+                    'name' => 'Build booking journey',
+                    'completed' => false,
+                    'parent' => null,
+                    'custom_fields' => [
+                        ['name' => 'Ticket ID', 'display_value' => 'JDW-12345'],
+                        ['name' => 'Delivery phase', 'enum_value' => ['name' => 'Ready for QA']],
+                        ['name' => 'Sprint', 'multi_enum_values' => [['name' => 'Sprint 14']]],
+                    ],
+                ],
+            ],
+            'next_page' => null,
+        ]),
+    ]);
+
+    $tasks = $service->getTasks('p1');
+
+    expect($tasks[0]['search_text'])->toBe('Ticket ID JDW-12345 Delivery phase Ready for QA Sprint Sprint 14');
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'custom_fields.display_value'));
+});
+
 test('ensureHoursCustomField returns existing field when name matches', function () {
     [, $service] = asanaTestServiceWithUser();
 

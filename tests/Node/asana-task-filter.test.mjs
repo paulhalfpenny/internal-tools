@@ -30,6 +30,29 @@ test('typing searches all linked board tasks instead of the project prefilter', 
     );
 });
 
+test('typing matches Asana ticket codes from cached search text', () => {
+    const tasks = [
+        { gid: 'BOOKING', name: 'Build booking journey', board_name: 'Agency Delivery Status', search_text: 'Ticket ID JDW-12345' },
+        { gid: 'DESIGN', name: 'Design homepage', board_name: 'Agency Delivery Status', search_text: 'Ticket ID JDW-98765' },
+    ];
+
+    assert.deepEqual(
+        filterAsanaTasksForProject(tasks, [], 'JDW-12345').map((task) => task.gid),
+        ['BOOKING'],
+    );
+});
+
+test('typing matches compact Asana ticket codes without punctuation', () => {
+    const tasks = [
+        { gid: 'BOOKING', name: 'Build booking journey', board_name: 'Agency Delivery Status', search_text: 'Ticket ID JDW-12345' },
+    ];
+
+    assert.deepEqual(
+        filterAsanaTasksForProject(tasks, [], 'JDW12345').map((task) => task.gid),
+        ['BOOKING'],
+    );
+});
+
 test('matches compact names across punctuation and spacing differences', () => {
     const tasks = [
         { gid: 'DENTIST', name: '123Dentist integration planning', board_name: 'Agency Delivery Status' },

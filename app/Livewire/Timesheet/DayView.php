@@ -710,11 +710,12 @@ class DayView extends Component
             ->whereIn('asana_project_gid', $linkedAsanaProjectGids)
             ->where('is_completed', false)
             ->orderBy('name')
-            ->get(['gid', 'asana_project_gid', 'name'])
+            ->get(['gid', 'asana_project_gid', 'name', 'search_text'])
             ->groupBy('asana_project_gid')
             ->map(fn ($group) => $group->map(fn (AsanaTask $t) => [
                 'gid' => $t->gid,
                 'name' => $t->name,
+                'search_text' => $t->search_text,
                 'board_name' => $asanaProjectNames[$t->asana_project_gid] ?? null,
             ])->values()->all())
             ->all();

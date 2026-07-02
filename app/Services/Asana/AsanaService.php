@@ -62,19 +62,107 @@ final class AsanaService
     }
 
     /**
-     * @return list<array{gid: string, name: string, completed: bool, parent_gid: string|null}>
+     * @return list<array{gid: string, name: string, search_text: string|null, completed: bool, parent_gid: string|null}>
      */
     public function getTasks(string $projectGid): array
     {
         return $this->paginated('/projects/'.$projectGid.'/tasks', [
-            'opt_fields' => 'gid,name,completed,parent.gid',
+            'opt_fields' => implode(',', [
+                'gid',
+                'name',
+                'completed',
+                'parent.gid',
+                'custom_fields.name',
+                'custom_fields.display_value',
+                'custom_fields.text_value',
+                'custom_fields.number_value',
+                'custom_fields.enum_value.name',
+                'custom_fields.multi_enum_values.name',
+                'custom_fields.date_value',
+            ]),
             'completed_since' => 'now',
         ], fn (array $t) => [
             'gid' => $t['gid'],
             'name' => $t['name'],
+            'search_text' => self::taskSearchText(is_array($t['custom_fields'] ?? null) ? $t['custom_fields'] : []),
             'completed' => $t['completed'] ?? false,
             'parent_gid' => $t['parent']['gid'] ?? null,
         ]);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $customFields
+     */
+    private static function taskSearchText(array $customFields): ?string
+    {
+        $parts = [];
+
+        foreach ($customFields as $field) {
+            if (! is_array($field)) {
+                continue;
+            }
+
+            $valueParts = self::customFieldValueParts($field);
+
+            if ($valueParts === []) {
+                continue;
+            }
+
+            self::pushSearchTextPart($parts, $field['name'] ?? null);
+
+            foreach ($valueParts as $valuePart) {
+                self::pushSearchTextPart($parts, $valuePart);
+            }
+        }
+
+        $text = implode(' ', array_values(array_unique($parts)));
+
+        return $text !== '' ? $text : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     * @return list<string>
+     */
+    private static function customFieldValueParts(array $field): array
+    {
+        foreach (['display_value', 'text_value', 'number_value'] as $key) {
+            if (array_key_exists($key, $field) && $field[$key] !== null && $field[$key] !== '') {
+                return [(string) $field[$key]];
+            }
+        }
+
+        if (isset($field['enum_value']['name'])) {
+            return [(string) $field['enum_value']['name']];
+        }
+
+        if (isset($field['multi_enum_values']) && is_array($field['multi_enum_values'])) {
+            return array_values(array_filter(
+                array_map(fn ($value) => is_array($value) ? (string) ($value['name'] ?? '') : '', $field['multi_enum_values']),
+                fn (string $value) => $value !== '',
+            ));
+        }
+
+        if (isset($field['date_value']) && is_array($field['date_value'])) {
+            return array_values(array_filter([
+                (string) ($field['date_value']['date'] ?? ''),
+                (string) ($field['date_value']['date_time'] ?? ''),
+            ]));
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  list<string>  $parts
+     */
+    private static function pushSearchTextPart(array &$parts, mixed $value): void
+    {
+        $part = trim((string) $value);
+
+        if ($part !== '') {
+            $parts[] = $part;
+        }
     }
 
     /**

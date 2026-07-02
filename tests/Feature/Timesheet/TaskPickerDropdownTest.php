@@ -60,7 +60,7 @@ function taskPickerMethodBody(string $html): string
     return $matches['body'];
 }
 
-function assertTaskPickerClosesAfterLivewireSync(string $html, string $wireSyncStatement): void
+function assertTaskPickerClosesBeforeLivewireSync(string $html, string $wireSyncStatement): void
 {
     $methodBody = taskPickerMethodBody($html);
 
@@ -70,23 +70,35 @@ function assertTaskPickerClosesAfterLivewireSync(string $html, string $wireSyncS
     $wirePosition = strpos($methodBody, $wireSyncStatement);
 
     expect($wirePosition)->not->toBeFalse();
-    expect($closePosition)->toBeGreaterThan($wirePosition);
+    expect($closePosition)->toBeLessThan($wirePosition);
 }
 
-function assertTaskPickerHasSearch(string $html): void
+function assertPickersSearchFromMainInputs(string $html): void
 {
     $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5);
 
     expect($html)
         ->toContain("taskSearch: ''")
-        ->toContain('x-model="taskSearch"')
-        ->toContain('placeholder="Search tasks…"')
+        ->toContain(':value="projectOpen ? projectSearch : selectedProjectLabel"')
+        ->toContain('@input="searchProjects($event.target.value)"')
+        ->toContain('@click.stop="toggleProjectPicker()"')
+        ->toContain(':value="asanaTaskOpen ? asanaTaskSearch : selectedAsanaTaskLabel"')
+        ->toContain('@input="searchAsanaTasks($event.target.value)"')
+        ->toContain('@click.stop="toggleAsanaTaskPicker()"')
+        ->toContain('@click.stop="openAsanaTaskPicker()"')
+        ->toContain(':value="taskOpen ? taskSearch : selectedTaskLabel"')
+        ->toContain('@input="searchTasks($event.target.value)"')
+        ->toContain('@click.stop="toggleTaskPicker()"')
+        ->not->toContain('x-model="projectSearch"')
+        ->not->toContain('x-model="asanaTaskSearch"')
+        ->not->toContain('x-model="taskSearch"')
+        ->not->toContain('border-b border-gray-100 flex justify-end')
         ->toContain('filteredBillableTasks')
         ->toContain('filteredNonBillableTasks')
         ->toContain('No tasks match.');
 }
 
-test('day view closes the task dropdown after syncing the selected task', function () {
+test('day view closes the task dropdown before syncing the selected task', function () {
     $user = taskPickerDropdownSetup();
     $this->actingAs($user);
 
@@ -94,10 +106,10 @@ test('day view closes the task dropdown after syncing the selected task', functi
         ->call('openNewModal')
         ->html();
 
-    assertTaskPickerClosesAfterLivewireSync($html, '$wire.selectedTaskId = id;');
+    assertTaskPickerClosesBeforeLivewireSync($html, '$wire.selectedTaskId = id;');
 });
 
-test('day view task dropdown can be searched by typing', function () {
+test('day view dropdowns search from their main inputs', function () {
     $user = taskPickerDropdownSetup();
     $this->actingAs($user);
 
@@ -105,10 +117,10 @@ test('day view task dropdown can be searched by typing', function () {
         ->call('openNewModal')
         ->html();
 
-    assertTaskPickerHasSearch($html);
+    assertPickersSearchFromMainInputs($html);
 });
 
-test('week view closes the task dropdown after syncing the selected task', function () {
+test('week view closes the task dropdown before syncing the selected task', function () {
     $user = taskPickerDropdownSetup();
     $this->actingAs($user);
 
@@ -116,10 +128,10 @@ test('week view closes the task dropdown after syncing the selected task', funct
         ->call('openAddRowModal')
         ->html();
 
-    assertTaskPickerClosesAfterLivewireSync($html, "\$wire.set('newRowTaskId', id);");
+    assertTaskPickerClosesBeforeLivewireSync($html, "\$wire.set('newRowTaskId', id);");
 });
 
-test('week view task dropdown can be searched by typing', function () {
+test('week view dropdowns search from their main inputs', function () {
     $user = taskPickerDropdownSetup();
     $this->actingAs($user);
 
@@ -127,7 +139,7 @@ test('week view task dropdown can be searched by typing', function () {
         ->call('openAddRowModal')
         ->html();
 
-    assertTaskPickerHasSearch($html);
+    assertPickersSearchFromMainInputs($html);
 });
 
 test('day view picker treats tasks on non-billable projects as non-billable', function () {

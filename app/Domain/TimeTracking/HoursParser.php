@@ -14,6 +14,7 @@ final class HoursParser
      *   1:30     → 1.5
      *   90m      → 1.5
      *   0:15     → 0.25
+     *   :15      → 0.25
      *
      * @throws InvalidArgumentException on unrecognised input
      */
@@ -22,8 +23,8 @@ final class HoursParser
         $input = trim($input);
 
         // hh:mm
-        if (preg_match('/^(\d{1,3}):([0-5]\d)$/', $input, $m)) {
-            $hours = (int) $m[1] + (int) $m[2] / 60;
+        if (preg_match('/^(\d{0,3}):([0-5]\d)$/', $input, $m)) {
+            $hours = ($m[1] === '' ? 0 : (int) $m[1]) + (int) $m[2] / 60;
 
             return self::validate(round($hours, 2));
         }

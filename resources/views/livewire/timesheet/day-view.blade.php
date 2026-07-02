@@ -438,8 +438,14 @@
                     get selectedProject() {
                         return this.projects.find(p => p.id === this.selectedProjectId) ?? null;
                     },
+                    get selectedProjectLabel() {
+                        return this.selectedProject ? (this.selectedProject.display_name ?? this.selectedProject.name) : '';
+                    },
                     get selectedTask() {
                         return this.selectedProject?.tasks.find(t => t.id === this.selectedTaskId) ?? null;
+                    },
+                    get selectedTaskLabel() {
+                        return this.selectedTask?.name ?? '';
                     },
                     get filteredTasks() {
                         const tasks = this.selectedProject?.tasks ?? [];
@@ -502,6 +508,9 @@
                     get selectedAsanaTask() {
                         return this.linkedAsanaTasks.find(t => t.gid === this.selectedAsanaTaskGid) ?? null;
                     },
+                    get selectedAsanaTaskLabel() {
+                        return this.selectedAsanaTask?.name ?? '';
+                    },
                     get groupedProjects() {
                         const q = this.projectSearch.toLowerCase();
                         const filtered = q
@@ -514,6 +523,69 @@
                         const groups = {};
                         filtered.forEach(p => { (groups[p.client_name] ??= []).push(p); });
                         return Object.entries(groups).sort(([a],[b]) => a.localeCompare(b));
+                    },
+                    openProjectPicker() {
+                        const wasOpen = this.projectOpen;
+                        this.projectOpen = true;
+                        this.taskOpen = false;
+                        this.asanaTaskOpen = false;
+                        if (!wasOpen) this.projectSearch = '';
+                    },
+                    closeProjectPicker() {
+                        this.projectOpen = false;
+                        this.projectSearch = '';
+                    },
+                    toggleProjectPicker() {
+                        this.projectOpen ? this.closeProjectPicker() : this.openProjectPicker();
+                    },
+                    searchProjects(value) {
+                        this.projectSearch = value;
+                        this.projectOpen = true;
+                        this.taskOpen = false;
+                        this.asanaTaskOpen = false;
+                    },
+                    openAsanaTaskPicker() {
+                        const wasOpen = this.asanaTaskOpen;
+                        this.asanaTaskOpen = true;
+                        this.projectOpen = false;
+                        this.taskOpen = false;
+                        if (!wasOpen) this.asanaTaskSearch = '';
+                    },
+                    closeAsanaTaskPicker() {
+                        this.asanaTaskOpen = false;
+                        this.asanaTaskSearch = '';
+                    },
+                    toggleAsanaTaskPicker() {
+                        this.asanaTaskOpen ? this.closeAsanaTaskPicker() : this.openAsanaTaskPicker();
+                    },
+                    searchAsanaTasks(value) {
+                        this.asanaTaskSearch = value;
+                        this.asanaTaskOpen = true;
+                        this.projectOpen = false;
+                        this.taskOpen = false;
+                    },
+                    openTaskPicker() {
+                        if (!this.selectedProjectId) return;
+                        const wasOpen = this.taskOpen;
+                        this.taskOpen = true;
+                        this.projectOpen = false;
+                        this.asanaTaskOpen = false;
+                        if (!wasOpen) this.taskSearch = '';
+                    },
+                    closeTaskPicker() {
+                        this.taskOpen = false;
+                        this.taskSearch = '';
+                    },
+                    toggleTaskPicker() {
+                        if (!this.selectedProjectId) return;
+                        this.taskOpen ? this.closeTaskPicker() : this.openTaskPicker();
+                    },
+                    searchTasks(value) {
+                        if (!this.selectedProjectId) return;
+                        this.taskSearch = value;
+                        this.taskOpen = true;
+                        this.projectOpen = false;
+                        this.asanaTaskOpen = false;
                     },
                     closePickers() {
                         this.projectOpen = false;
@@ -534,8 +606,8 @@
                     pickTask(id) {
                         this.selectedTaskId = id;
                         this.taskSearch = '';
-                        $wire.selectedTaskId = id;
                         this.closePickers();
+                        $wire.selectedTaskId = id;
                     },
                     pickAsanaTask(gid) {
                         this.selectedAsanaTaskGid = gid;
@@ -579,44 +651,43 @@
                     <div class="text-sm font-semibold text-gray-700">Project / Task</div>
 
                     {{-- Project dropdown --}}
-                    <div class="relative z-30">
-                        <button
-                            type="button"
-                            @click="projectOpen = !projectOpen; taskOpen = false; asanaTaskOpen = false"
-                            class="w-full flex items-center justify-between border border-gray-300 rounded-lg px-4 py-3 text-left bg-white hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500"
-                        >
-                            <template x-if="selectedProject">
-                                <div class="min-w-0">
-                                    <div class="text-xs text-gray-500 leading-none mb-0.5" x-text="selectedProject.client_name"></div>
-                                    <div class="font-semibold text-gray-900 text-sm leading-none" x-text="selectedProject.display_name ?? selectedProject.name"></div>
-                                </div>
-                            </template>
-                            <template x-if="!selectedProject">
-                                <span class="text-gray-400 text-sm">Select a project…</span>
-                            </template>
-                            <svg class="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                            </svg>
-                        </button>
+                    <div class="relative z-30" @click.outside="closeProjectPicker()">
+                        <div class="relative">
+                            <input
+                                type="text"
+                                :value="projectOpen ? projectSearch : selectedProjectLabel"
+                                @focus="openProjectPicker()"
+                                @click="openProjectPicker()"
+                                @input="searchProjects($event.target.value)"
+                                @keydown.escape.stop="closeProjectPicker(); $event.target.blur()"
+                                @keydown.enter.prevent
+                                :placeholder="projectOpen ? 'Search projects…' : 'Select a project…'"
+                                role="combobox"
+                                aria-autocomplete="list"
+                                :aria-expanded="projectOpen.toString()"
+                                :class="projectOpen ? 'cursor-text' : 'cursor-pointer'"
+                                class="w-full border border-gray-300 rounded-lg bg-white px-4 py-3 pr-11 text-sm text-gray-900 hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500 placeholder-gray-400"
+                            />
+                            <button
+                                type="button"
+                                @click.stop="toggleProjectPicker()"
+                                aria-label="Toggle project picker"
+                                class="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 focus:outline-none"
+                            >
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </button>
+                        </div>
 
                         <div
                             x-show="projectOpen"
                             x-transition:enter="transition ease-out duration-100"
                             x-transition:enter-start="opacity-0 scale-95"
                             x-transition:enter-end="opacity-100 scale-100"
-                            @click.outside="projectOpen = false"
                             class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
                             style="display: none"
                         >
-                            <div class="p-2 border-b border-gray-100">
-                                <input
-                                    type="text"
-                                    x-model="projectSearch"
-                                    placeholder="Search projects…"
-                                    class="w-full text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                                    x-init="$el.focus()"
-                                />
-                            </div>
                             <div class="max-h-60 overflow-y-auto py-1">
                                 <template x-if="groupedProjects.length === 0">
                                     <p class="text-sm text-gray-400 px-3 py-4 text-center">No projects found.</p>
@@ -641,7 +712,7 @@
                     {{-- Asana task picker — shown whenever the project has linked boards.
                          Required vs optional is gated by selectedProject.asana_task_required (see asanaRequired). --}}
                     <template x-if="asanaBoardGids.length > 0">
-                        <div class="relative z-20">
+                        <div class="relative z-20" @click.outside="closeAsanaTaskPicker()">
                             <template x-if="!asanaRequired">
                                 <p class="text-xs text-gray-500 mb-1">Asana task (optional)</p>
                             </template>
@@ -654,48 +725,48 @@
 
                             <template x-if="asanaAvailable">
                                 <div>
-                                    <button
-                                        type="button"
-                                        @click="asanaTaskOpen = !asanaTaskOpen; projectOpen = false; taskOpen = false"
-                                        class="w-full flex items-center justify-between border border-gray-300 rounded-lg px-4 py-2.5 text-left bg-white hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500"
-                                    >
-                                        <template x-if="selectedAsanaTask">
-                                            <div class="min-w-0">
-                                                <div class="text-sm font-medium text-gray-900 truncate" x-text="selectedAsanaTask.name"></div>
-                                                <template x-if="showAsanaBoardLabel && selectedAsanaTask.board_name">
-                                                    <div class="text-xs text-gray-500 truncate" x-text="selectedAsanaTask.board_name"></div>
-                                                </template>
-                                            </div>
-                                        </template>
-                                        <template x-if="!selectedAsanaTask">
-                                            <span class="text-gray-400 text-sm" x-text="asanaRequired ? 'Select an Asana task…' : 'No Asana task'"></span>
-                                        </template>
-                                        <svg class="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                                        </svg>
-                                    </button>
-                                    <div
-                                        x-show="asanaTaskOpen"
-                                        @click.outside="asanaTaskOpen = false"
-                                        class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
-                                        style="display: none"
-                                    >
-                                        <div class="p-2 border-b border-gray-100 flex items-center gap-2">
+                                    <div class="flex items-stretch gap-2">
+                                        <div class="relative min-w-0 flex-1">
                                             <input
                                                 type="text"
-                                                x-model="asanaTaskSearch"
-                                                placeholder="Search Asana tasks…"
-                                                class="flex-1 min-w-0 text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                                                x-init="$el.focus()"
+                                                :value="asanaTaskOpen ? asanaTaskSearch : selectedAsanaTaskLabel"
+                                                @focus="openAsanaTaskPicker()"
+                                                @click="openAsanaTaskPicker()"
+                                                @input="searchAsanaTasks($event.target.value)"
+                                                @keydown.escape.stop="closeAsanaTaskPicker(); $event.target.blur()"
+                                                @keydown.enter.prevent
+                                                :placeholder="asanaTaskOpen ? 'Search Asana tasks…' : (asanaRequired ? 'Select an Asana task…' : 'No Asana task')"
+                                                role="combobox"
+                                                aria-autocomplete="list"
+                                                :aria-expanded="asanaTaskOpen.toString()"
+                                                :class="asanaTaskOpen ? 'cursor-text' : 'cursor-pointer'"
+                                                class="w-full border border-gray-300 rounded-lg bg-white px-4 py-2.5 pr-11 text-sm text-gray-900 hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500 placeholder-gray-400"
                                             />
                                             <button
                                                 type="button"
-                                                wire:click="refreshSelectedProjectAsanaTasks"
-                                                class="px-3 py-2 text-xs font-medium text-blue-700 border border-blue-200 rounded-md hover:bg-blue-50"
+                                                @click.stop="toggleAsanaTaskPicker()"
+                                                aria-label="Toggle Asana task picker"
+                                                class="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-gray-400 transition hover:bg-gray-50 hover:text-gray-600 focus:outline-none"
                                             >
-                                                Refresh
+                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                                </svg>
                                             </button>
                                         </div>
+                                        <button
+                                            type="button"
+                                            wire:click="refreshSelectedProjectAsanaTasks"
+                                            @click.stop="openAsanaTaskPicker()"
+                                            class="inline-flex flex-shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-white px-4 text-sm font-medium text-blue-700 transition hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                        >
+                                            Refresh
+                                        </button>
+                                    </div>
+                                    <div
+                                        x-show="asanaTaskOpen"
+                                        class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
+                                        style="display: none"
+                                    >
                                         @if(session('asana_task_refresh_message'))
                                             <p class="px-3 py-2 text-xs text-green-700 bg-green-50 border-b border-green-100">
                                                 {{ session('asana_task_refresh_message') }}
@@ -743,45 +814,49 @@
                     </template>
 
                     {{-- Task dropdown --}}
-                    <div class="relative z-10">
-                        <button
-                            type="button"
-                            @click="if (selectedProjectId) { taskOpen = !taskOpen; projectOpen = false; asanaTaskOpen = false; if (taskOpen) taskSearch = ''; }"
-                            :class="selectedProjectId ? 'border-gray-300 bg-white hover:border-gray-400' : 'border-gray-200 bg-gray-50 cursor-not-allowed'"
-                            class="w-full flex items-center justify-between border rounded-lg px-4 py-3 text-left transition focus:outline-none focus:ring-2 focus:ring-green-500"
-                        >
-                            <template x-if="selectedTask">
-                                <div class="flex items-center gap-2">
-                                    <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="'background:' + selectedTask.colour"></span>
-                                    <span class="font-medium text-gray-900 text-sm" x-text="selectedTask.name"></span>
-                                </div>
+                    <div class="relative z-10" @click.outside="closeTaskPicker()">
+                        <div class="relative">
+                            <template x-if="selectedTask && !taskOpen">
+                                <span class="absolute left-4 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full" :style="'background:' + selectedTask.colour"></span>
                             </template>
-                            <template x-if="!selectedTask">
-                                <span class="text-sm" :class="selectedProjectId ? 'text-gray-400' : 'text-gray-300'">Select a task…</span>
-                            </template>
-                            <svg class="w-4 h-4 flex-shrink-0 ml-2" :class="selectedProjectId ? 'text-gray-400' : 'text-gray-300'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-                            </svg>
-                        </button>
+                            <input
+                                type="text"
+                                :disabled="!selectedProjectId"
+                                :value="taskOpen ? taskSearch : selectedTaskLabel"
+                                @focus="openTaskPicker()"
+                                @click="openTaskPicker()"
+                                @input="searchTasks($event.target.value)"
+                                @keydown.escape.stop="closeTaskPicker(); $event.target.blur()"
+                                @keydown.enter.prevent
+                                :placeholder="taskOpen ? 'Search tasks…' : 'Select a task…'"
+                                role="combobox"
+                                aria-autocomplete="list"
+                                :aria-expanded="taskOpen.toString()"
+                                :class="[selectedProjectId ? 'border-gray-300 bg-white text-gray-900 hover:border-gray-400 placeholder-gray-400' : 'border-gray-200 bg-gray-50 text-gray-300 cursor-not-allowed placeholder-gray-300', selectedProjectId ? (taskOpen ? 'cursor-text' : 'cursor-pointer') : '', selectedTask && !taskOpen ? 'pl-9' : 'pl-4']"
+                                class="w-full border rounded-lg py-3 pr-11 text-sm transition focus:outline-none focus:ring-2 focus:ring-green-500"
+                            />
+                            <button
+                                type="button"
+                                :disabled="!selectedProjectId"
+                                @click.stop="toggleTaskPicker()"
+                                aria-label="Toggle task picker"
+                                :class="selectedProjectId ? 'text-gray-400 hover:bg-gray-50 hover:text-gray-600 cursor-pointer' : 'text-gray-300 cursor-not-allowed'"
+                                class="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md transition focus:outline-none"
+                            >
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                </svg>
+                            </button>
+                        </div>
 
                         <div
                             x-show="taskOpen"
                             x-transition:enter="transition ease-out duration-100"
                             x-transition:enter-start="opacity-0 scale-95"
                             x-transition:enter-end="opacity-100 scale-100"
-                            @click.outside="taskOpen = false"
                             class="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg"
                             style="display: none"
                         >
-                            <div class="p-2 border-b border-gray-100">
-                                <input
-                                    type="text"
-                                    x-model="taskSearch"
-                                    placeholder="Search tasks…"
-                                    class="w-full text-sm px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-                                    x-init="$el.focus()"
-                                />
-                            </div>
                             <div class="max-h-60 overflow-y-auto py-1">
                                 <template x-if="selectedProject">
                                     <div>

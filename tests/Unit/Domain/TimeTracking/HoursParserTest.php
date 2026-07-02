@@ -12,6 +12,7 @@ test('parses decimal hours', function () {
 test('parses hh:mm format', function () {
     expect(HoursParser::parse('1:30'))->toBe(1.5)
         ->and(HoursParser::parse('0:15'))->toBe(0.25)
+        ->and(HoursParser::parse(':15'))->toBe(0.25)
         ->and(HoursParser::parse('8:00'))->toBe(8.0)
         ->and(HoursParser::parse('0:01'))->toBe(round(1 / 60, 2));
 });

@@ -61,6 +61,31 @@ test('pulling tasks upserts and removes stale rows', function () {
     expect(AsanaTask::find('t1')->name)->toBe('New');
 });
 
+test('pulling tasks caches searchable Asana custom field values', function () {
+    $user = asanaTestConnectedUser();
+
+    Http::fake([
+        'app.asana.com/api/1.0/projects/P1/tasks*' => Http::response([
+            'data' => [
+                [
+                    'gid' => 't1',
+                    'name' => 'Build booking journey',
+                    'completed' => false,
+                    'parent' => null,
+                    'custom_fields' => [
+                        ['name' => 'Ticket ID', 'display_value' => 'JDW-12345'],
+                    ],
+                ],
+            ],
+            'next_page' => null,
+        ]),
+    ]);
+
+    (new PullAsanaTasksJob('P1', $user->id))->handle(app(AsanaService::class));
+
+    expect(AsanaTask::find('t1')->search_text)->toBe('Ticket ID JDW-12345');
+});
+
 test('jobs no-op for users not connected', function () {
     $user = User::factory()->create(); // not connected
 

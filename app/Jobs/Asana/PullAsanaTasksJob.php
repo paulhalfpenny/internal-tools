@@ -54,6 +54,7 @@ class PullAsanaTasksJob implements ShouldQueue
                 [
                     'asana_project_gid' => $this->asanaProjectGid,
                     'name' => $task['name'],
+                    'search_text' => $task['search_text'],
                     'is_completed' => $task['completed'],
                     'parent_gid' => $task['parent_gid'],
                     'last_synced_at' => $now,
