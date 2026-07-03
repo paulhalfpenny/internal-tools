@@ -817,7 +817,7 @@
                     <div class="relative z-10" @click.outside="closeTaskPicker()">
                         <div class="relative">
                             <template x-if="selectedTask && !taskOpen">
-                                <span class="absolute left-4 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full" :style="'background:' + selectedTask.colour"></span>
+                                <span class="absolute left-4 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full" :style="'background:' + (selectedTask?.colour ?? '')"></span>
                             </template>
                             <input
                                 type="text"
@@ -860,7 +860,7 @@
                             <div class="max-h-60 overflow-y-auto py-1">
                                 <template x-if="selectedProject">
                                     <div>
-                                        <template x-if="selectedProject.tasks.length > 0 && filteredTasks.length === 0">
+                                        <template x-if="(selectedProject?.tasks.length ?? 0) > 0 && filteredTasks.length === 0">
                                             <p class="text-sm text-gray-400 px-3 py-4 text-center">No tasks match.</p>
                                         </template>
                                         <template x-if="filteredBillableTasks.length > 0">
@@ -887,7 +887,7 @@
                                                 </template>
                                             </div>
                                         </template>
-                                        <template x-if="selectedProject.tasks.length === 0">
+                                        <template x-if="(selectedProject?.tasks.length ?? 0) === 0 && selectedProject">
                                             <p class="text-sm text-gray-400 px-3 py-4 text-center">No tasks assigned.</p>
                                         </template>
                                     </div>
@@ -898,8 +898,12 @@
 
                     {{-- Notes + Time row --}}
                     <div class="flex gap-3 items-stretch">
+                        {{-- Deferred wire:model (not .blur): a blur-triggered
+                             round trip can morph the modal while a picker
+                             dropdown is open, orphaning Alpine template
+                             clones. The server only needs these at save. --}}
                         <textarea
-                            wire:model.blur="notes"
+                            wire:model="notes"
                             rows="1"
                             placeholder="Notes (optional)"
                             @keydown.enter.prevent="$wire.notes = $event.target.value; doSave({{ $editingEntryId ? 'false' : ($isImpersonating ? 'false' : 'isTimerMode') }})"
@@ -908,7 +912,7 @@
                         <div class="flex-shrink-0 w-24 flex flex-col">
                             <input
                                 type="text"
-                                wire:model.blur="hoursInput"
+                                wire:model="hoursInput"
                                 @input="liveHoursInput = $event.target.value"
                                 @keydown.enter.prevent="$wire.hoursInput = $event.target.value; doSave({{ $editingEntryId ? 'false' : ($isImpersonating ? 'false' : 'isTimerMode') }})"
                                 placeholder="0.25"
@@ -940,6 +944,11 @@
         </div>{{-- end modal backdrop --}}
     </div>{{-- end x-show wrapper --}}
 
-    {{-- 60-second poll for running timers --}}
-    <div wire:poll.60000ms="refreshForTimer" class="hidden"></div>
+    {{-- 60-second poll for running timers. Suspended while the entry modal is
+         open: a poll morph landing mid-interaction leaves orphaned Alpine
+         template clones in the pickers (ghost dropdowns, cleared-looking
+         fields), and can reset liveHoursInput so Enter starts a timer. --}}
+    @unless($showModal)
+        <div wire:poll.60000ms="refreshForTimer" class="hidden"></div>
+    @endunless
 </div>

@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin\Projects;
 
 use App\Domain\Budgeting\ProjectBudgetCalculator;
+use App\Domain\TimeTracking\ProjectPickerCache;
 use App\Enums\BudgetType;
 use App\Jobs\Asana\PullAsanaTasksJob;
 use App\Models\AsanaProject;
@@ -15,7 +16,6 @@ use App\Models\User;
 use App\Services\Asana\AsanaService;
 use App\Services\Asana\AsanaTaskRefreshDispatcher;
 use Illuminate\Database\Eloquent\Relations\Pivot;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
@@ -417,13 +417,6 @@ class Edit extends Component
      */
     private function forgetProjectPickerCaches(array $userIds): void
     {
-        collect($userIds)
-            ->map(fn ($id) => (int) $id)
-            ->filter()
-            ->unique()
-            ->each(function (int $userId): void {
-                Cache::forget("projects_picker_{$userId}");
-                Cache::forget("projects_picker_eloquent_{$userId}");
-            });
+        ProjectPickerCache::forgetForUsers($userIds);
     }
 }

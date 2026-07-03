@@ -130,7 +130,9 @@ test('week view closes the task dropdown before syncing the selected task', func
         ->call('openAddRowModal')
         ->html();
 
-    assertTaskPickerClosesBeforeLivewireSync($html, "\$wire.set('newRowTaskId', id);");
+    // Deferred set (third arg false): a live set fires an immediate round
+    // trip whose morph can land while a dropdown is open (ghost dropdowns).
+    assertTaskPickerClosesBeforeLivewireSync($html, "\$wire.set('newRowTaskId', id, false);");
 });
 
 test('week view dropdowns search from their main inputs', function () {
@@ -142,6 +144,41 @@ test('week view dropdowns search from their main inputs', function () {
         ->html();
 
     assertPickersSearchFromMainInputs($html);
+});
+
+// A thrown Alpine expression kills the component's reactivity (dropdowns stop
+// closing, lists stop updating). Morph-orphaned template clones can evaluate
+// these expressions while selectedProject/selectedTask are transiently null,
+// so every member access must be null-safe.
+function assertPickerExpressionsAreNullSafe(string $html): void
+{
+    $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5);
+
+    expect($html)
+        ->not->toContain('selectedProject.tasks')
+        ->not->toContain('selectedTask.colour');
+}
+
+test('day view picker Alpine expressions are null-safe', function () {
+    $user = taskPickerDropdownSetup();
+    $this->actingAs($user);
+
+    $html = Livewire::test(DayView::class)
+        ->call('openNewModal')
+        ->html();
+
+    assertPickerExpressionsAreNullSafe($html);
+});
+
+test('week view picker Alpine expressions are null-safe', function () {
+    $user = taskPickerDropdownSetup();
+    $this->actingAs($user);
+
+    $html = Livewire::test(WeekView::class)
+        ->call('openAddRowModal')
+        ->html();
+
+    assertPickerExpressionsAreNullSafe($html);
 });
 
 test('day view picker treats tasks on non-billable projects as non-billable', function () {
