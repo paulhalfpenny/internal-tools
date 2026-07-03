@@ -1,12 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "Filter Internal Tools — Log time from Asana",
-  "version": "1.0.0",
+  "name": "Filter Internal Tools \u2014 Log time from Asana",
+  "version": "1.0.1",
   "description": "Adds a Log time button to Asana tasks that opens the Filter Internal Tools entry form, prefilled for the task.",
   "content_scripts": [
     {
-      "matches": ["https://app.asana.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://app.asana.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],

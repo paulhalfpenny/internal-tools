@@ -35,22 +35,17 @@
     return null;
   }
 
-  // The task-details toolbar: anchor on stable-ish semantics rather than
-  // class names. Preference order:
-  //   1. The container of the "Mark complete" button (aria-label / text).
-  //   2. The TaskPaneToolbar test id, if Asana still ships it.
-  function findToolbar() {
-    const testId = document.querySelector(
-      '[data-testid="TaskPaneToolbar"], [data-testid="TaskPaneHeader"]'
-    );
-    if (testId) return testId;
-
-    const candidates = document.querySelectorAll('button, [role="button"]');
-    for (const el of candidates) {
-      const label = (el.getAttribute('aria-label') || el.textContent || '').trim().toLowerCase();
-      if (label === 'mark complete' || label.startsWith('mark complete')) {
-        // The toolbar is the row containing this button.
-        return el.closest('[role="toolbar"]') || el.parentElement?.parentElement || null;
+  // Anchor: the "Mark complete" button — the one stable, always-visible
+  // control in the task header (verified against Asana's live DOM
+  // 2026-07-03; there is no TaskPaneToolbar test id any more). The Log time
+  // button is inserted as its immediate sibling so it inherits the same
+  // visible flex row.
+  function findAnchor() {
+    for (const el of document.querySelectorAll('button, [role="button"]')) {
+      const label = ((el.getAttribute('aria-label') || '') + ' ' + (el.textContent || ''))
+        .trim().toLowerCase();
+      if (label.includes('mark complete')) {
+        return el;
       }
     }
 
@@ -102,12 +97,19 @@
       return;
     }
 
-    if (existing) return; // already present for this pane
+    if (existing) {
+      // If a re-render detached or hid it, re-inject fresh.
+      const rect = existing.getBoundingClientRect();
+      if (document.contains(existing) && rect.width > 0 && rect.height > 0) {
+        return;
+      }
+      existing.remove();
+    }
 
-    const toolbar = findToolbar();
-    if (!toolbar) return;
+    const anchor = findAnchor();
+    if (!anchor) return;
 
-    toolbar.appendChild(buildButton(gid));
+    anchor.insertAdjacentElement('afterend', buildButton(gid));
   }
 
   // Debounced observer: Asana re-renders constantly; check at most every
