@@ -435,3 +435,40 @@ test('manager viewing direct report week is read-only and cannot save', function
     // Saved entry remains 5.0 — write was blocked
     expect((float) TimeEntry::first()->hours)->toBe(5.00);
 });
+
+test('week view cell values render as HH:MM when the user prefers that format', function () {
+    [$user, $project, $task] = weekViewSetup();
+    $user->update(['schedule_preferences' => ['hours_display_format' => 'hhmm']]);
+    $this->actingAs($user);
+
+    $monday = now()->startOfWeek()->toDateString();
+    app(TimeEntryService::class)->create($user, ['project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => $monday, 'hours' => 1.5, 'notes' => null]);
+
+    $rowKey = weekViewRowKey($project, $task);
+    Livewire::test(WeekView::class)
+        ->assertSet("cellValues.{$rowKey}.0", '1:30');
+});
+
+test('week view cell values render as decimal by default', function () {
+    [$user, $project, $task] = weekViewSetup();
+    $this->actingAs($user);
+
+    $monday = now()->startOfWeek()->toDateString();
+    app(TimeEntryService::class)->create($user, ['project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => $monday, 'hours' => 1.5, 'notes' => null]);
+
+    $rowKey = weekViewRowKey($project, $task);
+    Livewire::test(WeekView::class)
+        ->assertSet("cellValues.{$rowKey}.0", '1.5');
+});
+
+test('week view row and week totals render as HH:MM when the user prefers that format', function () {
+    [$user, $project, $task] = weekViewSetup();
+    $user->update(['schedule_preferences' => ['hours_display_format' => 'hhmm']]);
+    $this->actingAs($user);
+
+    $monday = now()->startOfWeek()->toDateString();
+    app(TimeEntryService::class)->create($user, ['project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => $monday, 'hours' => 1.5, 'notes' => null]);
+
+    Livewire::test(WeekView::class)
+        ->assertSee('1:30');
+});

@@ -34,3 +34,13 @@ test('round-trips with HoursParser for typical entries', function () {
         expect(HoursFormatter::asTime($hours))->toBe($input);
     }
 });
+
+test('format() dispatches to decimal or hhmm based on the given format', function () {
+    expect(HoursFormatter::format(1.5, HoursFormatter::FORMAT_DECIMAL))->toBe('1.5')
+        ->and(HoursFormatter::format(1.5, HoursFormatter::FORMAT_HHMM))->toBe('1:30')
+        ->and(HoursFormatter::format(0.25, HoursFormatter::FORMAT_HHMM))->toBe('0:15');
+});
+
+test('format() falls back to decimal for an unrecognised format', function () {
+    expect(HoursFormatter::format(1.5, 'nonsense'))->toBe('1.5');
+});

@@ -214,7 +214,7 @@ class DayView extends Component
         $this->selectedProjectId = $entry->project_id;
         $this->selectedTaskId = $entry->task_id;
         $this->selectedAsanaTaskGid = $entry->asana_task_gid ?? '';
-        $this->hoursInput = HoursFormatter::asDecimal((float) $entry->hours);
+        $this->hoursInput = HoursFormatter::format((float) $entry->hours, $this->currentHoursFormat());
         $this->notes = $entry->notes ?? '';
         $this->entryDate = $entry->spent_on->toDateString();
         $this->lastCalendarPullTitle = $this->calendarTitleForEntry($entry);
@@ -612,7 +612,7 @@ class DayView extends Component
         }
 
         $this->notes = $title;
-        $this->hoursInput = HoursFormatter::asDecimal($hours);
+        $this->hoursInput = HoursFormatter::format($hours, $this->currentHoursFormat());
         $this->lastCalendarPullTitle = $title;
 
         // Auto-fill project/task from a previously remembered association for this event title.
@@ -793,6 +793,7 @@ class DayView extends Component
             'teamMembers' => $teamMembers,
             'emptySong' => null,
             'viewedUser' => $user,
+            'hoursFormat' => $this->currentHoursFormat(),
         ]);
     }
 
@@ -824,6 +825,14 @@ class DayView extends Component
 
         $this->selectedProjectId = $this->lastSavedProjectId;
         $this->selectedTaskId = $this->lastSavedTaskId;
+    }
+
+    private function currentHoursFormat(): string
+    {
+        /** @var User|null $authUser */
+        $authUser = auth()->user();
+
+        return $authUser?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_DECIMAL;
     }
 
     private function guardEntry(int $entryId): ?TimeEntry
