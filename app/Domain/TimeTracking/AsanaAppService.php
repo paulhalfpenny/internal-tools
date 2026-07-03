@@ -71,8 +71,23 @@ final class AsanaAppService
         $boardGid = $asanaTask?->asana_project_gid ?? '';
 
         $projects = $this->projectsForUser($user);
-        $selectedProjectId = $this->resolveSelectedProject($user, $projects, $boardGid, $values);
-        $selectedProject = $projects->firstWhere('id', $selectedProjectId);
+
+        // Projects the task's board is linked to determine the project field:
+        // exactly one => fixed read-only line (the normal case); several =>
+        // dropdown restricted to those; none => full dropdown so time can
+        // still be logged from unmapped boards (just without the Asana link).
+        $linkedProjects = $boardGid === ''
+            ? collect()
+            : $projects->filter(fn (Project $p): bool => $p->asanaProjects->contains('gid', $boardGid))->sortBy('name')->values();
+        $fixedProject = $linkedProjects->count() === 1 ? $linkedProjects->first() : null;
+        $projectOptions = $linkedProjects->isNotEmpty() ? $linkedProjects : $projects;
+
+        if ($fixedProject !== null) {
+            $selectedProject = $fixedProject;
+        } else {
+            $selectedProjectId = $this->resolveSelectedProject($user, $projectOptions, $boardGid, $values, restricted: $linkedProjects->isNotEmpty());
+            $selectedProject = $projectOptions->firstWhere('id', $selectedProjectId);
+        }
 
         $running = $this->runningEntryForTask($user, $taskGid);
         $timerTicked = is_array($values['timer'] ?? null) && in_array('start', $values['timer'], true);
@@ -94,19 +109,25 @@ final class AsanaAppService
             ];
         }
 
-        $fields[] = [
-            'type' => 'dropdown',
-            'id' => 'project',
-            'name' => 'Project',
-            'is_required' => true,
-            'is_watched' => true,
-            'options' => $projects
-                ->map(fn (Project $p): array => ['id' => (string) $p->id, 'label' => mb_substr($p->timesheetDisplayName(), 0, 80)])
-                ->values()
-                ->all(),
-            'value' => $selectedProjectId !== null ? (string) $selectedProjectId : null,
-            'width' => 'full',
-        ];
+        $fields[] = $fixedProject !== null
+            ? [
+                'type' => 'static_text',
+                'id' => 'project',
+                'name' => 'Project: '.$fixedProject->timesheetDisplayName(),
+            ]
+            : [
+                'type' => 'dropdown',
+                'id' => 'project',
+                'name' => 'Project',
+                'is_required' => true,
+                'is_watched' => true,
+                'options' => $projectOptions
+                    ->map(fn (Project $p): array => ['id' => (string) $p->id, 'label' => mb_substr($p->timesheetDisplayName(), 0, 80)])
+                    ->values()
+                    ->all(),
+                'value' => isset($selectedProjectId) && $selectedProjectId !== null ? (string) $selectedProjectId : null,
+                'width' => 'full',
+            ];
 
         $fields[] = [
             'type' => 'dropdown',
@@ -322,6 +343,13 @@ final class AsanaAppService
     {
         $projectId = (int) ($values['project'] ?? 0);
         $taskId = (int) ($values['task'] ?? 0);
+
+        // Single-mapped boards render the project as a fixed line, so the
+        // submit payload carries no project value — resolve it the same way.
+        if ($projectId <= 0) {
+            $projectId = $this->fixedProjectFor($user, AsanaTask::find($taskGid)?->asana_project_gid)?->id ?? 0;
+        }
+
         if ($projectId <= 0 || $taskId <= 0) {
             return ['error' => 'Pick a project and task first.'];
         }
@@ -422,36 +450,45 @@ final class AsanaAppService
     }
 
     /**
-     * @param  Collection<int, Project>  $projects
+     * Pick the preselected project among the offered dropdown options.
+     * $restricted means the options are the board's linked projects, so a
+     * default is always sensible; otherwise (unmapped board) leave the
+     * choice to the user unless an association or explicit value exists.
+     *
+     * @param  \Illuminate\Support\Collection<int, Project>  $options
      * @param  array<string, mixed>  $values
      */
-    private function resolveSelectedProject(User $user, $projects, string $boardGid, array $values): ?int
+    private function resolveSelectedProject(User $user, $options, string $boardGid, array $values, bool $restricted): ?int
     {
         // Explicit user choice (on_change round trip) wins.
         $chosen = $values['project'] ?? null;
-        if (is_string($chosen) && $chosen !== '' && $projects->contains('id', (int) $chosen)) {
+        if (is_string($chosen) && $chosen !== '' && $options->contains('id', (int) $chosen)) {
             return (int) $chosen;
         }
 
-        if ($boardGid === '') {
-            return null;
-        }
-
-        $linked = $projects->filter(
-            fn (Project $p): bool => $p->asanaProjects->contains('gid', $boardGid)
-        );
-
-        $first = $linked->sortBy('name')->first();
-        if ($first !== null && $linked->count() === 1) {
-            return $first->id;
-        }
-
-        $remembered = $this->associations->lookup($user, $boardGid);
-        if ($remembered !== null && $projects->contains('id', $remembered['project_id'])) {
+        $remembered = $boardGid !== '' ? $this->associations->lookup($user, $boardGid) : null;
+        if ($remembered !== null && $options->contains('id', $remembered['project_id'])) {
             return $remembered['project_id'];
         }
 
-        return $first?->id;
+        return $restricted ? $options->sortBy('name')->first()?->id : null;
+    }
+
+    /**
+     * The single internal project a task's board maps to for this user, when
+     * unambiguous — mirrors the form's fixed-project mode so a submit without
+     * a project value resolves identically.
+     */
+    private function fixedProjectFor(User $user, ?string $boardGid): ?Project
+    {
+        if ($boardGid === null || $boardGid === '') {
+            return null;
+        }
+
+        $linked = $this->projectsForUser($user)
+            ->filter(fn (Project $p): bool => $p->asanaProjects->contains('gid', $boardGid));
+
+        return $linked->count() === 1 ? $linked->first() : null;
     }
 
     /**

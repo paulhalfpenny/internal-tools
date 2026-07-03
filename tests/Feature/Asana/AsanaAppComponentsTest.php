@@ -110,7 +110,6 @@ test('form preselects the mapped project and prefills notes with the Asana task 
 
     expect($metadata['title'])->toBe('Log time to Internal Tools')
         ->and($metadata['on_submit_callback'])->toContain('/asana-app/submit')
-        ->and($fields['project']['value'])->toBe((string) $project->id)
         ->and(collect($fields['task']['options'])->pluck('label'))->toContain('Development')
         ->and($fields['notes']['value'])->toBe('Fix the checkout flow')
         ->and($fields['date']['value'])->toBe(today()->toDateString())
@@ -121,6 +120,11 @@ test('form preselects the mapped project and prefills notes with the Asana task 
     expect($fields['linked_asana_task']['type'])->toBe('static_text')
         ->and($fields['linked_asana_task']['name'])->toContain('Fix the checkout flow');
 
+    // The board maps to exactly one internal project, so the project is a
+    // fixed read-only line — not a dropdown the user could change.
+    expect($fields['project']['type'])->toBe('static_text')
+        ->and($fields['project']['name'])->toContain('Website Build');
+
     // Hours is required up front; the timer checkbox is watched so ticking it
     // re-renders the form with hours optional.
     expect($fields['hours']['is_required'])->toBeTrue()
@@ -128,12 +132,12 @@ test('form preselects the mapped project and prefills notes with the Asana task 
 });
 
 test('ticking the timer checkbox makes hours optional via on_change', function () {
-    [, $project] = asanaAppSetup();
+    asanaAppSetup();
 
     $response = signedPost('/asana-app/form/change', [
         'task' => 'AT1',
         'user' => 'AU1',
-        'values' => ['project' => (string) $project->id, 'timer' => ['start']],
+        'values' => ['timer' => ['start']],
     ])->assertOk();
 
     $fields = collect($response->json('metadata.fields'))->keyBy('id');
@@ -151,7 +155,7 @@ test('form shows a connect prompt with no submit button for unlinked Asana users
         ->and($metadata['fields'][0]['name'])->toContain('/profile/asana');
 });
 
-test('form uses the remembered association when a board maps to multiple projects', function () {
+test('a multi-mapped board shows a dropdown restricted to the linked projects', function () {
     [$user, $projectA, $task] = asanaAppSetup();
 
     $projectB = Project::factory()->create(['name' => 'Aardvark Retainer', 'asana_task_required' => false]);
@@ -159,9 +163,17 @@ test('form uses the remembered association when a board maps to multiple project
     $projectB->users()->attach($user->id, ['hourly_rate_override' => null]);
     $projectB->asanaProjects()->attach('BOARD1', ['asana_custom_field_gid' => null]);
 
+    // A project the user is on but that is NOT linked to this board must not
+    // be offered at all.
+    $unrelated = Project::factory()->create(['name' => 'Unrelated Retainer', 'asana_task_required' => false]);
+    $unrelated->users()->attach($user->id, ['hourly_rate_override' => null]);
+
     // Without an association, the alphabetically-first linked project wins.
     $first = collect(signedGet('/asana-app/form', ['task' => 'AT1', 'user' => 'AU1'])->json('metadata.fields'))->keyBy('id');
-    expect($first['project']['value'])->toBe((string) $projectB->id);
+    expect($first['project']['type'])->toBe('dropdown')
+        ->and($first['project']['value'])->toBe((string) $projectB->id)
+        ->and(collect($first['project']['options'])->pluck('id')->all())
+        ->toBe([(string) $projectB->id, (string) $projectA->id]);
 
     AsanaProjectAssociation::create([
         'user_id' => $user->id,
@@ -176,13 +188,27 @@ test('form uses the remembered association when a board maps to multiple project
         ->and($fields['task']['value'])->toBe((string) $task->id);
 });
 
-test('on_change rebuilds the task options for the newly selected project', function () {
+test('an unmapped board falls back to the full project dropdown', function () {
+    [$user] = asanaAppSetup();
+
+    AsanaProject::create(['gid' => 'LONEBOARD', 'workspace_gid' => 'WS1', 'name' => 'Unmapped board', 'is_archived' => false]);
+    AsanaTask::create(['gid' => 'AT9', 'asana_project_gid' => 'LONEBOARD', 'name' => 'Orphan task', 'is_completed' => false]);
+
+    $fields = collect(signedGet('/asana-app/form', ['task' => 'AT9', 'user' => 'AU1'])->json('metadata.fields'))->keyBy('id');
+
+    expect($fields['project']['type'])->toBe('dropdown')
+        ->and($fields['project']['value'])->toBeNull()
+        ->and(collect($fields['project']['options'])->pluck('label')->join(','))->toContain('Website Build');
+});
+
+test('on_change rebuilds the task options for the newly selected linked project', function () {
     [$user, $projectA] = asanaAppSetup();
 
     $otherTask = Task::factory()->create(['name' => 'Copywriting']);
     $projectB = Project::factory()->create(['name' => 'Second Project', 'asana_task_required' => false]);
     $projectB->tasks()->attach($otherTask->id, ['is_billable' => true, 'hourly_rate_override' => null]);
     $projectB->users()->attach($user->id, ['hourly_rate_override' => null]);
+    $projectB->asanaProjects()->attach('BOARD1', ['asana_custom_field_gid' => null]);
 
     $response = signedPost('/asana-app/form/change', [
         'task' => 'AT1',
@@ -193,6 +219,27 @@ test('on_change rebuilds the task options for the newly selected project', funct
     $fields = collect($response->json('metadata.fields'))->keyBy('id');
     expect($fields['project']['value'])->toBe((string) $projectB->id)
         ->and(collect($fields['task']['options'])->pluck('label')->all())->toBe(['Copywriting']);
+});
+
+test('submit resolves the fixed project when the form had no project dropdown', function () {
+    [$user, $project, $task] = asanaAppSetup();
+
+    // Single-mapped board => the form showed no project field, so the submit
+    // payload carries no project value.
+    signedPost('/asana-app/submit', [
+        'task' => 'AT1',
+        'user' => 'AU1',
+        'values' => [
+            'task' => (string) $task->id,
+            'hours' => '0:45',
+            'timer' => [],
+        ],
+    ])->assertOk();
+
+    $entry = $user->timeEntries()->sole();
+    expect($entry->project_id)->toBe($project->id)
+        ->and((float) $entry->hours)->toBe(0.75)
+        ->and($entry->asana_task_gid)->toBe('AT1');
 });
 
 // ─── submit ──────────────────────────────────────────────────────────────────
