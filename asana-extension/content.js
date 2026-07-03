@@ -80,13 +80,19 @@
       'display:inline-flex', 'align-items:center', 'justify-content:center',
       'width:28px', 'height:28px', 'margin:0 2px', 'padding:0',
       'border:none', 'border-radius:6px', 'background:transparent',
-      'cursor:pointer', 'color:inherit',
+      'cursor:pointer', 'color:#6d6e6f',
     ].join(';');
-    button.addEventListener('mouseenter', () => { button.style.background = 'rgba(55,23,23,0.06)'; });
-    button.addEventListener('mouseleave', () => { button.style.background = 'transparent'; });
+    button.addEventListener('mouseenter', () => {
+      button.style.background = 'rgba(55,23,23,0.06)';
+      button.style.color = '#1e1f21';
+    });
+    button.addEventListener('mouseleave', () => {
+      button.style.background = 'transparent';
+      button.style.color = '#6d6e6f';
+    });
 
     button.innerHTML =
-      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">' +
+      '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
       '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>';
 
     button.addEventListener('click', function (event) {
