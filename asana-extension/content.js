@@ -78,7 +78,7 @@
     // Icon-only, sized to sit in Asana's task-header icon row.
     button.style.cssText = [
       'display:inline-flex', 'align-items:center', 'justify-content:center',
-      'width:28px', 'height:28px', 'margin:0 2px', 'padding:5px 0 0',
+      'width:28px', 'height:28px', 'margin:5px 2px 0', 'padding:0',
       'border:none', 'border-radius:6px', 'background:transparent',
       'cursor:pointer', 'color:#6d6e6f',
     ].join(';');
