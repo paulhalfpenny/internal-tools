@@ -455,6 +455,12 @@
                         this.taskOpen = false;
                         this.asanaTaskOpen = false;
                     },
+                    // Picker syncs are deferred ($wire.set third arg false):
+                    // a live set fires an immediate round trip whose morph can
+                    // land while a dropdown is open, orphaning Alpine template
+                    // clones (ghost/empty dropdowns). The server only needs
+                    // these values on the next action (Save row / Refresh),
+                    // and deferred updates flush with that request.
                     pickProject(id) {
                         this.selectedProjectId = id;
                         this.selectedTaskId = null;
@@ -462,21 +468,21 @@
                         this.projectSearch = '';
                         this.taskSearch = '';
                         this.closePickers();
-                        $wire.set('newRowProjectId', id);
-                        $wire.set('newRowTaskId', null);
-                        $wire.set('newRowAsanaTaskGid', '');
+                        $wire.set('newRowProjectId', id, false);
+                        $wire.set('newRowTaskId', null, false);
+                        $wire.set('newRowAsanaTaskGid', '', false);
                     },
                     pickTask(id) {
                         this.selectedTaskId = id;
                         this.taskSearch = '';
                         this.closePickers();
-                        $wire.set('newRowTaskId', id);
+                        $wire.set('newRowTaskId', id, false);
                     },
                     pickAsanaTask(gid) {
                         this.selectedAsanaTaskGid = gid;
                         this.asanaTaskSearch = '';
                         this.closePickers();
-                        $wire.set('newRowAsanaTaskGid', gid);
+                        $wire.set('newRowAsanaTaskGid', gid, false);
                     },
                 }"
                 @click.stop
@@ -670,7 +676,7 @@
                     <div class="relative z-10" @click.outside="closeTaskPicker()">
                         <div class="relative">
                             <template x-if="selectedTask && !taskOpen">
-                                <span class="absolute left-4 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full" :style="'background:' + selectedTask.colour"></span>
+                                <span class="absolute left-4 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full" :style="'background:' + (selectedTask?.colour ?? '')"></span>
                             </template>
                             <input
                                 type="text"
@@ -713,7 +719,7 @@
                             <div class="max-h-60 overflow-y-auto py-1">
                                 <template x-if="selectedProject">
                                     <div>
-                                        <template x-if="selectedProject.tasks.length > 0 && filteredTasks.length === 0">
+                                        <template x-if="(selectedProject?.tasks.length ?? 0) > 0 && filteredTasks.length === 0">
                                             <p class="text-sm text-gray-400 px-3 py-4 text-center">No tasks match.</p>
                                         </template>
                                         <template x-if="filteredBillableTasks.length > 0">
@@ -740,7 +746,7 @@
                                                 </template>
                                             </div>
                                         </template>
-                                        <template x-if="selectedProject.tasks.length === 0">
+                                        <template x-if="(selectedProject?.tasks.length ?? 0) === 0 && selectedProject">
                                             <p class="text-sm text-gray-400 px-3 py-4 text-center">No tasks assigned.</p>
                                         </template>
                                     </div>

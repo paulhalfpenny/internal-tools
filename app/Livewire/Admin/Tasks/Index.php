@@ -2,8 +2,8 @@
 
 namespace App\Livewire\Admin\Tasks;
 
+use App\Domain\TimeTracking\ProjectPickerCache;
 use App\Models\Task;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
@@ -150,12 +150,8 @@ class Index extends Component
     {
         $task->loadMissing('projects.users:id');
 
-        $task->projects
-            ->flatMap(fn ($project) => $project->users->pluck('id'))
-            ->unique()
-            ->each(function ($userId): void {
-                Cache::forget("projects_picker_{$userId}");
-                Cache::forget("projects_picker_eloquent_{$userId}");
-            });
+        ProjectPickerCache::forgetForUsers(
+            $task->projects->flatMap(fn ($project) => $project->users->pluck('id'))
+        );
     }
 }

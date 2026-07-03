@@ -5,6 +5,7 @@ namespace App\Domain\Mcp;
 use App\Domain\Budgeting\ProjectBudgetCalculator;
 use App\Domain\Reporting\TimeReportQuery;
 use App\Domain\TimeTracking\HoursParser;
+use App\Domain\TimeTracking\ProjectPickerCache;
 use App\Domain\TimeTracking\TimeEntryService;
 use App\Enums\BudgetType;
 use App\Enums\GroupBy;
@@ -262,6 +263,8 @@ final class InternalMcpActions
             $this->syncProjectUsers($project, $validated['user_ids']);
         }
 
+        ProjectPickerCache::forgetForUsers($validated['user_ids'] ?? []);
+
         return $project->refresh();
     }
 
@@ -271,6 +274,8 @@ final class InternalMcpActions
     public function updateProject(User $actor, Project $project, array $data): Project
     {
         $this->assertAdmin($actor);
+
+        $previousUserIds = $project->users()->pluck('users.id')->all();
 
         $validated = Validator::validate($data, [
             'client_id' => ['sometimes', 'integer', 'exists:clients,id'],
@@ -321,6 +326,12 @@ final class InternalMcpActions
             $this->syncProjectUsers($project, $validated['user_ids']);
         }
 
+        // Both current and removed members see this project's picker change.
+        ProjectPickerCache::forgetForUsers([
+            ...$previousUserIds,
+            ...($validated['user_ids'] ?? []),
+        ]);
+
         return $project->refresh();
     }
 
@@ -329,6 +340,8 @@ final class InternalMcpActions
         $this->assertAdmin($actor);
 
         $project->update(['is_archived' => $archive]);
+
+        ProjectPickerCache::forgetForUsers($project->users()->pluck('users.id'));
 
         return $project->refresh();
     }
@@ -345,6 +358,8 @@ final class InternalMcpActions
             $member->id => ['hourly_rate_override' => null, 'rate_id' => null],
         ]);
 
+        ProjectPickerCache::forgetForUsers([$member->id]);
+
         return $project->refresh();
     }
 
@@ -353,6 +368,8 @@ final class InternalMcpActions
         $this->assertAdmin($actor);
 
         $project->users()->detach($member->id);
+
+        ProjectPickerCache::forgetForUsers([$member->id]);
 
         return $project->refresh();
     }
