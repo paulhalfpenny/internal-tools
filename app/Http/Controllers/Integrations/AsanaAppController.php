@@ -48,20 +48,26 @@ class AsanaAppController extends Controller
         ));
     }
 
+    /**
+     * Asana's on_submit contract: a 200 MUST attach a resource — which would
+     * replace the app's "Log time" entry point on the task. So every outcome
+     * (confirmation or error) is returned as a 400 + FormMetadataResponse,
+     * which Asana renders as a re-opened form.
+     */
     public function submit(Request $request): JsonResponse
     {
         $data = $this->data($request);
 
         $user = $this->service->resolveUser($data['user'] ?? null);
         if ($user === null) {
-            return response()->json(['error' => 'Your Asana account is not linked to Internal Tools.']);
+            return response()->json($this->service->connectPromptForm(), 400);
         }
 
         return response()->json($this->service->submit(
             $user,
             (string) ($data['task'] ?? ''),
             is_array($data['values'] ?? null) ? $data['values'] : [],
-        ));
+        ), 400);
     }
 
     public function widget(Request $request): JsonResponse

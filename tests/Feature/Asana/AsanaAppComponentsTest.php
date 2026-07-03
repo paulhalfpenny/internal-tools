@@ -262,7 +262,7 @@ test('submit resolves the fixed project when the form had no project dropdown', 
             'hours' => '0:45',
             'timer' => [],
         ],
-    ])->assertOk();
+    ])->assertStatus(400);
 
     $entry = $user->timeEntries()->sole();
     expect($entry->project_id)->toBe($project->id)
@@ -286,10 +286,13 @@ test('submit creates a linked time entry and remembers the association', functio
             'notes' => 'Fix the checkout flow',
             'timer' => [],
         ],
-    ])->assertOk();
+    ])->assertStatus(400);
 
-    expect($response->json())->not->toHaveKey('resource_url')
-        ->and($response->json())->not->toHaveKey('error');
+    // Asana's on_submit contract: 200 MUST attach a resource (which would
+    // replace the Log time button), so success is a 400 + confirmation form.
+    expect($response->json('template'))->toBe('form_metadata_v0')
+        ->and($response->json('metadata.title'))->toContain('logged')
+        ->and($response->json('metadata'))->not->toHaveKey('on_submit_callback');
 
     $entry = $user->timeEntries()->sole();
     expect((float) $entry->hours)->toBe(1.5)
@@ -319,8 +322,8 @@ test('submit never attaches a card and repeat logging keeps working', function (
 
     // Attaching a widget card replaces the app's "Log time" entry point on
     // the task, killing repeat logging — so submits must never attach.
-    expect(signedPost('/asana-app/submit', $payload())->assertOk()->json())->not->toHaveKey('resource_url')
-        ->and(signedPost('/asana-app/submit', $payload())->assertOk()->json())->not->toHaveKey('resource_url');
+    expect(signedPost('/asana-app/submit', $payload())->assertStatus(400)->json())->not->toHaveKey('resource_url')
+        ->and(signedPost('/asana-app/submit', $payload())->assertStatus(400)->json())->not->toHaveKey('resource_url');
 
     expect(TimeEntry::where('asana_task_gid', 'AT1')->count())->toBe(2);
 });
@@ -356,9 +359,10 @@ test('submit rejects unparseable hours with a form error', function () {
             'hours' => 'banana',
             'timer' => [],
         ],
-    ])->assertOk();
+    ])->assertStatus(400);
 
-    expect($response->json('error'))->toContain('banana')
+    $fields = collect($response->json('metadata.fields'))->keyBy('id');
+    expect($fields['form_error']['name'])->toContain('banana')
         ->and(TimeEntry::count())->toBe(0);
 });
 
@@ -374,9 +378,10 @@ test('submit requires hours unless starting a timer', function () {
             'hours' => '',
             'timer' => [],
         ],
-    ])->assertOk();
+    ])->assertStatus(400);
 
-    expect($response->json('error'))->toContain('hours')
+    $fields = collect($response->json('metadata.fields'))->keyBy('id');
+    expect($fields['form_error']['name'])->toContain('hours')
         ->and(TimeEntry::count())->toBe(0);
 });
 
@@ -393,9 +398,10 @@ test('submit rejects an unparseable date with a form error instead of a 500', fu
             'date' => 'not-a-date',
             'timer' => [],
         ],
-    ])->assertOk();
+    ])->assertStatus(400);
 
-    expect($response->json('error'))->toContain('date')
+    $fields = collect($response->json('metadata.fields'))->keyBy('id');
+    expect($fields['form_error']['name'])->toContain('date')
         ->and(TimeEntry::count())->toBe(0);
 });
 
@@ -415,7 +421,7 @@ test('submit stores no asana gid when the chosen project is not linked to the bo
             'hours' => '0.5',
             'timer' => [],
         ],
-    ])->assertOk();
+    ])->assertStatus(400);
 
     expect($user->timeEntries()->sole()->asana_task_gid)->toBeNull();
 });
@@ -435,9 +441,10 @@ test('submit rejects projects the user is not assigned to', function () {
             'hours' => '1',
             'timer' => [],
         ],
-    ])->assertOk();
+    ])->assertStatus(400);
 
-    expect($response->json('error'))->toContain('not assigned')
+    $fields = collect($response->json('metadata.fields'))->keyBy('id');
+    expect($fields['form_error']['name'])->toContain('not assigned')
         ->and(TimeEntry::count())->toBe(0);
 });
 
@@ -455,7 +462,7 @@ test('submit with the timer option starts a running timer', function () {
             'hours' => '',
             'timer' => ['start'],
         ],
-    ])->assertOk();
+    ])->assertStatus(400);
 
     $entry = $user->timeEntries()->sole();
     expect((bool) $entry->is_running)->toBeTrue()
@@ -469,7 +476,7 @@ test('form offers stop and submit stops the running timer', function () {
         'task' => 'AT1',
         'user' => 'AU1',
         'values' => ['project' => (string) $project->id, 'task' => (string) $task->id, 'hours' => '', 'timer' => ['start']],
-    ]);
+    ])->assertStatus(400);
 
     $fields = collect(signedGet('/asana-app/form', ['task' => 'AT1', 'user' => 'AU1'])->json('metadata.fields'))->keyBy('id');
     expect($fields['timer']['options'][0]['id'])->toBe('stop');
@@ -478,7 +485,7 @@ test('form offers stop and submit stops the running timer', function () {
         'task' => 'AT1',
         'user' => 'AU1',
         'values' => ['timer' => ['stop']],
-    ])->assertOk();
+    ])->assertStatus(400);
 
     expect((bool) $user->timeEntries()->sole()->fresh()->is_running)->toBeFalse();
 });
@@ -523,7 +530,7 @@ test('widget totals refresh for other viewers immediately after a submit', funct
         'task' => 'AT1',
         'user' => 'AU1',
         'values' => ['project' => (string) $project->id, 'task' => (string) $task->id, 'hours' => '2', 'timer' => []],
-    ])->assertOk();
+    ])->assertStatus(400);
 
     // Same colleague, straight after: must see the new total, not a 60s-stale cache.
     $after = collect(signedGet('/asana-app/widget', [

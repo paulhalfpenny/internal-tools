@@ -139,6 +139,9 @@ connect, instead of erroring.
 > therefore never attach a card, and the logged-so-far totals are shown as a
 > read-only line inside the form instead. The widget endpoint below remains
 > live to serve any historically attached cards, but no new cards are created.
+> Because Asana's on_submit contract only documents a 200-with-attachment,
+> every submit outcome (success confirmation or validation error) is returned
+> as a 400 + FormMetadataResponse, which Asana renders as a re-opened form.
 
 Input: the attached `resource_url` (contains the task gid) + acting user gid.
 Output (`summary_with_details_v0`):

@@ -92,7 +92,7 @@ final class AsanaAppService
      * @param  array<string, mixed>  $values
      * @return array<string, mixed>
      */
-    public function formMetadata(User $user, string $taskGid, array $values = []): array
+    public function formMetadata(User $user, string $taskGid, array $values = [], ?string $error = null): array
     {
         $asanaTask = AsanaTask::find($taskGid);
         $boardGid = $asanaTask?->asana_project_gid ?? '';
@@ -127,6 +127,14 @@ final class AsanaAppService
         $timerTicked = is_array($values['timer'] ?? null) && in_array('start', $values['timer'], true);
 
         $fields = [];
+
+        if ($error !== null) {
+            $fields[] = [
+                'type' => 'static_text',
+                'id' => 'form_error',
+                'name' => 'Could not log time: '.$error,
+            ];
+        }
 
         // The entry is linked to the Asana task by gid regardless of what
         // the user types in Notes — surface that as a fixed, read-only line.
@@ -278,10 +286,36 @@ final class AsanaAppService
 
             return $this->logEntry($user, $taskGid, $values, startTimer: in_array('start', $timerChoices, true));
         } catch (ValidationException $e) {
-            return ['error' => collect($e->errors())->flatten()->first() ?? 'Could not log time.'];
+            $message = collect($e->errors())->flatten()->first() ?? 'Could not log time.';
+
+            return $this->formMetadata($user, $taskGid, $values, error: (string) $message);
         } catch (AuthorizationException $e) {
-            return ['error' => $e->getMessage()];
+            return $this->formMetadata($user, $taskGid, $values, error: $e->getMessage());
         }
+    }
+
+    /**
+     * A terminal form (no submit button) confirming what just happened —
+     * Asana's on_submit contract offers no attachment-free 200, so success
+     * is conveyed by re-rendering the form via the 400 channel.
+     *
+     * @return array<string, mixed>
+     */
+    private function confirmationForm(string $message): array
+    {
+        return [
+            'template' => 'form_metadata_v0',
+            'metadata' => [
+                'title' => 'Time logged',
+                'fields' => [
+                    [
+                        'type' => 'static_text',
+                        'id' => 'confirmation',
+                        'name' => $message.' You can close this window.',
+                    ],
+                ],
+            ],
+        ];
     }
 
     /**
@@ -386,12 +420,12 @@ final class AsanaAppService
         }
 
         if ($projectId <= 0 || $taskId <= 0) {
-            return ['error' => 'Pick a project and task first.'];
+            return $this->formMetadata($user, $taskGid, $values, error: 'Pick a project and task first.');
         }
 
         $hoursInput = is_string($values['hours'] ?? null) ? trim($values['hours']) : '';
         if (! $startTimer && $hoursInput === '') {
-            return ['error' => 'Enter the hours to log, or tick "Start a timer instead".'];
+            return $this->formMetadata($user, $taskGid, $values, error: 'Enter the hours to log, or tick "Start a timer instead".');
         }
 
         $hours = 0.0;
@@ -399,7 +433,7 @@ final class AsanaAppService
             try {
                 $hours = HoursParser::parse($hoursInput);
             } catch (\InvalidArgumentException $e) {
-                return ['error' => $e->getMessage()];
+                return $this->formMetadata($user, $taskGid, $values, error: $e->getMessage());
             }
         }
 
@@ -408,7 +442,7 @@ final class AsanaAppService
         if ($dateInput !== '') {
             $parsed = \DateTimeImmutable::createFromFormat('Y-m-d', $dateInput);
             if ($parsed === false || $parsed->format('Y-m-d') !== $dateInput) {
-                return ['error' => 'Enter the date as YYYY-MM-DD.'];
+                return $this->formMetadata($user, $taskGid, $values, error: 'Enter the date as YYYY-MM-DD.');
             }
             $date = $dateInput;
         }
@@ -448,7 +482,12 @@ final class AsanaAppService
         // Never attach a resource card: an attached card replaces the app's
         // "Log time" entry point on the task, which kills repeat logging.
         // Totals are shown inside the form (logged_so_far) instead.
-        return [];
+        $summary = $startTimer
+            ? 'Timer started on '.$entry->project->timesheetDisplayName().' — '.$entry->task->name.'.'
+            : 'Logged '.HoursFormatter::format($hours, $user->hoursDisplayFormat()).' hrs to '
+                .$entry->project->timesheetDisplayName().' — '.$entry->task->name.'.';
+
+        return $this->confirmationForm($summary);
     }
 
     /**
@@ -458,14 +497,17 @@ final class AsanaAppService
     {
         $entry = $this->runningEntryForTask($user, $taskGid);
         if ($entry === null) {
-            return ['error' => 'No running timer on this task.'];
+            return $this->formMetadata($user, $taskGid, [], error: 'No running timer on this task.');
         }
 
         $this->timeEntries->stopTimer($entry);
         Cache::forget('asana_app_widget_'.$taskGid);
 
-        // The card was attached when the timer entry was created.
-        return [];
+        $entry->refresh();
+
+        return $this->confirmationForm(
+            'Timer stopped — logged '.HoursFormatter::format((float) $entry->hours, $user->hoursDisplayFormat()).' hrs.'
+        );
     }
 
     private function runningEntryForTask(User $user, string $taskGid): ?TimeEntry
