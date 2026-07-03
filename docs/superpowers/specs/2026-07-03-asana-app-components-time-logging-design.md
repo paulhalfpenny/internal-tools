@@ -133,6 +133,13 @@ connect, instead of erroring.
 
 ### Widget (`GET /asana-app/widget`)
 
+> **Revised after live testing (2026-07-03):** attaching the widget's resource
+> card *replaces* the app's "Log time" entry point in the task's Apps row,
+> which kills repeat logging — an undocumented platform behaviour. Submits
+> therefore never attach a card, and the logged-so-far totals are shown as a
+> read-only line inside the form instead. The widget endpoint below remains
+> live to serve any historically attached cards, but no new cards are created.
+
 Input: the attached `resource_url` (contains the task gid) + acting user gid.
 Output (`summary_with_details_v0`):
 

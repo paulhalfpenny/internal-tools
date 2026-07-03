@@ -288,8 +288,8 @@ test('submit creates a linked time entry and remembers the association', functio
         ],
     ])->assertOk();
 
-    expect($response->json('resource_url'))->toContain('/asana-app/tasks/AT1')
-        ->and($response->json('resource_name'))->toContain('Internal Tools');
+    expect($response->json())->not->toHaveKey('resource_url')
+        ->and($response->json())->not->toHaveKey('error');
 
     $entry = $user->timeEntries()->sole();
     expect((float) $entry->hours)->toBe(1.5)
@@ -304,7 +304,7 @@ test('submit creates a linked time entry and remembers the association', functio
         ->and($assoc->asana_project_gid)->toBe('BOARD1');
 });
 
-test('only the first entry on a task attaches the widget card', function () {
+test('submit never attaches a card and repeat logging keeps working', function () {
     [$user, $project, $task] = asanaAppSetup();
 
     $payload = fn () => [
@@ -317,12 +317,31 @@ test('only the first entry on a task attaches the widget card', function () {
         ],
     ];
 
-    // First entry attaches the card (this is what makes the widget appear);
-    // repeats must not — Asana logs every attachment as an activity story.
-    expect(signedPost('/asana-app/submit', $payload())->json('resource_url'))->toContain('/asana-app/tasks/AT1')
-        ->and(signedPost('/asana-app/submit', $payload())->json())->not->toHaveKey('resource_url');
+    // Attaching a widget card replaces the app's "Log time" entry point on
+    // the task, killing repeat logging — so submits must never attach.
+    expect(signedPost('/asana-app/submit', $payload())->assertOk()->json())->not->toHaveKey('resource_url')
+        ->and(signedPost('/asana-app/submit', $payload())->assertOk()->json())->not->toHaveKey('resource_url');
 
     expect(TimeEntry::where('asana_task_gid', 'AT1')->count())->toBe(2);
+});
+
+test('the form shows time already logged on the task', function () {
+    [$user, $project, $task] = asanaAppSetup();
+    $colleague = User::factory()->create(['default_hourly_rate' => 100]);
+    $project->users()->attach($colleague->id, ['hourly_rate_override' => null]);
+
+    // No entries yet: no logged-so-far line.
+    $before = collect(signedGet('/asana-app/form', ['task' => 'AT1', 'user' => 'AU1'])->json('metadata.fields'))->keyBy('id');
+    expect($before->has('logged_so_far'))->toBeFalse();
+
+    TimeEntry::create(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => '2026-07-01', 'hours' => 1.5, 'is_running' => false, 'is_billable' => true, 'billable_rate_snapshot' => 100, 'billable_amount' => 150, 'asana_task_gid' => 'AT1']);
+    TimeEntry::create(['user_id' => $colleague->id, 'project_id' => $project->id, 'task_id' => $task->id, 'spent_on' => '2026-07-02', 'hours' => 2.0, 'is_running' => false, 'is_billable' => true, 'billable_rate_snapshot' => 100, 'billable_amount' => 200, 'asana_task_gid' => 'AT1']);
+
+    $fields = collect(signedGet('/asana-app/form', ['task' => 'AT1', 'user' => 'AU1'])->json('metadata.fields'))->keyBy('id');
+
+    expect($fields['logged_so_far']['type'])->toBe('static_text')
+        ->and($fields['logged_so_far']['name'])->toContain('3.5')
+        ->and($fields['logged_so_far']['name'])->toContain('1.5');
 });
 
 test('submit rejects unparseable hours with a form error', function () {

@@ -136,6 +136,20 @@ final class AsanaAppService
             'name' => 'Asana task: '.$asanaTask->name,
         ];
 
+        // In-form replacement for the abandoned on-task widget (attaching a
+        // card would replace the Log time button — see logEntry()).
+        $linkedEntries = TimeEntry::where('asana_task_gid', $taskGid)->get(['user_id', 'hours']);
+        if ($linkedEntries->isNotEmpty()) {
+            $format = $user->hoursDisplayFormat();
+            $fields[] = [
+                'type' => 'static_text',
+                'id' => 'logged_so_far',
+                'name' => 'Logged on this task so far: '
+                    .HoursFormatter::format((float) $linkedEntries->sum('hours'), $format).' hrs total, '
+                    .HoursFormatter::format((float) $linkedEntries->where('user_id', $user->id)->sum('hours'), $format).' hrs yours.',
+            ];
+        }
+
         $fields[] = $fixedProject !== null
             ? [
                 'type' => 'static_text',
@@ -357,17 +371,6 @@ final class AsanaAppService
     }
 
     /**
-     * @return array<string, string>
-     */
-    public function attachmentResource(string $taskGid): array
-    {
-        return [
-            'resource_name' => 'Time log — Filter Internal Tools',
-            'resource_url' => route('asana-app.tasks.show', $taskGid),
-        ];
-    }
-
-    /**
      * @param  array<string, mixed>  $values
      * @return array<string, mixed>
      */
@@ -442,13 +445,10 @@ final class AsanaAppService
 
         Cache::forget('asana_app_widget_'.$taskGid);
 
-        // Attach the widget card only once per task (Asana logs every
-        // attachment as an activity story) and only when the entry actually
-        // links to the task.
-        $isFirstLinkedEntry = $gidToStore !== null
-            && TimeEntry::where('asana_task_gid', $gidToStore)->count() === 1;
-
-        return $isFirstLinkedEntry ? $this->attachmentResource($taskGid) : [];
+        // Never attach a resource card: an attached card replaces the app's
+        // "Log time" entry point on the task, which kills repeat logging.
+        // Totals are shown inside the form (logged_so_far) instead.
+        return [];
     }
 
     /**
