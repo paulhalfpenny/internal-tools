@@ -194,7 +194,7 @@
                             </td>
                         @endfor
                         <td class="px-2 py-3 text-right text-sm font-medium tabular-nums text-gray-900">
-                            {{ $rowTotal > 0 ? \App\Domain\TimeTracking\HoursFormatter::asDecimal((float) $rowTotal) : '—' }}
+                            {{ $rowTotal > 0 ? \App\Domain\TimeTracking\HoursFormatter::format((float) $rowTotal, $hoursFormat) : '—' }}
                         </td>
                         @unless($isReadOnly)
                             <td class="px-2 py-3 text-center">
@@ -222,11 +222,11 @@
                     <td class="px-4 py-3 text-sm font-medium text-gray-700">Daily totals</td>
                     @for($i = 0; $i < 7; $i++)
                         <td class="px-2 py-3 text-center text-sm font-medium tabular-nums text-gray-900 {{ $weekDays[$i]->isToday() ? 'bg-green-100' : '' }}">
-                            {{ $dayTotals[$i] > 0 ? \App\Domain\TimeTracking\HoursFormatter::asDecimal((float) $dayTotals[$i]) : '—' }}
+                            {{ $dayTotals[$i] > 0 ? \App\Domain\TimeTracking\HoursFormatter::format((float) $dayTotals[$i], $hoursFormat) : '—' }}
                         </td>
                     @endfor
                     <td class="px-2 py-3 text-right text-sm font-semibold tabular-nums text-gray-900">
-                        {{ $weekTotal > 0 ? \App\Domain\TimeTracking\HoursFormatter::asDecimal((float) $weekTotal) : '—' }}
+                        {{ $weekTotal > 0 ? \App\Domain\TimeTracking\HoursFormatter::format((float) $weekTotal, $hoursFormat) : '—' }}
                     </td>
                     @unless($isReadOnly)
                         <td></td>

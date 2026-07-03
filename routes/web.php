@@ -16,6 +16,7 @@ use App\Livewire\Admin\Timesheets\Index as AdminTimesheets;
 use App\Livewire\Admin\Users\Index as AdminUsers;
 use App\Livewire\Profile\ApiTokens as ProfileApiTokens;
 use App\Livewire\Profile\AsanaConnection as ProfileAsanaConnection;
+use App\Livewire\Profile\Preferences as ProfilePreferences;
 use App\Livewire\Reports\ClientDetail;
 use App\Livewire\Reports\ClientsReport;
 use App\Livewire\Reports\ProjectBudget;
@@ -121,6 +122,7 @@ Route::middleware('auth')->group(function () {
     // Profile / personal integrations
     Route::get('/profile/asana', ProfileAsanaConnection::class)->name('profile.asana');
     Route::get('/profile/api-tokens', ProfileApiTokens::class)->name('profile.api-tokens');
+    Route::get('/profile/preferences', ProfilePreferences::class)->name('profile.preferences');
     Route::view('/profile/mcp', 'profile.mcp')->name('profile.mcp');
 
     // MCP high-impact write approvals. These use the web session and CSRF

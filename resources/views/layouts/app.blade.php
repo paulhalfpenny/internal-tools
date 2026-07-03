@@ -100,6 +100,7 @@
                         <p class="text-sm font-medium text-gray-900 truncate">{{ auth()->user()->name }}</p>
                         <p class="text-xs text-gray-500 truncate">{{ auth()->user()->email }}</p>
                     </div>
+                    <a href="{{ route('profile.preferences') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Preferences</a>
                     <a href="{{ route('profile.asana') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Asana connection</a>
                     <a href="{{ route('profile.api-tokens') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">API tokens</a>
                     <a href="{{ route('profile.mcp') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">MCP guide</a>

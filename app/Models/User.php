@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Domain\TimeTracking\HoursFormatter;
 use App\Enums\Role;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -204,6 +205,19 @@ class User extends Authenticatable implements OAuthenticatable
             ->all();
 
         return $days !== [] ? $days : [1, 2, 3, 4, 5];
+    }
+
+    /**
+     * How this user prefers time durations displayed: decimal hours (e.g.
+     * "2.8") or HH:MM (e.g. "2:48"). Stored in schedule_preferences.
+     */
+    public function hoursDisplayFormat(): string
+    {
+        $value = $this->schedule_preferences['hours_display_format'] ?? null;
+
+        return $value === HoursFormatter::FORMAT_HHMM
+            ? HoursFormatter::FORMAT_HHMM
+            : HoursFormatter::FORMAT_DECIMAL;
     }
 
     public function notificationsArePaused(?\DateTimeInterface $on = null): bool

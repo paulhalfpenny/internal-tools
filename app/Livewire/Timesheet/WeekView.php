@@ -551,9 +551,18 @@ class WeekView extends Component
             ->all();
     }
 
+    private function currentHoursFormat(): string
+    {
+        /** @var User|null $authUser */
+        $authUser = auth()->user();
+
+        return $authUser?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_DECIMAL;
+    }
+
     public function render(): View
     {
         $user = $this->viewedUser();
+        $hoursFormat = $this->currentHoursFormat();
         $weekStart = CarbonImmutable::parse($this->selectedDate)->startOfWeek();
         $weekDays = collect(range(0, 6))->map(fn (int $offset) => $weekStart->addDays($offset));
         $this->loadPersistedExtraRowsForWeek($weekStart);
@@ -614,7 +623,7 @@ class WeekView extends Component
             $dayIndex = (int) $weekStart->diffInDays(CarbonImmutable::parse($entry->spent_on));
             if ($dayIndex >= 0 && $dayIndex < 7) {
                 $storedCellHours[$key][$dayIndex] = ($storedCellHours[$key][$dayIndex] ?? 0.0) + (float) $entry->hours;
-                $rowsFromEntries[$key]['cells'][$dayIndex] = HoursFormatter::asDecimal($storedCellHours[$key][$dayIndex]);
+                $rowsFromEntries[$key]['cells'][$dayIndex] = HoursFormatter::format($storedCellHours[$key][$dayIndex], $hoursFormat);
 
                 $currentCellHours[$key][$dayIndex] = ($currentCellHours[$key][$dayIndex] ?? 0.0) + $timeEntryService->currentHours($entry);
                 if ($currentCellHours[$key][$dayIndex] > $storedCellHours[$key][$dayIndex]) {
@@ -750,6 +759,7 @@ class WeekView extends Component
             'teamMembers' => $teamMembers,
             'canCopyRowsFromPriorWeek' => $canCopyRowsFromPriorWeek,
             'viewedUser' => $user,
+            'hoursFormat' => $hoursFormat,
         ]);
     }
 }

@@ -4,6 +4,10 @@ namespace App\Domain\TimeTracking;
 
 final class HoursFormatter
 {
+    public const FORMAT_DECIMAL = 'decimal';
+
+    public const FORMAT_HHMM = 'hhmm';
+
     /**
      * Format decimal hours as `h:mm` (e.g. 0.25 → "0:15", 1.5 → "1:30").
      * 60-minute rollover is handled (e.g. 0.999 → "1:00").
@@ -29,5 +33,16 @@ final class HoursFormatter
         }
 
         return $formatted;
+    }
+
+    /**
+     * Format decimal hours using the given display format (FORMAT_DECIMAL or
+     * FORMAT_HHMM), falling back to decimal for anything unrecognised.
+     */
+    public static function format(float $hours, string $format): string
+    {
+        return $format === self::FORMAT_HHMM
+            ? self::asTime($hours)
+            : self::asDecimal($hours);
     }
 }
