@@ -54,10 +54,6 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->redirectGuestsTo(fn () => route('auth.login'));
-
-        // Asana app-components endpoints are authenticated by HMAC signature
-        // (VerifyAsanaAppSignature), not the web session — no CSRF token.
-        $middleware->validateCsrfTokens(except: ['asana-app/*']);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

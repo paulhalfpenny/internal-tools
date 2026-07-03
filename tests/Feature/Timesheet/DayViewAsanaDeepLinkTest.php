@@ -19,7 +19,13 @@ uses(RefreshDatabase::class);
 
 function deepLinkSetup(): array
 {
-    $user = User::factory()->create(['default_hourly_rate' => 100]);
+    // The Asana connection makes DayView's asana-task validation treat the
+    // integration as active (asanaIntegrationAvailable()).
+    $user = User::factory()->create([
+        'default_hourly_rate' => 100,
+        'asana_user_gid' => 'AU1',
+        'asana_access_token' => 'token-1',
+    ]);
 
     $project = Project::factory()->create(['name' => 'Website Build', 'asana_task_required' => false]);
     $task = Task::factory()->create(['name' => 'Development']);
@@ -61,6 +67,37 @@ test('log_asana prefills project without an association via the board mapping', 
         ->assertSet('showModal', true)
         ->assertSet('selectedProjectId', $project->id)
         ->assertSet('selectedAsanaTaskGid', 'AT1');
+});
+
+test('saving an entry with an Asana task remembers the board association', function () {
+    [$user, $project, $task] = deepLinkSetup();
+    $this->actingAs($user);
+
+    Livewire::test(DayView::class)
+        ->call('openNewModal')
+        ->set('selectedProjectId', $project->id)
+        ->set('selectedTaskId', $task->id)
+        ->set('selectedAsanaTaskGid', 'AT1')
+        ->set('hoursInput', '0.5')
+        ->call('save');
+
+    $assoc = AsanaProjectAssociation::sole();
+    expect($assoc->asana_project_gid)->toBe('BOARD1')
+        ->and($assoc->project_id)->toBe($project->id)
+        ->and($assoc->task_id)->toBe($task->id);
+
+    // ...so the next deep link preselects the remembered task too.
+    Livewire::withQueryParams(['log_asana' => 'AT1'])
+        ->test(DayView::class)
+        ->assertSet('selectedTaskId', $task->id);
+});
+
+test('the asana-app task URL redirects into the prefilled timesheet', function () {
+    [$user] = deepLinkSetup();
+    $this->actingAs($user);
+
+    $this->get('/asana-app/tasks/AT1')
+        ->assertRedirect(route('timesheet', ['log_asana' => 'AT1']));
 });
 
 test('an unknown log_asana gid opens nothing', function () {
