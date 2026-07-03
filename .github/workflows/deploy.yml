@@ -35,7 +35,14 @@ jobs:
             # couldn't later overwrite, failing `artisan view:cache` with
             # "Permission denied". No live requests means no stray
             # www-data-owned cache files.
-            php artisan down --retry=60 || true
+            #
+            # --render pre-renders the 503 page now (as the deploy user) so
+            # requests during maintenance are served from the static
+            # maintenance file without booting the framework. Without it,
+            # every hit while down Blade-compiles errors::503 as www-data,
+            # recreating exactly the unwritable cache file this guards
+            # against.
+            php artisan down --render="errors::503" --retry=60 || true
 
             git pull origin main
             composer install --no-dev --no-interaction --optimize-autoloader
@@ -54,7 +61,10 @@ jobs:
             find storage/framework/views bootstrap/cache -type d -exec chmod g+s {} + || true
             php artisan config:cache
             php artisan route:cache
-            php artisan view:cache
+            # Retry once after re-clearing: a queue worker finishing a job
+            # mid-deploy can still compile a view as www-data in the gap
+            # between the delete above and this cache rebuild.
+            php artisan view:cache || { find storage/framework/views -type f -name '*.php' -delete; php artisan view:cache; }
             chgrp -R www-data storage/framework/views bootstrap/cache || true
             chmod -R ug+rwX storage/framework/views bootstrap/cache || true
             find storage/framework/views bootstrap/cache -type d -exec chmod g+s {} + || true
