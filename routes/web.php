@@ -4,7 +4,6 @@ use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Integrations\AsanaAppController;
 use App\Http\Controllers\Integrations\AsanaOAuthController;
 use App\Http\Controllers\Mcp\PendingActionController as McpPendingActionController;
-use App\Http\Middleware\VerifyAsanaAppSignature;
 use App\Livewire\Admin\Clients\Index as AdminClients;
 use App\Livewire\Admin\Integrations\AsanaSettings as AdminAsanaSettings;
 use App\Livewire\Admin\Notifications\Index as AdminNotifications;
@@ -56,20 +55,11 @@ Route::post('/auth/logout', function () {
     return redirect('/');
 })->name('auth.logout')->middleware('auth');
 
-// Asana app-components endpoints. No web session — requests come from
-// Asana's platform and are authenticated by HMAC signature (the middleware).
-// CSRF is exempted for asana-app/* in bootstrap/app.php for the same reason.
-Route::prefix('asana-app')->name('asana-app.')->middleware(VerifyAsanaAppSignature::class)->group(function () {
-    Route::get('/form', [AsanaAppController::class, 'form'])->name('form');
-    Route::post('/form/change', [AsanaAppController::class, 'change'])->name('form.change');
-    Route::post('/submit', [AsanaAppController::class, 'submit'])->name('submit');
-    Route::get('/widget', [AsanaAppController::class, 'widget'])->name('widget');
-});
-
 // Authenticated routes
 Route::middleware('auth')->group(function () {
     Route::get('/', fn () => redirect()->route('timesheet'));
-    // Human-facing target of the Asana attachment link (session auth).
+    // Target of legacy Asana attachment cards and the browser extension:
+    // deep-links into the timesheet with the entry modal prefilled.
     Route::get('/asana-app/tasks/{taskGid}', [AsanaAppController::class, 'show'])->name('asana-app.tasks.show');
     Route::get('/timesheet', DayView::class)->name('timesheet');
     Route::get('/timesheet/week', WeekView::class)->name('timesheet.week');

@@ -374,6 +374,16 @@ class DayView extends Component
 
         if ($saved) {
             $this->rememberLastSavedProjectAndTask($projectId, $taskId);
+
+            // Remember the project/task per Asana board so the widget deep
+            // link (?log_asana=...) can preselect them next time.
+            if ($this->selectedAsanaTaskGid !== '') {
+                $boardGid = AsanaTask::find($this->selectedAsanaTaskGid)?->asana_project_gid;
+                if ($boardGid !== null) {
+                    app(AsanaProjectAssociationService::class)
+                        ->remember($user, $boardGid, $projectId, $taskId);
+                }
+            }
         }
 
         if ($this->lastCalendarPullTitle !== null) {

@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-03
 **Follow-up to:** [2026-07-03-asana-app-components-time-logging-design.md](2026-07-03-asana-app-components-time-logging-design.md) (FLTR-2292)
-**Status:** Proposed — awaiting go-ahead.
+**Status:** Approved (Paul, 2026-07-03). Built in `asana-extension/`; the app-components form/widget endpoints were removed as part of the cutover — only the `/asana-app/tasks/{gid}` deep link remains server-side.
 
 ## Why
 
