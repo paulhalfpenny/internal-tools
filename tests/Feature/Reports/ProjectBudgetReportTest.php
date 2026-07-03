@@ -3,6 +3,7 @@
 use App\Domain\Budgeting\ProjectBudgetCalculator;
 use App\Enums\BudgetType;
 use App\Enums\Role;
+use App\Livewire\Reports\ProjectBudget;
 use App\Livewire\Reports\ProjectsReport;
 use App\Models\Project;
 use App\Models\Task;
@@ -73,4 +74,59 @@ test('drill-down page renders for a budgeted project', function () {
     $response = $this->get(route('reports.projects.budget', $project));
     $response->assertOk();
     $response->assertSee('CI Retainer');
+});
+
+test('budget page lists time entries for this project only, with who/what/when', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $alice = User::factory()->create(['name' => 'Alice Example']);
+    $task = Task::factory()->create(['name' => 'Discovery']);
+
+    $thisProject = Project::factory()->create([
+        'budget_type' => BudgetType::MonthlyCi,
+        'budget_amount' => 500.00,
+        'budget_starts_on' => '2026-04-01',
+    ]);
+    $otherProject = Project::factory()->create([
+        'budget_type' => BudgetType::MonthlyCi,
+        'budget_amount' => 500.00,
+        'budget_starts_on' => '2026-04-01',
+    ]);
+
+    budgetReportEntry(['user_id' => $alice->id, 'project_id' => $thisProject->id, 'task_id' => $task->id, 'hours' => 2.5, 'spent_on' => '2026-04-10', 'notes' => 'Kickoff call']);
+    budgetReportEntry(['user_id' => $alice->id, 'project_id' => $otherProject->id, 'task_id' => $task->id, 'hours' => 9.0, 'notes' => 'Should not appear']);
+
+    $this->actingAs($admin);
+
+    $component = Livewire::test(ProjectBudget::class, ['project' => $thisProject]);
+
+    $component->assertSee('Alice Example')
+        ->assertSee('Discovery')
+        ->assertSee('Kickoff call')
+        ->assertSee('2.5')
+        ->assertDontSee('Should not appear');
+});
+
+test('budget page paginates time entries', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $user = User::factory()->create();
+    $task = Task::factory()->create();
+
+    $project = Project::factory()->create([
+        'budget_type' => BudgetType::MonthlyCi,
+        'budget_amount' => 500.00,
+        'budget_starts_on' => '2026-04-01',
+    ]);
+
+    foreach (range(1, 30) as $i) {
+        $day = str_pad((string) $i, 2, '0', STR_PAD_LEFT);
+        budgetReportEntry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 1.0, 'spent_on' => "2026-04-{$day}"]);
+    }
+
+    $this->actingAs($admin);
+
+    $component = Livewire::test(ProjectBudget::class, ['project' => $project]);
+
+    $entries = $component->viewData('entries');
+    expect($entries->total())->toBe(30)
+        ->and($entries->items())->toHaveCount(25);
 });

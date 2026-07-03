@@ -6,6 +6,7 @@ use App\Enums\GroupBy;
 use App\Models\TimeEntry;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\LazyCollection;
 
@@ -146,6 +147,22 @@ final class TimeReportQuery
             ->orderBy('time_entries.spent_on')
             ->orderBy('time_entries.created_at')
             ->lazyById(200, 'time_entries.id');
+    }
+
+    /**
+     * Paginated, newest-first TimeEntry models for on-screen display, with
+     * relations eager-loaded (project.client, task, user).
+     *
+     * @return LengthAwarePaginator<TimeEntry>
+     */
+    public function paginate(int $perPage = 25): LengthAwarePaginator
+    {
+        /** @var LengthAwarePaginator<TimeEntry> */
+        return $this->baseQuery()
+            ->with(['project.client', 'task', 'user'])
+            ->orderByDesc('time_entries.spent_on')
+            ->orderByDesc('time_entries.id')
+            ->paginate($perPage);
     }
 
     /** @return Builder<TimeEntry> */

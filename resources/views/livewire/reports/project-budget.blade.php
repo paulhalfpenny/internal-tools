@@ -126,5 +126,38 @@
                 </table>
             @endif
         </div>
+
+        <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 mt-6">Time entries</h2>
+        <div class="bg-white rounded-lg border border-gray-200 overflow-x-auto">
+            @if($entries->isEmpty())
+                <div class="py-12 text-center text-sm text-gray-400">No time entries in this window yet.</div>
+            @else
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
+                            <th class="text-left px-4 py-3 font-medium">Date</th>
+                            <th class="text-left px-4 py-3 font-medium">User</th>
+                            <th class="text-left px-4 py-3 font-medium">Task</th>
+                            <th class="text-right px-4 py-3 font-medium">Hours</th>
+                            <th class="text-left px-4 py-3 font-medium">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        @foreach($entries as $entry)
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-3 tabular-nums text-gray-500">{{ $entry->spent_on->format('d M Y') }}</td>
+                                <td class="px-4 py-3 font-medium text-gray-900">{{ $entry->user?->name }}</td>
+                                <td class="px-4 py-3 text-gray-500">{{ $entry->task?->name }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums">{{ \App\Domain\TimeTracking\HoursFormatter::asDecimal((float) $entry->hours) }}</td>
+                                <td class="px-4 py-3 text-gray-500 truncate max-w-xs">{{ $entry->notes }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+                <div class="px-4 py-3 border-t border-gray-100">
+                    {{ $entries->links() }}
+                </div>
+            @endif
+        </div>
     @endif
 </div>
