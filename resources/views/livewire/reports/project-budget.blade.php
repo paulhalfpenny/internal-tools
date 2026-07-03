@@ -149,7 +149,16 @@
                                 <td class="px-4 py-3 tabular-nums text-gray-500">{{ $entry->spent_on->format('d M Y') }}</td>
                                 <td class="px-4 py-3 font-medium text-gray-900">{{ $entry->user?->name }}</td>
                                 <td class="px-4 py-3 text-gray-500">{{ $entry->task?->name }}</td>
-                                <td class="px-4 py-3 text-gray-500 truncate max-w-xs">{{ $entry->asanaTask?->name ?? '—' }}</td>
+                                <td class="px-4 py-3 text-gray-500 truncate max-w-xs">
+                                    @if($entry->asanaTask)
+                                        <a href="https://app.asana.com/0/0/{{ $entry->asana_task_gid }}/f"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="text-blue-700 hover:underline">{{ $entry->asanaTask->name }}</a>
+                                    @else
+                                        —
+                                    @endif
+                                </td>
                                 <td class="px-4 py-3 text-right tabular-nums">{{ \App\Domain\TimeTracking\HoursFormatter::asDecimal((float) $entry->hours) }}</td>
                                 <td class="px-4 py-3 text-gray-500 truncate max-w-xs">{{ $entry->notes }}</td>
                             </tr>

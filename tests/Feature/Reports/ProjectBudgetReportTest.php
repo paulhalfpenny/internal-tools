@@ -127,8 +127,12 @@ test('budget page shows the linked Asana task for entries that have one', functi
 
     $this->actingAs($admin);
 
-    Livewire::test(ProjectBudget::class, ['project' => $project])
-        ->assertSee('Fix the header bug');
+    $html = Livewire::test(ProjectBudget::class, ['project' => $project])
+        ->assertSee('Fix the header bug')
+        ->html();
+
+    expect($html)->toContain('href="https://app.asana.com/0/0/AT1/f"')
+        ->toContain('target="_blank"');
 });
 
 test('budget page paginates time entries', function () {
