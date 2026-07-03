@@ -75,85 +75,111 @@ final class AsanaAppService
         $selectedProject = $projects->firstWhere('id', $selectedProjectId);
 
         $running = $this->runningEntryForTask($user, $taskGid);
+        $timerTicked = is_array($values['timer'] ?? null) && in_array('start', $values['timer'], true);
 
-        $fields = [
-            [
-                'type' => 'dropdown',
-                'id' => 'project',
-                'name' => 'Project',
-                'is_required' => true,
-                'is_watched' => true,
-                'options' => $projects
-                    ->map(fn (Project $p): array => ['id' => (string) $p->id, 'label' => mb_substr($p->timesheetDisplayName(), 0, 80)])
-                    ->values()
-                    ->all(),
-                'value' => $selectedProjectId !== null ? (string) $selectedProjectId : null,
-                'width' => 'full',
-            ],
-            [
-                'type' => 'dropdown',
-                'id' => 'task',
-                'name' => 'Task',
-                'is_required' => true,
-                'options' => $selectedProject !== null
-                    ? $selectedProject->tasks
-                        ->where('is_archived', false)
-                        ->sortBy('name')
-                        ->map(fn ($t): array => ['id' => (string) $t->id, 'label' => mb_substr($t->name, 0, 80)])
-                        ->values()
-                        ->all()
-                    : [],
-                'value' => $this->resolveSelectedTask($user, $selectedProject, $boardGid, $values),
-                'width' => 'full',
-            ],
-            [
-                'type' => 'single_line_text',
-                'id' => 'hours',
-                'name' => 'Hours',
-                'is_required' => false,
-                'placeholder' => '0.25 or 0:15',
-                'value' => isset($values['hours']) && is_string($values['hours']) ? $values['hours'] : null,
-                'width' => 'half',
-            ],
-            [
-                'type' => 'date',
-                'id' => 'date',
-                'name' => 'Date',
-                'is_required' => true,
-                'value' => isset($values['date']) && is_string($values['date']) ? $values['date'] : today()->toDateString(),
-                'width' => 'half',
-            ],
-            [
-                'type' => 'multi_line_text',
-                'id' => 'notes',
-                'name' => 'Notes',
-                'is_required' => false,
-                'value' => isset($values['notes']) && is_string($values['notes'])
-                    ? $values['notes']
-                    : ($asanaTask?->name ?? null),
-            ],
-            $running !== null
-                ? [
-                    'type' => 'checkbox',
-                    'id' => 'timer',
-                    'name' => 'Timer',
-                    'is_required' => false,
-                    'options' => [[
-                        'id' => 'stop',
-                        'label' => 'Stop the running timer ('.HoursFormatter::format($this->timeEntries->currentHours($running), $user->hoursDisplayFormat()).' so far)',
-                    ]],
-                ]
-                : [
-                    'type' => 'checkbox',
-                    'id' => 'timer',
-                    'name' => 'Timer',
-                    'is_required' => false,
-                    'options' => [[
-                        'id' => 'start',
-                        'label' => 'Start a timer instead of logging hours',
-                    ]],
-                ],
+        $fields = [];
+
+        if ($asanaTask !== null) {
+            // The entry is linked to the Asana task by gid regardless of what
+            // the user types in Notes — surface that as a fixed, read-only line.
+            $projectIsLinked = $selectedProject === null
+                || $selectedProject->asanaProjects->contains('gid', $boardGid);
+
+            $fields[] = [
+                'type' => 'static_text',
+                'id' => 'linked_asana_task',
+                'name' => 'Linked Asana task: '.$asanaTask->name.($projectIsLinked
+                    ? ''
+                    : ' — note: the selected project is not linked to this board, so the entry will be saved without the Asana link'),
+            ];
+        }
+
+        $fields[] = [
+            'type' => 'dropdown',
+            'id' => 'project',
+            'name' => 'Project',
+            'is_required' => true,
+            'is_watched' => true,
+            'options' => $projects
+                ->map(fn (Project $p): array => ['id' => (string) $p->id, 'label' => mb_substr($p->timesheetDisplayName(), 0, 80)])
+                ->values()
+                ->all(),
+            'value' => $selectedProjectId !== null ? (string) $selectedProjectId : null,
+            'width' => 'full',
         ];
+
+        $fields[] = [
+            'type' => 'dropdown',
+            'id' => 'task',
+            'name' => 'Task',
+            'is_required' => true,
+            'options' => $selectedProject !== null
+                ? $selectedProject->tasks
+                    ->where('is_archived', false)
+                    ->sortBy('name')
+                    ->map(fn ($t): array => ['id' => (string) $t->id, 'label' => mb_substr($t->name, 0, 80)])
+                    ->values()
+                    ->all()
+                : [],
+            'value' => $this->resolveSelectedTask($user, $selectedProject, $boardGid, $values),
+            'width' => 'full',
+        ];
+
+        // Required unless the user is starting a timer (the checkbox is
+        // watched, so ticking it re-renders the form with hours optional)
+        // or stopping one (hours are ignored in stop mode).
+        $fields[] = [
+            'type' => 'single_line_text',
+            'id' => 'hours',
+            'name' => 'Hours',
+            'is_required' => ! $timerTicked && $running === null,
+            'placeholder' => '0.25 or 0:15',
+            'value' => isset($values['hours']) && is_string($values['hours']) ? $values['hours'] : null,
+            'width' => 'half',
+        ];
+
+        $fields[] = [
+            'type' => 'date',
+            'id' => 'date',
+            'name' => 'Date',
+            'is_required' => true,
+            'value' => isset($values['date']) && is_string($values['date']) ? $values['date'] : today()->toDateString(),
+            'width' => 'half',
+        ];
+
+        $fields[] = [
+            'type' => 'multi_line_text',
+            'id' => 'notes',
+            'name' => 'Notes',
+            'is_required' => false,
+            'value' => isset($values['notes']) && is_string($values['notes'])
+                ? $values['notes']
+                : ($asanaTask?->name ?? null),
+        ];
+
+        $fields[] = $running !== null
+            ? [
+                'type' => 'checkbox',
+                'id' => 'timer',
+                'name' => 'Timer',
+                'is_required' => false,
+                'is_watched' => true,
+                'options' => [[
+                    'id' => 'stop',
+                    'label' => 'Stop the running timer ('.HoursFormatter::format($this->timeEntries->currentHours($running), $user->hoursDisplayFormat()).' so far)',
+                ]],
+            ]
+            : [
+                'type' => 'checkbox',
+                'id' => 'timer',
+                'name' => 'Timer',
+                'is_required' => false,
+                'is_watched' => true,
+                'options' => [[
+                    'id' => 'start',
+                    'label' => 'Start a timer instead of logging hours',
+                ]],
+            ];
 
         return [
             'template' => 'form_metadata_v0',

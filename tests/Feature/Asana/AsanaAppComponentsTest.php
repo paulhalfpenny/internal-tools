@@ -115,6 +115,29 @@ test('form preselects the mapped project and prefills notes with the Asana task 
         ->and($fields['notes']['value'])->toBe('Fix the checkout flow')
         ->and($fields['date']['value'])->toBe(today()->toDateString())
         ->and($fields['timer']['options'][0]['id'])->toBe('start');
+
+    // The linkage to the Asana task is fixed (carried by gid, not the notes
+    // text) and must be visible as a read-only line on the form.
+    expect($fields['linked_asana_task']['type'])->toBe('static_text')
+        ->and($fields['linked_asana_task']['name'])->toContain('Fix the checkout flow');
+
+    // Hours is required up front; the timer checkbox is watched so ticking it
+    // re-renders the form with hours optional.
+    expect($fields['hours']['is_required'])->toBeTrue()
+        ->and($fields['timer']['is_watched'])->toBeTrue();
+});
+
+test('ticking the timer checkbox makes hours optional via on_change', function () {
+    [, $project] = asanaAppSetup();
+
+    $response = signedPost('/asana-app/form/change', [
+        'task' => 'AT1',
+        'user' => 'AU1',
+        'values' => ['project' => (string) $project->id, 'timer' => ['start']],
+    ])->assertOk();
+
+    $fields = collect($response->json('metadata.fields'))->keyBy('id');
+    expect($fields['hours']['is_required'])->toBeFalse();
 });
 
 test('form shows a connect prompt with no submit button for unlinked Asana users', function () {
@@ -137,8 +160,8 @@ test('form uses the remembered association when a board maps to multiple project
     $projectB->asanaProjects()->attach('BOARD1', ['asana_custom_field_gid' => null]);
 
     // Without an association, the alphabetically-first linked project wins.
-    $first = signedGet('/asana-app/form', ['task' => 'AT1', 'user' => 'AU1'])->json('metadata.fields.0.value');
-    expect($first)->toBe((string) $projectB->id);
+    $first = collect(signedGet('/asana-app/form', ['task' => 'AT1', 'user' => 'AU1'])->json('metadata.fields'))->keyBy('id');
+    expect($first['project']['value'])->toBe((string) $projectB->id);
 
     AsanaProjectAssociation::create([
         'user_id' => $user->id,
