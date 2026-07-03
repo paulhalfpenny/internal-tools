@@ -18,6 +18,8 @@ The deploy workflow SSHes into the droplet as the `deploy` user and runs:
 
 ```bash
 cd /var/www/internal.filter.agency
+trap 'php artisan up || true' EXIT
+php artisan down --retry=60 || true
 git pull origin main
 composer install --no-dev --no-interaction --optimize-autoloader
 npm ci && npm run build
@@ -26,6 +28,8 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 ```
+
+The app is put into maintenance mode for the duration of the deploy (`artisan down`/`up`). This isn't just for show — without it, a live request landing mid-deploy can make PHP-FPM (running as `www-data`) recompile a view itself, writing it with permissions the `deploy` user can't later overwrite, which fails `artisan view:cache` with a permission error. The `trap` guarantees `artisan up` runs even if a step fails, so a broken deploy can't leave the site stuck in maintenance mode.
 
 To trigger a manual deploy, push any commit to `main` or run an empty commit:
 
@@ -45,6 +49,8 @@ If a deploy breaks production, SSH in and revert manually:
 ```bash
 ssh deploy@159.65.19.139
 cd /var/www/internal.filter.agency
+trap 'php artisan up || true' EXIT
+php artisan down --retry=60 || true
 git log --oneline -10          # find the last good commit hash
 git checkout <commit-hash>
 composer install --no-dev --no-interaction --optimize-autoloader

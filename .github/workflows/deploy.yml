@@ -20,6 +20,23 @@ jobs:
             umask 0002
             export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
             cd /var/www/internal.filter.agency
+
+            # Guarantee the site comes back out of maintenance mode even if a
+            # step below fails — otherwise a mid-deploy error leaves it 503ing
+            # indefinitely, which is worse than the race condition this works
+            # around.
+            trap 'php artisan up || true' EXIT
+
+            # Take the app down for the whole deploy, not just the cache
+            # rebuild. Previously the deploy cleared the compiled view cache
+            # and rebuilt it while still serving live traffic: if a request
+            # landed in that gap, PHP-FPM (running as www-data) recompiled a
+            # view itself and wrote it with permissions the deploy user
+            # couldn't later overwrite, failing `artisan view:cache` with
+            # "Permission denied". No live requests means no stray
+            # www-data-owned cache files.
+            php artisan down --retry=60 || true
+
             git pull origin main
             composer install --no-dev --no-interaction --optimize-autoloader
             npm ci && npm run build
