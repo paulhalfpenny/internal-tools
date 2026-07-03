@@ -189,16 +189,34 @@ test('a multi-mapped board shows a dropdown restricted to the linked projects', 
 });
 
 test('an unmapped board falls back to the full project dropdown', function () {
-    [$user] = asanaAppSetup();
+    [$user, $project] = asanaAppSetup();
 
     AsanaProject::create(['gid' => 'LONEBOARD', 'workspace_gid' => 'WS1', 'name' => 'Unmapped board', 'is_archived' => false]);
     AsanaTask::create(['gid' => 'AT9', 'asana_project_gid' => 'LONEBOARD', 'name' => 'Orphan task', 'is_completed' => false]);
 
     $fields = collect(signedGet('/asana-app/form', ['task' => 'AT9', 'user' => 'AU1'])->json('metadata.fields'))->keyBy('id');
 
+    // A project must always be preselected so the task dropdown has options —
+    // Asana's renderer rejects the form otherwise ("Something went wrong").
     expect($fields['project']['type'])->toBe('dropdown')
-        ->and($fields['project']['value'])->toBeNull()
-        ->and(collect($fields['project']['options'])->pluck('label')->join(','))->toContain('Website Build');
+        ->and($fields['project']['value'])->toBe((string) $project->id)
+        ->and(collect($fields['project']['options'])->pluck('label')->join(','))->toContain('Website Build')
+        ->and($fields['task']['options'])->not->toBeEmpty();
+});
+
+test('form fields never contain null values (Asana rejects them)', function () {
+    asanaAppSetup();
+
+    AsanaProject::create(['gid' => 'LONEBOARD', 'workspace_gid' => 'WS1', 'name' => 'Unmapped board', 'is_archived' => false]);
+    AsanaTask::create(['gid' => 'AT9', 'asana_project_gid' => 'LONEBOARD', 'name' => 'Orphan task', 'is_completed' => false]);
+
+    foreach (['AT1', 'AT9', 'TOTALLY-UNKNOWN-GID'] as $taskGid) {
+        $fields = signedGet('/asana-app/form', ['task' => $taskGid, 'user' => 'AU1'])->json('metadata.fields');
+
+        foreach ($fields as $field) {
+            expect(collect($field)->filter(fn ($v) => $v === null))->toBeEmpty();
+        }
+    }
 });
 
 test('on_change rebuilds the task options for the newly selected linked project', function () {

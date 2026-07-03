@@ -85,7 +85,7 @@ final class AsanaAppService
         if ($fixedProject !== null) {
             $selectedProject = $fixedProject;
         } else {
-            $selectedProjectId = $this->resolveSelectedProject($user, $projectOptions, $boardGid, $values, restricted: $linkedProjects->isNotEmpty());
+            $selectedProjectId = $this->resolveSelectedProject($user, $projectOptions, $boardGid, $values);
             $selectedProject = $projectOptions->firstWhere('id', $selectedProjectId);
         }
 
@@ -208,7 +208,12 @@ final class AsanaAppService
                 'title' => 'Log time to Internal Tools',
                 'on_submit_callback' => route('asana-app.submit'),
                 'on_change_callback' => route('asana-app.form.change'),
-                'fields' => $fields,
+                // Null values (e.g. an empty hours box) must be omitted, not
+                // sent as JSON null — Asana's renderer rejects them.
+                'fields' => array_map(
+                    fn (array $field): array => array_filter($field, fn ($v) => $v !== null),
+                    $fields,
+                ),
             ],
         ];
     }
@@ -450,15 +455,13 @@ final class AsanaAppService
     }
 
     /**
-     * Pick the preselected project among the offered dropdown options.
-     * $restricted means the options are the board's linked projects, so a
-     * default is always sensible; otherwise (unmapped board) leave the
-     * choice to the user unless an association or explicit value exists.
+     * Pick the preselected project among the offered dropdown options:
+     * explicit choice, then remembered association, then first option.
      *
      * @param  \Illuminate\Support\Collection<int, Project>  $options
      * @param  array<string, mixed>  $values
      */
-    private function resolveSelectedProject(User $user, $options, string $boardGid, array $values, bool $restricted): ?int
+    private function resolveSelectedProject(User $user, $options, string $boardGid, array $values): ?int
     {
         // Explicit user choice (on_change round trip) wins.
         $chosen = $values['project'] ?? null;
@@ -471,7 +474,10 @@ final class AsanaAppService
             return $remembered['project_id'];
         }
 
-        return $restricted ? $options->sortBy('name')->first()?->id : null;
+        // Always default to something: with no selected project the task
+        // dropdown would render with zero options, which Asana's form
+        // renderer rejects outright ("Something went wrong").
+        return $options->sortBy('name')->first()?->id;
     }
 
     /**
