@@ -2,7 +2,6 @@
 
 namespace App\Domain\TimeTracking;
 
-use App\Jobs\Asana\DeleteAsanaAppReceiptAttachmentJob;
 use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -296,31 +295,19 @@ final class AsanaAppService
     }
 
     /**
-     * The receipt attachment claims the app's slot on the task and hides the
-     * "Log time" button, so it is deleted again shortly after creation. The
-     * delay gives Asana time to actually create the attachment first.
-     */
-    private function queueReceiptCleanup(User $user, string $taskGid): void
-    {
-        DeleteAsanaAppReceiptAttachmentJob::dispatch($user->id, $taskGid)
-            ->delay(now()->addSeconds(20));
-    }
-
-    /**
-     * Asana's on_submit contract requires a 200 to attach a resource; any
-     * other response shape renders a generic error even when the entry saved.
-     * The attachment doubles as a receipt. Its URL must NOT match the
-     * configured widget pattern (asana-app/*): a widget-matching attachment
-     * takes over the app's slot in the task's Apps row and removes the
-     * "Log time" entry point, killing repeat logging.
+     * Asana's on_submit contract requires every 200 to attach a resource, and
+     * any form-created attachment claims the app's slot on the task (hiding
+     * the "Log time" entry point). So the attachment IS the widget: it shows
+     * live totals on the task, and its link deep-dives into Internal Tools
+     * with the entry modal prefilled for repeat logging.
      *
      * @return array<string, string>
      */
-    private function receiptAttachment(string $taskGid, string $summary): array
+    private function widgetAttachment(string $taskGid): array
     {
         return [
-            'resource_name' => $summary,
-            'resource_url' => route('timesheet', ['from_asana' => $taskGid]),
+            'resource_name' => 'Time log — Filter Internal Tools',
+            'resource_url' => route('asana-app.tasks.show', $taskGid),
         ];
     }
 
@@ -485,14 +472,7 @@ final class AsanaAppService
 
         Cache::forget('asana_app_widget_'.$taskGid);
 
-        $summary = $startTimer
-            ? 'Timer started — '.$entry->project->timesheetDisplayName().' (Internal Tools)'
-            : 'Logged '.HoursFormatter::format($hours, $user->hoursDisplayFormat()).' hrs — '
-                .$entry->project->timesheetDisplayName().' (Internal Tools)';
-
-        $this->queueReceiptCleanup($user, $taskGid);
-
-        return $this->receiptAttachment($taskGid, $summary);
+        return $this->widgetAttachment($taskGid);
     }
 
     /**
@@ -510,12 +490,7 @@ final class AsanaAppService
 
         $entry->refresh();
 
-        $this->queueReceiptCleanup($user, $taskGid);
-
-        return $this->receiptAttachment(
-            $taskGid,
-            'Timer stopped — logged '.HoursFormatter::format((float) $entry->hours, $user->hoursDisplayFormat()).' hrs (Internal Tools)'
-        );
+        return $this->widgetAttachment($taskGid);
     }
 
     private function runningEntryForTask(User $user, string $taskGid): ?TimeEntry

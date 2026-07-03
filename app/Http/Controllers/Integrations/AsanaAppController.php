@@ -4,12 +4,9 @@ namespace App\Http\Controllers\Integrations;
 
 use App\Domain\TimeTracking\AsanaAppService;
 use App\Http\Controllers\Controller;
-use App\Models\AsanaTask;
-use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Gate;
 
 /**
  * Endpoints called by Asana's app-components platform (signed requests, no
@@ -50,8 +47,9 @@ class AsanaAppController extends Controller
 
     /**
      * Asana's on_submit contract: 200 responses must attach a resource (the
-     * receipt), anything else renders a generic error client-side. Validation
-     * failures return 400 + the re-rendered form, the documented error shape.
+     * widget card), anything else renders a generic error client-side.
+     * Validation failures return 400 + the re-rendered form, the documented
+     * error shape.
      */
     public function submit(Request $request): JsonResponse
     {
@@ -86,27 +84,13 @@ class AsanaAppController extends Controller
     }
 
     /**
-     * Human-facing fallback for the attached resource link: send the user to
-     * the mapped project's budget page, else their timesheet.
+     * The widget card's link. Once the card occupies the app's slot on a
+     * task, the in-Asana form is unreachable, so this deep-links into the
+     * timesheet with the entry modal opened and prefilled for the task.
      */
     public function show(string $taskGid): RedirectResponse
     {
-        $boardGid = AsanaTask::find($taskGid)?->asana_project_gid;
-
-        // Budget pages sit behind the manager-only reports gate; everyone
-        // else lands on their own timesheet.
-        if ($boardGid !== null && Gate::allows('access-reports')) {
-            $project = Project::where('is_archived', false)
-                ->whereHas('asanaProjects', fn ($q) => $q->where('gid', $boardGid))
-                ->orderBy('name')
-                ->first();
-
-            if ($project !== null) {
-                return redirect()->route('reports.projects.budget', $project);
-            }
-        }
-
-        return redirect()->route('timesheet');
+        return redirect()->route('timesheet', ['log_asana' => $taskGid]);
     }
 
     /**

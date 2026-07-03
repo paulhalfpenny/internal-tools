@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Timesheet;
 
+use App\Domain\TimeTracking\AsanaProjectAssociationService;
 use App\Domain\TimeTracking\CalendarEventAssociationService;
 use App\Domain\TimeTracking\HoursFormatter;
 use App\Domain\TimeTracking\HoursParser;
@@ -143,6 +144,48 @@ class DayView extends Component
                 abort(403);
             }
         }
+
+        // Deep link from the Asana widget card (/timesheet?log_asana={gid}):
+        // once the card occupies the app's slot on a task the in-Asana form is
+        // unreachable, so repeat logging lands here with the modal prefilled.
+        $logAsanaGid = (string) request()->query('log_asana', '');
+        if ($logAsanaGid !== '' && $this->viewedUserId === null) {
+            $this->openModalForAsanaTask($logAsanaGid);
+        }
+    }
+
+    private function openModalForAsanaTask(string $asanaTaskGid): void
+    {
+        $asanaTask = AsanaTask::find($asanaTaskGid);
+        if ($asanaTask === null) {
+            return;
+        }
+
+        $user = $this->viewedUser();
+        $linked = Project::with('tasks')
+            ->where('is_archived', false)
+            ->whereHas('users', fn ($q) => $q->where('users.id', $user->id))
+            ->whereHas('asanaProjects', fn ($q) => $q->where('gid', $asanaTask->asana_project_gid))
+            ->orderBy('name')
+            ->get();
+
+        if ($linked->isEmpty()) {
+            return;
+        }
+
+        $remembered = app(AsanaProjectAssociationService::class)->lookup($user, $asanaTask->asana_project_gid);
+        $project = ($remembered !== null ? $linked->firstWhere('id', $remembered['project_id']) : null)
+            ?? $linked->first();
+
+        $this->resetModal();
+        $this->selectedProjectId = $project->id;
+        if ($remembered !== null
+            && $remembered['project_id'] === $project->id
+            && $project->tasks->contains('id', $remembered['task_id'])) {
+            $this->selectedTaskId = $remembered['task_id'];
+        }
+        $this->selectedAsanaTaskGid = $asanaTaskGid;
+        $this->showModal = true;
     }
 
     protected function viewedUser(): User

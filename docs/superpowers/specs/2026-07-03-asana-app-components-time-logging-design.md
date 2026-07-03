@@ -139,12 +139,15 @@ connect, instead of erroring.
 > therefore never attach a card, and the logged-so-far totals are shown as a
 > read-only line inside the form instead. The widget endpoint below remains
 > live to serve any historically attached cards, but no new cards are created.
-> Asana's client renders a generic error for ANY non-attachment submit
-> response (including the spec's own 400+FormMetadataResponse shape when used
-> for success), so a successful submit returns 200 + a plain "receipt"
-> attachment ("Logged 1.5 hrs — [project]") whose URL deliberately does NOT
-> match the widget pattern — keeping the Log time button alive. Validation
-> errors return 400 + the re-rendered form with an error line.
+> Final design after live testing: Asana's client renders a generic error
+> for ANY non-attachment submit response, and ANY form-created attachment
+> (regardless of URL pattern) claims the app's slot on the task, hiding the
+> "Log time" button. So the attachment IS the widget, attached on first
+> submit, showing live totals permanently — and repeat logging goes through
+> the card's link, which deep-links to /timesheet?log_asana={gid} where the
+> entry modal opens prefilled (DayView::openModalForAsanaTask). Validation
+> errors return 400 + the re-rendered form with an error line. A browser
+> extension (separate spec) may later restore fully in-Asana repeat logging.
 
 Input: the attached `resource_url` (contains the task gid) + acting user gid.
 Output (`summary_with_details_v0`):

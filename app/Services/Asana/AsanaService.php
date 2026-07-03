@@ -46,28 +46,6 @@ final class AsanaService
     }
 
     /**
-     * Attachments on a task, with the external URL each points at.
-     *
-     * @return list<array{gid: string, view_url: string|null}>
-     */
-    public function getTaskAttachments(string $taskGid): array
-    {
-        return $this->paginated('/tasks/'.$taskGid.'/attachments', [
-            'opt_fields' => 'gid,view_url',
-        ], fn (array $a) => [
-            'gid' => (string) $a['gid'],
-            'view_url' => isset($a['view_url']) && is_string($a['view_url']) ? $a['view_url'] : null,
-        ]);
-    }
-
-    public function deleteAttachment(string $attachmentGid): void
-    {
-        $this->client()
-            ->delete(self::BASE_URL.'/attachments/'.$attachmentGid)
-            ->throw();
-    }
-
-    /**
      * @return list<array{gid: string, name: string, archived: bool}>
      */
     public function getProjects(string $workspaceGid): array

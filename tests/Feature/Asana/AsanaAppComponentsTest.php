@@ -1,6 +1,5 @@
 <?php
 
-use App\Jobs\Asana\DeleteAsanaAppReceiptAttachmentJob;
 use App\Models\AsanaProject;
 use App\Models\AsanaProjectAssociation;
 use App\Models\AsanaTask;
@@ -9,7 +8,6 @@ use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
 
 uses(RefreshDatabase::class);
@@ -290,11 +288,10 @@ test('submit creates a linked time entry and remembers the association', functio
         ],
     ])->assertOk();
 
-    // Success must attach (Asana's contract) — but as a plain receipt whose
-    // URL does NOT match the widget pattern, so the Log time button survives.
-    expect($response->json('resource_name'))->toContain('Logged 1.5')
-        ->and($response->json('resource_url'))->not->toContain('/asana-app/')
-        ->and($response->json('resource_url'))->toContain('/timesheet');
+    // Success attaches the widget card (Asana's contract requires a 200 to
+    // attach). Repeat logging happens through the card's deep link.
+    expect($response->json('resource_name'))->toContain('Time log')
+        ->and($response->json('resource_url'))->toContain('/asana-app/tasks/AT1');
 
     $entry = $user->timeEntries()->sole();
     expect((float) $entry->hours)->toBe(1.5)
@@ -309,7 +306,7 @@ test('submit creates a linked time entry and remembers the association', functio
         ->and($assoc->asana_project_gid)->toBe('BOARD1');
 });
 
-test('receipts never match the widget pattern so repeat logging keeps working', function () {
+test('every successful submit returns the same widget attachment resource', function () {
     [$user, $project, $task] = asanaAppSetup();
 
     $payload = fn () => [
@@ -322,19 +319,14 @@ test('receipts never match the widget pattern so repeat logging keeps working', 
         ],
     ];
 
-    // A widget-matching attachment would replace the app's "Log time" entry
-    // point and kill repeat logging — receipts must never match asana-app/*.
-    Queue::fake();
+    $first = signedPost('/asana-app/submit', $payload())->assertOk()->json('resource_url');
+    $second = signedPost('/asana-app/submit', $payload())->assertOk()->json('resource_url');
 
-    expect(signedPost('/asana-app/submit', $payload())->assertOk()->json('resource_url'))->not->toContain('/asana-app/')
-        ->and(signedPost('/asana-app/submit', $payload())->assertOk()->json('resource_url'))->not->toContain('/asana-app/');
+    // Same URL both times so Asana has a stable resource to key on.
+    expect($first)->toBe($second)
+        ->and($first)->toContain('/asana-app/tasks/AT1');
 
     expect(TimeEntry::where('asana_task_gid', 'AT1')->count())->toBe(2);
-
-    // Every receipt is queued for deletion: ANY attachment created via the
-    // form claims the app slot and hides the Log time button, so receipts
-    // are removed again moments after Asana creates them.
-    Queue::assertPushed(DeleteAsanaAppReceiptAttachmentJob::class, 2);
 });
 
 test('the form shows time already logged on the task', function () {
@@ -565,9 +557,10 @@ test('widget still renders totals for viewers without a linked account', functio
 
 // ─── human-facing attachment link ────────────────────────────────────────────
 
-test('attachment link redirects a regular user to their timesheet', function () {
+test('attachment link deep-links into the timesheet with the log-time modal', function () {
     [$user] = asanaAppSetup();
     $this->actingAs($user);
 
-    $this->get('/asana-app/tasks/AT1')->assertRedirect(route('timesheet'));
+    $this->get('/asana-app/tasks/AT1')
+        ->assertRedirect(route('timesheet', ['log_asana' => 'AT1']));
 });
