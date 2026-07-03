@@ -1,8 +1,10 @@
 # Filter Internal Tools — Asana extension
 
-Adds a **Log time** button to Asana's task toolbar. Clicking it opens the
-Internal Tools timesheet in a popup with the entry modal already open and
+Adds a **Log time** button to Asana's task toolbar. Clicking it opens an
+in-page overlay (Harvest-style) with the entry modal already open and
 prefilled for the task (mapped project, remembered task, Asana link set).
+The overlay closes itself when the entry saves, or via ✕ / Esc / clicking
+outside; "Open in tab" is the fallback if login-in-iframe is ever blocked.
 
 Spec: [docs/superpowers/specs/2026-07-03-asana-browser-extension-design.md](../docs/superpowers/specs/2026-07-03-asana-browser-extension-design.md)
 
@@ -31,6 +33,8 @@ Fix by inspecting the task pane in devtools and updating those anchors.
 
 - No permissions beyond running on `app.asana.com`; no storage, no network
   requests from the extension itself. Auth is the user's normal Internal
-  Tools session inside the popup.
+  Tools session inside the overlay iframe — this depends on the app sending
+  `SameSite=None` session cookies and a `frame-ancestors` policy that
+  allows `app.asana.com` (see `RestrictFrameAncestors` middleware).
 - Task id detection handles current (`/task/{gid}`) and legacy
   (`/0/{project}/{gid}`) URL shapes plus the `?task=` query param.

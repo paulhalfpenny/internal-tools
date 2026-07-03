@@ -383,6 +383,10 @@ class DayView extends Component
                     app(AsanaProjectAssociationService::class)
                         ->remember($user, $boardGid, $projectId, $taskId);
                 }
+
+                // Lets the extension overlay on app.asana.com know it can
+                // close (forwarded as a postMessage from the blade).
+                $this->dispatch('asana-entry-saved');
             }
         }
 

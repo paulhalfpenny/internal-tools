@@ -1,8 +1,11 @@
 // Filter Internal Tools — "Log time" button for Asana tasks.
 //
-// Injects a button into the task-details toolbar. Clicking it opens the
-// Internal Tools timesheet in a popup with the entry modal prefilled for
-// the current task (/timesheet?log_asana={gid} — see DayView's deep link).
+// Injects a button into the task-details toolbar. Clicking it opens an
+// in-page overlay (iframe) with the entry modal prefilled for the current
+// task (/timesheet?log_asana={gid} — see DayView's deep link). The app
+// posts 'filter-log-time:saved' back when the entry saves so the overlay
+// closes itself. Requires the app to send SameSite=None session cookies
+// and a frame-ancestors policy allowing app.asana.com.
 //
 // Asana is a SPA whose DOM changes without warning; everything here is
 // defensive. If injection fails, the extension does nothing visible and
@@ -13,6 +16,7 @@
 
   const BASE_URL = 'https://internal.filter.agency';
   const BUTTON_ID = 'filter-log-time-button';
+  const OVERLAY_ID = 'filter-log-time-overlay';
 
   // The current task gid, from the URL. Asana URL shapes seen in the wild:
   //   /1/{workspace}/project/{project}/task/{task}
@@ -78,19 +82,107 @@
     button.addEventListener('click', function (event) {
       event.preventDefault();
       event.stopPropagation();
-      const gid = currentTaskGid() || taskGid;
-      if (!gid) return;
 
-      const url = BASE_URL + '/timesheet?log_asana=' + encodeURIComponent(gid);
-      window.open(
-        url,
-        'filter-log-time',
-        'width=560,height=760,menubar=no,toolbar=no,location=no,status=no'
-      );
+      if (document.getElementById(OVERLAY_ID)) {
+        closeOverlay();
+        return;
+      }
+
+      const gid = currentTaskGid() || taskGid;
+      if (gid) openOverlay(gid);
     });
 
     return button;
   }
+
+  function closeOverlay() {
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (overlay) overlay.remove();
+    document.removeEventListener('keydown', onOverlayKeydown, true);
+    document.removeEventListener('pointerdown', onOverlayPointerdown, true);
+  }
+
+  function onOverlayKeydown(event) {
+    if (event.key === 'Escape') closeOverlay();
+  }
+
+  function onOverlayPointerdown(event) {
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (overlay && !overlay.contains(event.target)) closeOverlay();
+  }
+
+  // Harvest-style panel: fixed near the top-right of the viewport, hosting
+  // the timesheet deep link in an iframe. The user's normal Internal Tools
+  // session applies (cookies are SameSite=None); if they're logged out the
+  // login screen renders in the panel, or they can pop out to a tab.
+  function openOverlay(gid) {
+    closeOverlay();
+
+    const url = BASE_URL + '/timesheet?log_asana=' + encodeURIComponent(gid);
+
+    const overlay = document.createElement('div');
+    overlay.id = OVERLAY_ID;
+    overlay.style.cssText = [
+      'position:fixed', 'top:56px', 'right:24px', 'z-index:2147483000',
+      'width:560px', 'max-width:calc(100vw - 32px)',
+      'height:720px', 'max-height:calc(100vh - 80px)',
+      'display:flex', 'flex-direction:column', 'overflow:hidden',
+      'background:#fff', 'border-radius:12px',
+      'box-shadow:0 12px 40px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.06)',
+    ].join(';');
+
+    const header = document.createElement('div');
+    header.style.cssText = [
+      'display:flex', 'align-items:center', 'justify-content:space-between',
+      'padding:10px 14px', 'border-bottom:1px solid #e8e8e8',
+      'font:600 13px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      'color:#1e1f21', 'flex:none',
+    ].join(';');
+
+    const title = document.createElement('span');
+    title.textContent = 'Log time — Filter Internal Tools';
+
+    const actions = document.createElement('span');
+    actions.style.cssText = 'display:inline-flex;align-items:center;gap:12px;';
+
+    const popOut = document.createElement('a');
+    popOut.href = url;
+    popOut.target = '_blank';
+    popOut.rel = 'noopener';
+    popOut.textContent = 'Open in tab ↗';
+    popOut.style.cssText = 'font-weight:400;font-size:12px;color:#6d6e6f;text-decoration:none;';
+    popOut.addEventListener('click', () => closeOverlay());
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Close');
+    close.textContent = '✕';
+    close.style.cssText = [
+      'border:none', 'background:transparent', 'cursor:pointer',
+      'font-size:14px', 'color:#6d6e6f', 'padding:2px 4px', 'line-height:1',
+    ].join(';');
+    close.addEventListener('click', () => closeOverlay());
+
+    actions.append(popOut, close);
+    header.append(title, actions);
+
+    const frame = document.createElement('iframe');
+    frame.src = url;
+    frame.style.cssText = 'flex:1;width:100%;border:none;';
+
+    overlay.append(header, frame);
+    document.body.appendChild(overlay);
+
+    document.addEventListener('keydown', onOverlayKeydown, true);
+    document.addEventListener('pointerdown', onOverlayPointerdown, true);
+  }
+
+  // The app posts this after a successful save (see day-view.blade.php).
+  window.addEventListener('message', function (event) {
+    if (event.origin === BASE_URL && event.data === 'filter-log-time:saved') {
+      setTimeout(closeOverlay, 600);
+    }
+  });
 
   function inject() {
     const gid = currentTaskGid();

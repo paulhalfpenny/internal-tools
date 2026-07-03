@@ -169,7 +169,7 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => env('SESSION_SECURE_COOKIE', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -199,7 +199,12 @@ return [
     |
     */
 
-    'same_site' => env('SESSION_SAME_SITE', 'lax'),
+    // "none" (not Laravel's "lax" default) so the session survives inside the
+    // browser-extension iframe on app.asana.com — third-party context, where
+    // lax cookies are stripped. Requires the secure flag above; CSRF exposure
+    // is covered by Laravel/Livewire token checks, and framing is restricted
+    // to Asana via the frame-ancestors CSP header (see bootstrap/app.php).
+    'same_site' => env('SESSION_SAME_SITE', 'none'),
 
     /*
     |--------------------------------------------------------------------------

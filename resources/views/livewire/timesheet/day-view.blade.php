@@ -952,3 +952,15 @@
         <div wire:poll.60000ms="refreshForTimer" class="hidden"></div>
     @endunless
 </div>
+
+@script
+<script>
+    // When this page runs inside the browser extension's iframe overlay on
+    // app.asana.com, tell the extension the entry saved so it can close.
+    $wire.on('asana-entry-saved', () => {
+        if (window.self !== window.top) {
+            window.parent.postMessage('filter-log-time:saved', 'https://app.asana.com');
+        }
+    });
+</script>
+@endscript
