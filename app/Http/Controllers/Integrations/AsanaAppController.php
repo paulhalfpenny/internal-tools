@@ -49,10 +49,9 @@ class AsanaAppController extends Controller
     }
 
     /**
-     * Asana's on_submit contract: a 200 MUST attach a resource — which would
-     * replace the app's "Log time" entry point on the task. So every outcome
-     * (confirmation or error) is returned as a 400 + FormMetadataResponse,
-     * which Asana renders as a re-opened form.
+     * Asana's on_submit contract: 200 responses must attach a resource (the
+     * receipt), anything else renders a generic error client-side. Validation
+     * failures return 400 + the re-rendered form, the documented error shape.
      */
     public function submit(Request $request): JsonResponse
     {
@@ -63,11 +62,13 @@ class AsanaAppController extends Controller
             return response()->json($this->service->connectPromptForm(), 400);
         }
 
-        return response()->json($this->service->submit(
+        $body = $this->service->submit(
             $user,
             (string) ($data['task'] ?? ''),
             is_array($data['values'] ?? null) ? $data['values'] : [],
-        ), 400);
+        );
+
+        return response()->json($body, isset($body['resource_url']) ? 200 : 400);
     }
 
     public function widget(Request $request): JsonResponse

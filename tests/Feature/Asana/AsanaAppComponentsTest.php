@@ -262,7 +262,7 @@ test('submit resolves the fixed project when the form had no project dropdown', 
             'hours' => '0:45',
             'timer' => [],
         ],
-    ])->assertStatus(400);
+    ])->assertOk();
 
     $entry = $user->timeEntries()->sole();
     expect($entry->project_id)->toBe($project->id)
@@ -286,13 +286,13 @@ test('submit creates a linked time entry and remembers the association', functio
             'notes' => 'Fix the checkout flow',
             'timer' => [],
         ],
-    ])->assertStatus(400);
+    ])->assertOk();
 
-    // Asana's on_submit contract: 200 MUST attach a resource (which would
-    // replace the Log time button), so success is a 400 + confirmation form.
-    expect($response->json('template'))->toBe('form_metadata_v0')
-        ->and($response->json('metadata.title'))->toContain('logged')
-        ->and($response->json('metadata'))->not->toHaveKey('on_submit_callback');
+    // Success must attach (Asana's contract) — but as a plain receipt whose
+    // URL does NOT match the widget pattern, so the Log time button survives.
+    expect($response->json('resource_name'))->toContain('Logged 1.5')
+        ->and($response->json('resource_url'))->not->toContain('/asana-app/')
+        ->and($response->json('resource_url'))->toContain('/timesheet');
 
     $entry = $user->timeEntries()->sole();
     expect((float) $entry->hours)->toBe(1.5)
@@ -307,7 +307,7 @@ test('submit creates a linked time entry and remembers the association', functio
         ->and($assoc->asana_project_gid)->toBe('BOARD1');
 });
 
-test('submit never attaches a card and repeat logging keeps working', function () {
+test('receipts never match the widget pattern so repeat logging keeps working', function () {
     [$user, $project, $task] = asanaAppSetup();
 
     $payload = fn () => [
@@ -320,10 +320,10 @@ test('submit never attaches a card and repeat logging keeps working', function (
         ],
     ];
 
-    // Attaching a widget card replaces the app's "Log time" entry point on
-    // the task, killing repeat logging — so submits must never attach.
-    expect(signedPost('/asana-app/submit', $payload())->assertStatus(400)->json())->not->toHaveKey('resource_url')
-        ->and(signedPost('/asana-app/submit', $payload())->assertStatus(400)->json())->not->toHaveKey('resource_url');
+    // A widget-matching attachment would replace the app's "Log time" entry
+    // point and kill repeat logging — receipts must never match asana-app/*.
+    expect(signedPost('/asana-app/submit', $payload())->assertOk()->json('resource_url'))->not->toContain('/asana-app/')
+        ->and(signedPost('/asana-app/submit', $payload())->assertOk()->json('resource_url'))->not->toContain('/asana-app/');
 
     expect(TimeEntry::where('asana_task_gid', 'AT1')->count())->toBe(2);
 });
@@ -421,7 +421,7 @@ test('submit stores no asana gid when the chosen project is not linked to the bo
             'hours' => '0.5',
             'timer' => [],
         ],
-    ])->assertStatus(400);
+    ])->assertOk();
 
     expect($user->timeEntries()->sole()->asana_task_gid)->toBeNull();
 });
@@ -462,7 +462,7 @@ test('submit with the timer option starts a running timer', function () {
             'hours' => '',
             'timer' => ['start'],
         ],
-    ])->assertStatus(400);
+    ])->assertOk();
 
     $entry = $user->timeEntries()->sole();
     expect((bool) $entry->is_running)->toBeTrue()
@@ -476,7 +476,7 @@ test('form offers stop and submit stops the running timer', function () {
         'task' => 'AT1',
         'user' => 'AU1',
         'values' => ['project' => (string) $project->id, 'task' => (string) $task->id, 'hours' => '', 'timer' => ['start']],
-    ])->assertStatus(400);
+    ])->assertOk();
 
     $fields = collect(signedGet('/asana-app/form', ['task' => 'AT1', 'user' => 'AU1'])->json('metadata.fields'))->keyBy('id');
     expect($fields['timer']['options'][0]['id'])->toBe('stop');
@@ -485,7 +485,7 @@ test('form offers stop and submit stops the running timer', function () {
         'task' => 'AT1',
         'user' => 'AU1',
         'values' => ['timer' => ['stop']],
-    ])->assertStatus(400);
+    ])->assertOk();
 
     expect((bool) $user->timeEntries()->sole()->fresh()->is_running)->toBeFalse();
 });
@@ -530,7 +530,7 @@ test('widget totals refresh for other viewers immediately after a submit', funct
         'task' => 'AT1',
         'user' => 'AU1',
         'values' => ['project' => (string) $project->id, 'task' => (string) $task->id, 'hours' => '2', 'timer' => []],
-    ])->assertStatus(400);
+    ])->assertOk();
 
     // Same colleague, straight after: must see the new total, not a 60s-stale cache.
     $after = collect(signedGet('/asana-app/widget', [

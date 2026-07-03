@@ -295,26 +295,20 @@ final class AsanaAppService
     }
 
     /**
-     * A terminal form (no submit button) confirming what just happened —
-     * Asana's on_submit contract offers no attachment-free 200, so success
-     * is conveyed by re-rendering the form via the 400 channel.
+     * Asana's on_submit contract requires a 200 to attach a resource; any
+     * other response shape renders a generic error even when the entry saved.
+     * The attachment doubles as a receipt. Its URL must NOT match the
+     * configured widget pattern (asana-app/*): a widget-matching attachment
+     * takes over the app's slot in the task's Apps row and removes the
+     * "Log time" entry point, killing repeat logging.
      *
-     * @return array<string, mixed>
+     * @return array<string, string>
      */
-    private function confirmationForm(string $message): array
+    private function receiptAttachment(string $taskGid, string $summary): array
     {
         return [
-            'template' => 'form_metadata_v0',
-            'metadata' => [
-                'title' => 'Time logged',
-                'fields' => [
-                    [
-                        'type' => 'static_text',
-                        'id' => 'confirmation',
-                        'name' => $message.' You can close this window.',
-                    ],
-                ],
-            ],
+            'resource_name' => $summary,
+            'resource_url' => route('timesheet', ['from_asana' => $taskGid]),
         ];
     }
 
@@ -479,15 +473,12 @@ final class AsanaAppService
 
         Cache::forget('asana_app_widget_'.$taskGid);
 
-        // Never attach a resource card: an attached card replaces the app's
-        // "Log time" entry point on the task, which kills repeat logging.
-        // Totals are shown inside the form (logged_so_far) instead.
         $summary = $startTimer
-            ? 'Timer started on '.$entry->project->timesheetDisplayName().' — '.$entry->task->name.'.'
-            : 'Logged '.HoursFormatter::format($hours, $user->hoursDisplayFormat()).' hrs to '
-                .$entry->project->timesheetDisplayName().' — '.$entry->task->name.'.';
+            ? 'Timer started — '.$entry->project->timesheetDisplayName().' (Internal Tools)'
+            : 'Logged '.HoursFormatter::format($hours, $user->hoursDisplayFormat()).' hrs — '
+                .$entry->project->timesheetDisplayName().' (Internal Tools)';
 
-        return $this->confirmationForm($summary);
+        return $this->receiptAttachment($taskGid, $summary);
     }
 
     /**
@@ -505,8 +496,9 @@ final class AsanaAppService
 
         $entry->refresh();
 
-        return $this->confirmationForm(
-            'Timer stopped — logged '.HoursFormatter::format((float) $entry->hours, $user->hoursDisplayFormat()).' hrs.'
+        return $this->receiptAttachment(
+            $taskGid,
+            'Timer stopped — logged '.HoursFormatter::format((float) $entry->hours, $user->hoursDisplayFormat()).' hrs (Internal Tools)'
         );
     }
 
