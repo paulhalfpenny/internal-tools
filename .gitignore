@@ -33,3 +33,4 @@ yarn-error.log
 /freshdesk-app/dist/
 /freshdesk-app/coverage/
 /.claude
+asana-extension-*.zip
