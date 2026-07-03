@@ -152,7 +152,7 @@ class AsanaLogTime extends Component
         app(TimeEntryService::class)->startTimer($entry);
 
         $this->savedSummary = sprintf(
-            'Timer running on %s — %s. Stop it from your timesheet.',
+            'Timer running on %s — %s.',
             $entry->project->name,
             $entry->task->name,
         );
@@ -163,11 +163,54 @@ class AsanaLogTime extends Component
         $this->dispatch('asana-entry-saved');
     }
 
+    public function stopRunningTimer(): void
+    {
+        $entry = $this->runningEntry();
+        if ($entry === null) {
+            return;
+        }
+
+        app(TimeEntryService::class)->stopTimer($entry);
+        $entry->refresh();
+
+        $this->savedSummary = sprintf(
+            'Timer stopped — %s logged to %s — %s.',
+            HoursFormatter::format((float) $entry->hours, $this->user()->hoursDisplayFormat()),
+            $entry->project->name,
+            $entry->task->name,
+        );
+        $this->timerStarted = false;
+
+        $this->dispatch('asana-entry-saved');
+    }
+
     public function render(): View
     {
+        $running = null;
+        if ($this->status === 'ok' && ($entry = $this->runningEntry()) !== null) {
+            $running = [
+                'label' => $entry->project->name.' — '.$entry->task->name,
+                'notes' => $entry->notes,
+                // The Alpine ticker resumes from hours banked before this
+                // run plus the wall-clock elapsed since the timer started.
+                'base_seconds' => (int) round((float) $entry->hours * 3600),
+                'started_at_ms' => $entry->timer_started_at?->getTimestampMs() ?? now()->getTimestampMs(),
+            ];
+        }
+
         return view('livewire.integrations.asana-log-time', [
             'projects' => $this->status === 'ok' ? $this->linkedProjects() : collect(),
+            'running' => $running,
         ]);
+    }
+
+    private function runningEntry(): ?TimeEntry
+    {
+        return TimeEntry::with(['project', 'task'])
+            ->where('user_id', $this->user()->id)
+            ->where('is_running', true)
+            ->where('asana_task_gid', $this->taskGid)
+            ->first();
     }
 
     private function createEntry(float $hours): TimeEntry

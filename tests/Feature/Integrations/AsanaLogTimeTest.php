@@ -142,3 +142,56 @@ test('a board with no linked projects shows the unmapped notice', function () {
         ->assertSet('status', 'unmapped')
         ->assertSee('linked to any of your projects');
 });
+
+test('a running timer on this task shows the ticking panel instead of the form', function () {
+    [$user, $project, $task] = embedSetup();
+
+    $component = Livewire::actingAs($user)
+        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
+        ->set('selectedTaskId', $task->id)
+        ->call('startTimer');
+
+    // Re-mount, as the extension does when the dialog reopens.
+    Livewire::actingAs($user)
+        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
+        ->assertSee('Timer running')
+        ->assertSee('Stop timer')
+        ->assertDontSee('Log time');
+});
+
+test('stopping the timer banks the elapsed time and notifies the extension', function () {
+    [$user, , $task] = embedSetup();
+
+    Livewire::actingAs($user)
+        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
+        ->set('selectedTaskId', $task->id)
+        ->call('startTimer');
+
+    TimeEntry::sole()->update(['timer_started_at' => now()->subMinutes(30)]);
+
+    Livewire::actingAs($user)
+        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
+        ->call('stopRunningTimer')
+        ->assertDispatched('asana-entry-saved')
+        ->assertSee('Timer stopped');
+
+    $entry = TimeEntry::sole();
+    expect($entry->is_running)->toBeFalse()
+        ->and((float) $entry->hours)->toBeGreaterThanOrEqual(0.5)
+        ->and((float) $entry->hours)->toBeLessThan(0.52);
+});
+
+test('a timer running on a different Asana task leaves the form alone', function () {
+    [$user, $project, $task] = embedSetup();
+    AsanaTask::create(['gid' => 'AT2', 'asana_project_gid' => 'BOARD1', 'name' => 'Other ticket', 'is_completed' => false]);
+
+    Livewire::actingAs($user)
+        ->test(AsanaLogTime::class, ['taskGid' => 'AT2'])
+        ->set('selectedTaskId', $task->id)
+        ->call('startTimer');
+
+    Livewire::actingAs($user)
+        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
+        ->assertDontSee('Timer running')
+        ->assertSee('Log time');
+});

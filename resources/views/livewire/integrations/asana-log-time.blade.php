@@ -21,6 +21,46 @@
                class="flex-none text-xs text-white opacity-70 hover:opacity-100 hover:underline">My timesheet ↗</a>
         </div>
 
+        @if($running !== null)
+            {{-- A timer is running on this Asana task: show it instead of
+                 the entry form. Ticks client-side only — no Livewire polls
+                 (a morph mid-interaction is what breaks embedded forms). --}}
+            <div class="px-6 py-5 space-y-3"
+                 x-data="{
+                     seconds: {{ $running['base_seconds'] }} + Math.max(0, Math.floor((Date.now() - {{ $running['started_at_ms'] }}) / 1000)),
+                     display() {
+                         const h = Math.floor(this.seconds / 3600);
+                         const m = String(Math.floor((this.seconds % 3600) / 60)).padStart(2, '0');
+                         const s = String(this.seconds % 60).padStart(2, '0');
+                         return h + ':' + m + ':' + s;
+                     },
+                 }"
+                 x-init="setInterval(() => seconds++, 1000)">
+                <div class="text-sm font-semibold text-gray-700">Timer running</div>
+
+                <div class="flex items-center justify-between gap-3 border border-green-200 bg-green-50 rounded-lg px-4 py-3">
+                    <div class="min-w-0">
+                        <p class="text-sm font-medium text-gray-900 truncate">{{ $running['label'] }}</p>
+                        @if($running['notes'])
+                            <p class="text-xs text-gray-500 truncate">{{ $running['notes'] }}</p>
+                        @endif
+                    </div>
+                    <span class="flex-none text-lg font-semibold tabular-nums text-green-700" x-text="display()"></span>
+                </div>
+
+                <div class="flex items-center pt-4 -mx-6 px-6 border-t border-gray-100 !mt-5">
+                    <button type="button" wire:click="stopRunningTimer"
+                            class="px-5 py-2 text-sm font-semibold bg-green-600 hover:bg-green-700 text-white rounded-full transition">
+                        Stop timer
+                    </button>
+                    <button type="button" x-show="embedded" x-cloak
+                            x-on:click="window.parent.postMessage({ type: 'filter-log-time:close' }, 'https://app.asana.com')"
+                            class="ml-auto px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition">
+                        Close
+                    </button>
+                </div>
+            </div>
+        @else
         <form wire:submit="save" class="px-6 py-5 space-y-3">
             @if($savedSummary !== '')
                 <div class="px-4 py-2.5 rounded-lg text-sm {{ $timerStarted ? 'bg-blue-50 text-blue-900' : 'bg-green-50 text-green-900' }}">
@@ -88,6 +128,7 @@
                 </button>
             </div>
         </form>
+        @endif
     @endif
 </div>
 
