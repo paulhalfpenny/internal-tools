@@ -902,6 +902,7 @@
                             wire:model.blur="notes"
                             rows="1"
                             placeholder="Notes (optional)"
+                            @keydown.enter.prevent="$wire.notes = $event.target.value; doSave({{ $editingEntryId ? 'false' : ($isImpersonating ? 'false' : 'isTimerMode') }})"
                             class="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none placeholder-gray-400"
                         ></textarea>
                         <div class="flex-shrink-0 w-24 flex flex-col">
@@ -909,6 +910,7 @@
                                 type="text"
                                 wire:model.blur="hoursInput"
                                 @input="liveHoursInput = $event.target.value"
+                                @keydown.enter.prevent="$wire.hoursInput = $event.target.value; doSave({{ $editingEntryId ? 'false' : ($isImpersonating ? 'false' : 'isTimerMode') }})"
                                 placeholder="0.25"
                                 class="w-full h-full border {{ $hoursError ? 'border-red-400' : 'border-gray-300' }} rounded-lg px-3 py-2.5 text-sm text-center tabular-nums focus:outline-none focus:ring-2 focus:ring-green-500 placeholder-gray-400"
                             />
