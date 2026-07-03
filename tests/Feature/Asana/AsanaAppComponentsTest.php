@@ -8,6 +8,7 @@ use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 
 uses(RefreshDatabase::class);
@@ -202,6 +203,44 @@ test('an unmapped board falls back to the full project dropdown', function () {
         ->and($fields['project']['value'])->toBe((string) $project->id)
         ->and(collect($fields['project']['options'])->pluck('label')->join(','))->toContain('Website Build')
         ->and($fields['task']['options'])->not->toBeEmpty();
+});
+
+test('form fetches the task name from the Asana API for unsynced tasks', function () {
+    asanaAppSetup();
+
+    // A task on an unmapped board is not in our asana_tasks sync, so the name
+    // comes from Asana's API using the acting user's OAuth token.
+    Http::fake([
+        'app.asana.com/api/1.0/tasks/REMOTE1*' => Http::response([
+            'data' => ['gid' => 'REMOTE1', 'name' => 'Ticket only Asana knows about'],
+        ]),
+    ]);
+
+    // The token manager needs a token to build the client.
+    User::where('asana_user_gid', 'AU1')->first()
+        ->forceFill(['asana_access_token' => 'token-1', 'asana_token_expires_at' => now()->addHour()])
+        ->save();
+
+    $fields = collect(signedGet('/asana-app/form', ['task' => 'REMOTE1', 'user' => 'AU1'])->json('metadata.fields'))->keyBy('id');
+
+    expect($fields['linked_asana_task']['name'])->toContain('Ticket only Asana knows about')
+        ->and($fields['notes']['value'])->toBe('Ticket only Asana knows about');
+});
+
+test('form still renders when the Asana API lookup fails', function () {
+    asanaAppSetup();
+
+    Http::fake([
+        'app.asana.com/*' => Http::response([], 500),
+    ]);
+
+    User::where('asana_user_gid', 'AU1')->first()
+        ->forceFill(['asana_access_token' => 'token-1', 'asana_token_expires_at' => now()->addHour()])
+        ->save();
+
+    $response = signedGet('/asana-app/form', ['task' => 'REMOTE1', 'user' => 'AU1'])->assertOk();
+
+    expect($response->json('metadata.title'))->toBe('Log time to Internal Tools');
 });
 
 test('form fields never contain null values (Asana rejects them)', function () {

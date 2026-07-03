@@ -6,6 +6,7 @@ use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\Asana\AsanaService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -21,6 +22,7 @@ final class AsanaAppService
     public function __construct(
         private readonly TimeEntryService $timeEntries,
         private readonly AsanaProjectAssociationService $associations,
+        private readonly AsanaService $asana,
     ) {}
 
     public function resolveUser(?string $asanaUserGid): ?User
@@ -92,20 +94,24 @@ final class AsanaAppService
         $running = $this->runningEntryForTask($user, $taskGid);
         $timerTicked = is_array($values['timer'] ?? null) && in_array('start', $values['timer'], true);
 
+        // Tasks on boards we don't sync aren't in asana_tasks — fall back to
+        // asking Asana's API for the name so the form can still show it.
+        $taskName = $asanaTask?->name ?? $this->remoteTaskName($user, $taskGid);
+
         $fields = [];
 
-        if ($asanaTask !== null) {
+        if ($taskName !== null) {
             // The entry is linked to the Asana task by gid regardless of what
             // the user types in Notes — surface that as a fixed, read-only line.
-            $projectIsLinked = $selectedProject === null
-                || $selectedProject->asanaProjects->contains('gid', $boardGid);
+            $willBeLinked = $asanaTask !== null && ($selectedProject === null
+                || $selectedProject->asanaProjects->contains('gid', $boardGid));
 
             $fields[] = [
                 'type' => 'static_text',
                 'id' => 'linked_asana_task',
-                'name' => 'Linked Asana task: '.$asanaTask->name.($projectIsLinked
+                'name' => 'Asana task: '.$taskName.($willBeLinked
                     ? ''
-                    : ' — note: the selected project is not linked to this board, so the entry will be saved without the Asana link'),
+                    : ' — note: this board is not linked to the selected Internal Tools project, so the entry will be saved without the Asana link'),
             ];
         }
 
@@ -175,7 +181,7 @@ final class AsanaAppService
             'is_required' => false,
             'value' => isset($values['notes']) && is_string($values['notes'])
                 ? $values['notes']
-                : ($asanaTask?->name ?? null),
+                : $taskName,
         ];
 
         $fields[] = $running !== null
@@ -478,6 +484,26 @@ final class AsanaAppService
         // dropdown would render with zero options, which Asana's form
         // renderer rejects outright ("Something went wrong").
         return $options->sortBy('name')->first()?->id;
+    }
+
+    /**
+     * The task's name straight from Asana's API, for tasks we don't sync.
+     * Cached briefly; any failure (no token, API error) just means the form
+     * renders without the name rather than not at all.
+     */
+    private function remoteTaskName(User $user, string $taskGid): ?string
+    {
+        if ($taskGid === '') {
+            return null;
+        }
+
+        return Cache::remember('asana_app_task_name_'.$taskGid, 600, function () use ($user, $taskGid): ?string {
+            try {
+                return $this->asana->forUser($user)->getTaskName($taskGid);
+            } catch (\Throwable) {
+                return null;
+            }
+        });
     }
 
     /**
