@@ -6,6 +6,7 @@ use App\Domain\Budgeting\ProjectBudgetCalculator;
 use App\Domain\Reporting\TimeReportQuery;
 use App\Domain\TimeTracking\HoursParser;
 use App\Domain\TimeTracking\ProjectPickerCache;
+use App\Domain\TimeTracking\ProjectTaskUsability;
 use App\Domain\TimeTracking\TimeEntryService;
 use App\Enums\BudgetType;
 use App\Enums\GroupBy;
@@ -778,29 +779,7 @@ final class InternalMcpActions
 
     private function ensureProjectTaskIsUsable(User $user, int $projectId, int $taskId, ?string $asanaTaskGid): void
     {
-        $project = Project::with(['users', 'tasks'])->findOrFail($projectId);
-
-        if (! $project->users->contains('id', $user->id)) {
-            throw new AuthorizationException('The time entry user is not assigned to this project.');
-        }
-
-        if (! $project->tasks->contains('id', $taskId)) {
-            throw ValidationException::withMessages(['task_id' => 'The selected task is not assigned to this project.']);
-        }
-
-        $linkedBoardGids = $project->asanaProjects()->pluck('gid')->all();
-        if ($linkedBoardGids === []) {
-            return;
-        }
-
-        $hasGid = $asanaTaskGid !== null && $asanaTaskGid !== '';
-        if ($project->asana_task_required && ! $hasGid) {
-            throw ValidationException::withMessages(['asana_task_gid' => 'An Asana task is required for this project.']);
-        }
-
-        if ($hasGid && ! AsanaTask::where('gid', $asanaTaskGid)->whereIn('asana_project_gid', $linkedBoardGids)->exists()) {
-            throw ValidationException::withMessages(['asana_task_gid' => 'The selected Asana task does not belong to this project.']);
-        }
+        ProjectTaskUsability::ensure($user, $projectId, $taskId, $asanaTaskGid);
     }
 
     /**
