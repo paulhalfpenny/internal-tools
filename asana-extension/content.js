@@ -18,6 +18,15 @@
   const BASE_URL = 'https://internal.filter.agency';
   const BUTTON_ID = 'filter-log-time-button';
   const DIALOG_ID = 'filter-log-time-dialog';
+  const DOT_ID = 'filter-log-time-dot';
+
+  const COLOR_IDLE = '#6d6e6f';   // Asana toolbar grey
+  const COLOR_HOVER = '#1e1f21';
+  const COLOR_RUNNING = '#16a34a'; // green-600, matches the app's timer UI
+
+  // Latest known timer status for the logged-in Internal Tools user.
+  let timerRunning = false;
+  let timerGid = null;
 
   // ::backdrop can't be styled inline; one stylesheet for the dialog shell.
   const style = document.createElement('style');
@@ -80,15 +89,15 @@
       'display:inline-flex', 'align-items:center', 'justify-content:center',
       'width:28px', 'height:28px', 'margin:5px 2px 0', 'padding:0',
       'border:none', 'border-radius:6px', 'background:transparent',
-      'cursor:pointer', 'color:#6d6e6f',
+      'cursor:pointer', 'color:' + COLOR_IDLE, 'position:relative',
     ].join(';');
     button.addEventListener('mouseenter', () => {
       button.style.background = 'rgba(55,23,23,0.06)';
-      button.style.color = '#1e1f21';
+      if (!runningOnCurrentTask()) button.style.color = COLOR_HOVER;
     });
     button.addEventListener('mouseleave', () => {
       button.style.background = 'transparent';
-      button.style.color = '#6d6e6f';
+      applyTimerVisual();
     });
 
     button.innerHTML =
@@ -109,6 +118,55 @@
     });
 
     return button;
+  }
+
+  function runningOnCurrentTask() {
+    return timerRunning && timerGid !== null && timerGid === currentTaskGid();
+  }
+
+  // Green stopwatch = timer running on this task; green corner dot = timer
+  // running on another task; grey = no timer.
+  function applyTimerVisual() {
+    const button = document.getElementById(BUTTON_ID);
+    if (!button) return;
+
+    const onThisTask = runningOnCurrentTask();
+    button.style.color = onThisTask ? COLOR_RUNNING : COLOR_IDLE;
+    button.title = onThisTask
+      ? 'Timer running on this task — click to view or stop'
+      : (timerRunning
+        ? 'Timer running on another task — Log time in Filter Internal Tools'
+        : 'Log time in Filter Internal Tools');
+
+    let dot = document.getElementById(DOT_ID);
+    const wantDot = timerRunning && !onThisTask;
+    if (wantDot && !dot) {
+      dot = document.createElement('span');
+      dot.id = DOT_ID;
+      dot.style.cssText = [
+        'position:absolute', 'top:2px', 'right:2px',
+        'width:7px', 'height:7px', 'border-radius:9999px',
+        'background:' + COLOR_RUNNING, 'pointer-events:none',
+      ].join(';');
+      button.appendChild(dot);
+    } else if (!wantDot && dot) {
+      dot.remove();
+    }
+  }
+
+  // The background service worker does the actual fetch (content scripts
+  // are subject to the page's CSP; the worker has the host permission).
+  function refreshTimerStatus() {
+    try {
+      chrome.runtime.sendMessage({ type: 'timer-status' }, (data) => {
+        if (chrome.runtime.lastError || !data) return;
+        timerRunning = !!data.running;
+        timerGid = data.gid || null;
+        applyTimerVisual();
+      });
+    } catch (e) {
+      // Extension was reloaded/orphaned; the next page load recovers.
+    }
   }
 
   function closeDialog() {
@@ -151,8 +209,11 @@
     if (type === 'filter-log-time:saved') {
       // Leave the success state visible for a beat before dismissing.
       setTimeout(closeDialog, 900);
+      // A save can start or stop a timer — re-check once the dust settles.
+      setTimeout(refreshTimerStatus, 1200);
     } else if (type === 'filter-log-time:close') {
       closeDialog();
+      setTimeout(refreshTimerStatus, 400);
     } else if (type === 'filter-log-time:height' && typeof event.data.height === 'number') {
       const dialog = document.getElementById(DIALOG_ID);
       if (dialog) {
@@ -184,7 +245,22 @@
     if (!anchor) return;
 
     anchor.insertAdjacentElement('afterend', buildButton(gid));
+    applyTimerVisual();
   }
+
+  // Re-evaluate the icon when the user navigates between tasks (SPA URL
+  // changes don't reload the content script).
+  let lastGid = null;
+  setInterval(function () {
+    const gid = currentTaskGid();
+    if (gid !== lastGid) {
+      lastGid = gid;
+      applyTimerVisual();
+    }
+  }, 1000);
+
+  setInterval(refreshTimerStatus, 30000);
+  refreshTimerStatus();
 
   // Debounced observer: Asana re-renders constantly; check at most every
   // 500ms after mutations settle.

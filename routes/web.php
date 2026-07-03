@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Integrations\AsanaOAuthController;
+use App\Http\Controllers\Integrations\AsanaTimerStatusController;
 use App\Http\Controllers\Mcp\PendingActionController as McpPendingActionController;
 use App\Livewire\Admin\Clients\Index as AdminClients;
 use App\Livewire\Admin\Integrations\AsanaSettings as AdminAsanaSettings;
@@ -54,6 +55,11 @@ Route::post('/auth/logout', function () {
 
     return redirect('/');
 })->name('auth.logout')->middleware('auth');
+
+// Running-timer status for the browser extension's toolbar icon.
+// Unauthenticated on purpose: guests get {running: false}, not a redirect.
+Route::get('/asana-app/timer-status', AsanaTimerStatusController::class)
+    ->name('asana-app.timer-status');
 
 // Authenticated routes
 Route::middleware('auth')->group(function () {

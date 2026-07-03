@@ -33,10 +33,14 @@ Fix by inspecting the task pane in devtools and updating those anchors.
 
 ## Notes
 
-- No permissions beyond running on `app.asana.com`; no storage, no network
-  requests from the extension itself. Auth is the user's normal Internal
-  Tools session inside the overlay iframe — this depends on the app sending
-  `SameSite=None` session cookies and a `frame-ancestors` policy that
-  allows `app.asana.com` (see `RestrictFrameAncestors` middleware).
+- Runs on `app.asana.com` plus a host permission for
+  `internal.filter.agency`: the background worker polls
+  `/asana-app/timer-status` (session cookie included) so the toolbar icon
+  can show a running-timer cue — green stopwatch for a timer on the open
+  task, green corner dot for a timer on another task.
+- Auth is the user's normal Internal Tools session inside the dialog
+  iframe — this depends on the app sending `SameSite=None` session cookies
+  and a `frame-ancestors` policy that allows `app.asana.com` (see
+  `RestrictFrameAncestors` middleware).
 - Task id detection handles current (`/task/{gid}`) and legacy
   (`/0/{project}/{gid}`) URL shapes plus the `?task=` query param.
