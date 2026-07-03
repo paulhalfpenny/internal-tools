@@ -216,7 +216,7 @@ final class AsanaAppService
             'is_required' => false,
             'value' => isset($values['notes']) && is_string($values['notes'])
                 ? $values['notes']
-                : $asanaTask->name,
+                : null,
         ];
 
         $fields[] = $running !== null

@@ -101,7 +101,7 @@ test('submit endpoint verifies the signature over the data blob', function () {
 
 // ─── form metadata ───────────────────────────────────────────────────────────
 
-test('form preselects the mapped project and prefills notes with the Asana task title', function () {
+test('form fixes the mapped project and leaves notes empty', function () {
     [$user, $project, $task] = asanaAppSetup();
 
     $response = signedGet('/asana-app/form', ['task' => 'AT1', 'user' => 'AU1'])->assertOk();
@@ -111,7 +111,7 @@ test('form preselects the mapped project and prefills notes with the Asana task 
     expect($metadata['title'])->toBe('Log time to Internal Tools')
         ->and($metadata['on_submit_callback'])->toContain('/asana-app/submit')
         ->and(collect($fields['task']['options'])->pluck('label'))->toContain('Development')
-        ->and($fields['notes']['value'])->toBe('Fix the checkout flow')
+        ->and($fields['notes'])->not->toHaveKey('value')
         ->and($fields['date']['value'])->toBe(today()->toDateString())
         ->and($fields['timer']['options'][0]['id'])->toBe('start');
 
