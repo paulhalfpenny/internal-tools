@@ -35,21 +35,24 @@
     return null;
   }
 
-  // Anchor: the "Mark complete" button — the one stable, always-visible
-  // control in the task header (verified against Asana's live DOM
-  // 2026-07-03; there is no TaskPaneToolbar test id any more). The Log time
-  // button is inserted as its immediate sibling so it inherits the same
-  // visible flex row.
+  // Anchor: the "Like this task" icon in the task header's icon row (where
+  // Harvest puts its stopwatch), falling back to the "Mark complete" button.
+  // Both located by aria-label/text — Asana ships no stable toolbar test id.
   function findAnchor() {
+    let fallback = null;
+
     for (const el of document.querySelectorAll('button, [role="button"]')) {
       const label = ((el.getAttribute('aria-label') || '') + ' ' + (el.textContent || ''))
         .trim().toLowerCase();
-      if (label.includes('mark complete')) {
+      if (label.includes('like this task')) {
         return el;
+      }
+      if (fallback === null && label.includes('mark complete')) {
+        fallback = el;
       }
     }
 
-    return null;
+    return fallback;
   }
 
   function buildButton(taskGid) {
@@ -58,18 +61,19 @@
     button.type = 'button';
     button.title = 'Log time in Filter Internal Tools';
     button.setAttribute('aria-label', 'Log time in Filter Internal Tools');
+    // Icon-only, sized to sit in Asana's task-header icon row.
     button.style.cssText = [
-      'display:inline-flex', 'align-items:center', 'gap:4px',
-      'margin:0 4px', 'padding:4px 8px', 'border:1px solid #cfcbcb',
-      'border-radius:6px', 'background:transparent', 'cursor:pointer',
-      'font:inherit', 'font-size:12px', 'color:inherit', 'line-height:1',
+      'display:inline-flex', 'align-items:center', 'justify-content:center',
+      'width:28px', 'height:28px', 'margin:0 2px', 'padding:0',
+      'border:none', 'border-radius:6px', 'background:transparent',
+      'cursor:pointer', 'color:inherit',
     ].join(';');
+    button.addEventListener('mouseenter', () => { button.style.background = 'rgba(55,23,23,0.06)'; });
+    button.addEventListener('mouseleave', () => { button.style.background = 'transparent'; });
 
-    // Small stopwatch glyph + label.
     button.innerHTML =
-      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
-      '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>' +
-      '<span>Log time</span>';
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">' +
+      '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>';
 
     button.addEventListener('click', function (event) {
       event.preventDefault();

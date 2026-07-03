@@ -23,8 +23,8 @@ re-uploading — installs update automatically.
 
 The button is injected into Asana's DOM, which they change without notice.
 Failure mode is silent (no button); nothing else is affected. Selectors live
-in one place — `findToolbar()` in `content.js` — anchored on
-`data-testid="TaskPaneToolbar"` with a "Mark complete"-button fallback.
+in one place — `findAnchor()` in `content.js` — anchored on the "Like this
+task" icon's aria-label, with the "Mark complete" button as fallback.
 Fix by inspecting the task pane in devtools and updating those anchors.
 
 ## Notes
