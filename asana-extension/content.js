@@ -1,8 +1,8 @@
 // Filter Internal Tools — "Log time" button for Asana tasks.
 //
-// Injects a button into the task-details toolbar. Clicking it opens an
-// in-page overlay (iframe) with the entry modal prefilled for the current
-// task (/timesheet?log_asana={gid} — see DayView's deep link). The app
+// Injects a button into the task-details toolbar. Clicking it opens a
+// centered in-page overlay (iframe) hosting the compact log-time form for
+// the current task (/asana-app/tasks/{gid}). The app
 // posts 'filter-log-time:saved' back when the entry saves so the overlay
 // closes itself. Requires the app to send SameSite=None session cookies
 // and a frame-ancestors policy allowing app.asana.com.
@@ -107,28 +107,33 @@
   }
 
   function onOverlayPointerdown(event) {
-    const overlay = document.getElementById(OVERLAY_ID);
-    if (overlay && !overlay.contains(event.target)) closeOverlay();
+    if (event.target === document.getElementById(OVERLAY_ID)) closeOverlay();
   }
 
-  // Harvest-style panel: fixed near the top-right of the viewport, hosting
-  // the timesheet deep link in an iframe. The user's normal Internal Tools
+  // Harvest-style panel: centered over a dimmed backdrop, hosting the
+  // compact log-time form in an iframe. The user's normal Internal Tools
   // session applies (cookies are SameSite=None); if they're logged out the
   // login screen renders in the panel, or they can pop out to a tab.
   function openOverlay(gid) {
     closeOverlay();
 
-    const url = BASE_URL + '/timesheet?log_asana=' + encodeURIComponent(gid);
+    const url = BASE_URL + '/asana-app/tasks/' + encodeURIComponent(gid);
+
+    const backdrop = document.createElement('div');
+    backdrop.id = OVERLAY_ID;
+    backdrop.style.cssText = [
+      'position:fixed', 'inset:0', 'z-index:2147483000',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'background:rgba(0,0,0,0.4)',
+    ].join(';');
 
     const overlay = document.createElement('div');
-    overlay.id = OVERLAY_ID;
     overlay.style.cssText = [
-      'position:fixed', 'top:56px', 'right:24px', 'z-index:2147483000',
-      'width:560px', 'max-width:calc(100vw - 32px)',
-      'height:720px', 'max-height:calc(100vh - 80px)',
+      'width:520px', 'max-width:calc(100vw - 32px)',
+      'height:560px', 'max-height:calc(100vh - 64px)',
       'display:flex', 'flex-direction:column', 'overflow:hidden',
       'background:#fff', 'border-radius:12px',
-      'box-shadow:0 12px 40px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.06)',
+      'box-shadow:0 12px 40px rgba(0,0,0,0.28)',
     ].join(';');
 
     const header = document.createElement('div');
@@ -171,7 +176,8 @@
     frame.style.cssText = 'flex:1;width:100%;border:none;';
 
     overlay.append(header, frame);
-    document.body.appendChild(overlay);
+    backdrop.appendChild(overlay);
+    document.body.appendChild(backdrop);
 
     document.addEventListener('keydown', onOverlayKeydown, true);
     document.addEventListener('pointerdown', onOverlayPointerdown, true);

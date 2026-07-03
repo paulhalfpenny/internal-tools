@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\Auth\GoogleController;
-use App\Http\Controllers\Integrations\AsanaAppController;
 use App\Http\Controllers\Integrations\AsanaOAuthController;
 use App\Http\Controllers\Mcp\PendingActionController as McpPendingActionController;
 use App\Livewire\Admin\Clients\Index as AdminClients;
@@ -15,6 +14,7 @@ use App\Livewire\Admin\Teams\Index as AdminTeams;
 use App\Livewire\Admin\TimeEntries\BulkMove as AdminTimeEntriesBulkMove;
 use App\Livewire\Admin\Timesheets\Index as AdminTimesheets;
 use App\Livewire\Admin\Users\Index as AdminUsers;
+use App\Livewire\Integrations\AsanaLogTime;
 use App\Livewire\Profile\ApiTokens as ProfileApiTokens;
 use App\Livewire\Profile\AsanaConnection as ProfileAsanaConnection;
 use App\Livewire\Profile\Preferences as ProfilePreferences;
@@ -58,9 +58,10 @@ Route::post('/auth/logout', function () {
 // Authenticated routes
 Route::middleware('auth')->group(function () {
     Route::get('/', fn () => redirect()->route('timesheet'));
-    // Target of legacy Asana attachment cards and the browser extension:
-    // deep-links into the timesheet with the entry modal prefilled.
-    Route::get('/asana-app/tasks/{taskGid}', [AsanaAppController::class, 'show'])->name('asana-app.tasks.show');
+    // The compact log-time form rendered inside the browser extension's
+    // overlay iframe on app.asana.com (also target of legacy Asana
+    // attachment cards).
+    Route::get('/asana-app/tasks/{taskGid}', AsanaLogTime::class)->name('asana-app.tasks.show');
     Route::get('/timesheet', DayView::class)->name('timesheet');
     Route::get('/timesheet/week', WeekView::class)->name('timesheet.week');
     Route::get('/schedule', ScheduleBoard::class)

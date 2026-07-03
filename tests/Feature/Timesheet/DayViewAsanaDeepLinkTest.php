@@ -92,12 +92,13 @@ test('saving an entry with an Asana task remembers the board association', funct
         ->assertSet('selectedTaskId', $task->id);
 });
 
-test('the asana-app task URL redirects into the prefilled timesheet', function () {
+test('the asana-app task URL renders the compact log-time form', function () {
     [$user] = deepLinkSetup();
     $this->actingAs($user);
 
     $this->get('/asana-app/tasks/AT1')
-        ->assertRedirect(route('timesheet', ['log_asana' => 'AT1']));
+        ->assertOk()
+        ->assertSee('Fix the checkout flow');
 });
 
 test('an unknown log_asana gid opens nothing', function () {
