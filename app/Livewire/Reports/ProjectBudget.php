@@ -13,11 +13,14 @@ use Illuminate\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
+use Livewire\WithPagination;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 #[Layout('layouts.app')]
 class ProjectBudget extends Component
 {
+    use WithPagination;
+
     public Project $project;
 
     public function mount(Project $project): void
@@ -28,15 +31,7 @@ class ProjectBudget extends Component
     #[Renderless]
     public function export(): StreamedResponse
     {
-        // Match the lifetime scope shown on screen: project's effective start to today.
-        // If neither budget_starts_on nor starts_on is set, fall back to the earliest entry date.
-        $start = $this->project->budget_starts_on ?? $this->project->starts_on;
-        if ($start === null) {
-            $earliest = TimeEntry::where('project_id', $this->project->id)->min('spent_on');
-            $start = $earliest ?? CarbonImmutable::now()->subYear()->toDateString();
-        }
-        $from = CarbonImmutable::parse($start);
-        $to = CarbonImmutable::now()->endOfDay();
+        [$from, $to] = $this->lifetimeWindow();
 
         $query = new TimeReportQuery(
             from: $from,
@@ -57,9 +52,37 @@ class ProjectBudget extends Component
 
     public function render(ProjectBudgetCalculator $calculator): View
     {
+        [$from, $to] = $this->lifetimeWindow();
+
+        $entries = (new TimeReportQuery(
+            from: $from,
+            to: $to,
+            projectId: $this->project->id,
+        ))->paginate();
+
         return view('livewire.reports.project-budget', [
             'status' => $calculator->forProject($this->project),
             'monthlyRows' => $calculator->monthlyBreakdown($this->project),
+            'entries' => $entries,
         ]);
+    }
+
+    /**
+     * The project's effective lifetime window: its budget/project start date
+     * through today. Falls back to the earliest logged entry, then to a year
+     * ago, when no start date is configured. Shared by export() and render()
+     * so the CSV and the on-screen entries table cover the same range.
+     *
+     * @return array{0: CarbonImmutable, 1: CarbonImmutable}
+     */
+    private function lifetimeWindow(): array
+    {
+        $start = $this->project->budget_starts_on ?? $this->project->starts_on;
+        if ($start === null) {
+            $earliest = TimeEntry::where('project_id', $this->project->id)->min('spent_on');
+            $start = $earliest ?? CarbonImmutable::now()->subYear()->toDateString();
+        }
+
+        return [CarbonImmutable::parse($start), CarbonImmutable::now()->endOfDay()];
     }
 }
