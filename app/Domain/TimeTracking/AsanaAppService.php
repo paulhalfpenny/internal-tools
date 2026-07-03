@@ -2,6 +2,7 @@
 
 namespace App\Domain\TimeTracking;
 
+use App\Jobs\Asana\DeleteAsanaAppReceiptAttachmentJob;
 use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -295,6 +296,17 @@ final class AsanaAppService
     }
 
     /**
+     * The receipt attachment claims the app's slot on the task and hides the
+     * "Log time" button, so it is deleted again shortly after creation. The
+     * delay gives Asana time to actually create the attachment first.
+     */
+    private function queueReceiptCleanup(User $user, string $taskGid): void
+    {
+        DeleteAsanaAppReceiptAttachmentJob::dispatch($user->id, $taskGid)
+            ->delay(now()->addSeconds(20));
+    }
+
+    /**
      * Asana's on_submit contract requires a 200 to attach a resource; any
      * other response shape renders a generic error even when the entry saved.
      * The attachment doubles as a receipt. Its URL must NOT match the
@@ -478,6 +490,8 @@ final class AsanaAppService
             : 'Logged '.HoursFormatter::format($hours, $user->hoursDisplayFormat()).' hrs — '
                 .$entry->project->timesheetDisplayName().' (Internal Tools)';
 
+        $this->queueReceiptCleanup($user, $taskGid);
+
         return $this->receiptAttachment($taskGid, $summary);
     }
 
@@ -495,6 +509,8 @@ final class AsanaAppService
         Cache::forget('asana_app_widget_'.$taskGid);
 
         $entry->refresh();
+
+        $this->queueReceiptCleanup($user, $taskGid);
 
         return $this->receiptAttachment(
             $taskGid,

@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\Asana\DeleteAsanaAppReceiptAttachmentJob;
 use App\Models\AsanaProject;
 use App\Models\AsanaProjectAssociation;
 use App\Models\AsanaTask;
@@ -8,6 +9,7 @@ use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
 
 uses(RefreshDatabase::class);
@@ -322,10 +324,17 @@ test('receipts never match the widget pattern so repeat logging keeps working', 
 
     // A widget-matching attachment would replace the app's "Log time" entry
     // point and kill repeat logging — receipts must never match asana-app/*.
+    Queue::fake();
+
     expect(signedPost('/asana-app/submit', $payload())->assertOk()->json('resource_url'))->not->toContain('/asana-app/')
         ->and(signedPost('/asana-app/submit', $payload())->assertOk()->json('resource_url'))->not->toContain('/asana-app/');
 
     expect(TimeEntry::where('asana_task_gid', 'AT1')->count())->toBe(2);
+
+    // Every receipt is queued for deletion: ANY attachment created via the
+    // form claims the app slot and hides the Log time button, so receipts
+    // are removed again moments after Asana creates them.
+    Queue::assertPushed(DeleteAsanaAppReceiptAttachmentJob::class, 2);
 });
 
 test('the form shows time already logged on the task', function () {
