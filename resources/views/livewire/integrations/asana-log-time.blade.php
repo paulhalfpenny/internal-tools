@@ -70,7 +70,7 @@
 
             <div class="text-sm font-semibold text-gray-700">Project / Task</div>
 
-            <select wire:model.live="selectedProjectId" aria-label="Project"
+            <select wire:model.live="selectedProjectId" aria-label="Project" data-searchable-select="false"
                     class="w-full border border-gray-300 rounded-lg bg-white px-4 py-3 text-sm text-gray-900 hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none pr-10 bg-no-repeat" style="background-image: url(&quot;data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e&quot;); background-position: right 0.875rem center; background-size: 1.25em 1.25em;">
                 @foreach($projects as $project)
                     <option value="{{ $project->id }}">{{ $project->name }}{{ $project->client ? ' — '.$project->client->name : '' }}</option>
@@ -78,7 +78,7 @@
             </select>
 
             <div>
-                <select wire:model="selectedTaskId" aria-label="Task"
+                <select wire:model="selectedTaskId" aria-label="Task" data-searchable-select="false"
                         class="w-full border border-gray-300 rounded-lg bg-white px-4 py-3 text-sm text-gray-900 hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none pr-10 bg-no-repeat" style="background-image: url(&quot;data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e&quot;); background-position: right 0.875rem center; background-size: 1.25em 1.25em;">
                     <option value="">Select a task…</option>
                     @foreach(($projects->firstWhere('id', $selectedProjectId)?->tasks ?? []) as $task)
