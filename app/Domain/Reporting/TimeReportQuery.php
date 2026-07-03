@@ -151,7 +151,7 @@ final class TimeReportQuery
 
     /**
      * Paginated, newest-first TimeEntry models for on-screen display, with
-     * relations eager-loaded (project.client, task, user).
+     * relations eager-loaded (project.client, task, user, asanaTask).
      *
      * @return LengthAwarePaginator<TimeEntry>
      */
@@ -159,7 +159,7 @@ final class TimeReportQuery
     {
         /** @var LengthAwarePaginator<TimeEntry> */
         return $this->baseQuery()
-            ->with(['project.client', 'task', 'user'])
+            ->with(['project.client', 'task', 'user', 'asanaTask'])
             ->orderByDesc('time_entries.spent_on')
             ->orderByDesc('time_entries.id')
             ->paginate($perPage);
