@@ -14,11 +14,11 @@
                class="mt-4 inline-block text-sm text-green-700 hover:underline">Open Internal Tools ↗</a>
         </div>
     @else
-        {{-- Header — mirrors the Track Time entry modal --}}
-        <div class="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-100">
-            <h3 class="font-semibold text-gray-900 text-base truncate" title="{{ $taskName }}">{{ $taskName }}</h3>
+        {{-- Branded header bar, like Harvest's logo bar --}}
+        <div class="flex items-center justify-between gap-3 px-6 py-3" style="background-color: #002f5f;">
+            <img src="/assets/filter-logo-white-rgb.png" alt="Filter" class="w-auto" style="height: 1.5rem;">
             <a href="{{ route('timesheet') }}" target="_blank" rel="noopener"
-               class="flex-none text-xs text-gray-400 hover:text-gray-600 hover:underline">My timesheet ↗</a>
+               class="flex-none text-xs text-white opacity-70 hover:opacity-100 hover:underline">My timesheet ↗</a>
         </div>
 
         <form wire:submit="save" class="px-6 py-5 space-y-3">
@@ -31,7 +31,7 @@
             <div class="text-sm font-semibold text-gray-700">Project / Task</div>
 
             <select wire:model.live="selectedProjectId" aria-label="Project"
-                    class="w-full border border-gray-300 rounded-lg bg-white px-4 py-3 text-sm text-gray-900 hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500">
+                    class="w-full border border-gray-300 rounded-lg bg-white px-4 py-3 text-sm text-gray-900 hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none pr-10 bg-no-repeat" style="background-image: url(&quot;data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e&quot;); background-position: right 0.875rem center; background-size: 1.25em 1.25em;">
                 @foreach($projects as $project)
                     <option value="{{ $project->id }}">{{ $project->name }}{{ $project->client ? ' — '.$project->client->name : '' }}</option>
                 @endforeach
@@ -39,7 +39,7 @@
 
             <div>
                 <select wire:model="selectedTaskId" aria-label="Task"
-                        class="w-full border border-gray-300 rounded-lg bg-white px-4 py-3 text-sm text-gray-900 hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500">
+                        class="w-full border border-gray-300 rounded-lg bg-white px-4 py-3 text-sm text-gray-900 hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500 appearance-none pr-10 bg-no-repeat" style="background-image: url(&quot;data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e&quot;); background-position: right 0.875rem center; background-size: 1.25em 1.25em;">
                     <option value="">Select a task…</option>
                     @foreach(($projects->firstWhere('id', $selectedProjectId)?->tasks ?? []) as $task)
                         <option value="{{ $task->id }}">{{ $task->name }}</option>
@@ -50,10 +50,9 @@
                 @enderror
             </div>
 
-            <div class="text-sm font-semibold text-gray-700 pt-1">Date</div>
-
-            <input type="date" wire:model="entryDate" aria-label="Date"
-                   class="w-full border border-gray-300 rounded-lg bg-white px-4 py-2.5 text-sm text-gray-900 hover:border-gray-400 transition focus:outline-none focus:ring-2 focus:ring-green-500">
+            {{-- The Asana task this entry is fixed to — read-only context --}}
+            <input type="text" value="{{ $taskName }}" disabled aria-label="Asana task"
+                   class="w-full border border-gray-200 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-500 cursor-not-allowed">
 
             {{-- Notes + Hours row, as in the entry modal --}}
             <div class="flex gap-3 items-stretch pt-1">
