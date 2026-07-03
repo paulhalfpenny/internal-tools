@@ -43,14 +43,19 @@ jobs:
             php artisan migrate --force
             php artisan view:clear
             mkdir -p storage/framework/views bootstrap/cache
-            chgrp -R www-data storage/framework/views bootstrap/cache
-            chmod -R ug+rwX storage/framework/views bootstrap/cache
+            # Ownership fixes are belt-and-braces: files created by php-fpm
+            # (www-data) can't be re-owned by the deploy user, but the setgid
+            # dirs already give them the right group. Never fail the deploy
+            # on these — a genuine permission problem surfaces loudly in the
+            # artisan cache commands below instead.
+            chgrp -R www-data storage/framework/views bootstrap/cache || true
+            chmod -R ug+rwX storage/framework/views bootstrap/cache || true
             find storage/framework/views -type f -name '*.php' -delete
-            find storage/framework/views bootstrap/cache -type d -exec chmod g+s {} +
+            find storage/framework/views bootstrap/cache -type d -exec chmod g+s {} + || true
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
-            chgrp -R www-data storage/framework/views bootstrap/cache
-            chmod -R ug+rwX storage/framework/views bootstrap/cache
-            find storage/framework/views bootstrap/cache -type d -exec chmod g+s {} +
+            chgrp -R www-data storage/framework/views bootstrap/cache || true
+            chmod -R ug+rwX storage/framework/views bootstrap/cache || true
+            find storage/framework/views bootstrap/cache -type d -exec chmod g+s {} + || true
             php artisan queue:restart
