@@ -46,22 +46,6 @@ final class AsanaService
     }
 
     /**
-     * The display name of a single task, or null when it cannot be fetched.
-     * Used by the app-components form for tasks on boards we don't sync.
-     */
-    public function getTaskName(string $taskGid): ?string
-    {
-        $payload = $this->client()
-            ->get(self::BASE_URL.'/tasks/'.$taskGid, ['opt_fields' => 'gid,name'])
-            ->throw()
-            ->json('data', []);
-
-        $name = $payload['name'] ?? null;
-
-        return is_string($name) && $name !== '' ? $name : null;
-    }
-
-    /**
      * @return list<array{gid: string, name: string, archived: bool}>
      */
     public function getProjects(string $workspaceGid): array

@@ -8,7 +8,6 @@ use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Testing\TestResponse;
 
 uses(RefreshDatabase::class);
@@ -189,58 +188,30 @@ test('a multi-mapped board shows a dropdown restricted to the linked projects', 
         ->and($fields['task']['value'])->toBe((string) $task->id);
 });
 
-test('an unmapped board falls back to the full project dropdown', function () {
-    [$user, $project] = asanaAppSetup();
+test('an unmapped board blocks logging with an explanation instead of guessing a project', function () {
+    asanaAppSetup();
 
     AsanaProject::create(['gid' => 'LONEBOARD', 'workspace_gid' => 'WS1', 'name' => 'Unmapped board', 'is_archived' => false]);
     AsanaTask::create(['gid' => 'AT9', 'asana_project_gid' => 'LONEBOARD', 'name' => 'Orphan task', 'is_completed' => false]);
 
-    $fields = collect(signedGet('/asana-app/form', ['task' => 'AT9', 'user' => 'AU1'])->json('metadata.fields'))->keyBy('id');
+    $metadata = signedGet('/asana-app/form', ['task' => 'AT9', 'user' => 'AU1'])->assertOk()->json('metadata');
 
-    // A project must always be preselected so the task dropdown has options —
-    // Asana's renderer rejects the form otherwise ("Something went wrong").
-    expect($fields['project']['type'])->toBe('dropdown')
-        ->and($fields['project']['value'])->toBe((string) $project->id)
-        ->and(collect($fields['project']['options'])->pluck('label')->join(','))->toContain('Website Build')
-        ->and($fields['task']['options'])->not->toBeEmpty();
+    // No submit button (no on_submit_callback) — logging from here would have
+    // to guess the internal project, which silently misattributes time.
+    expect($metadata)->not->toHaveKey('on_submit_callback')
+        ->and($metadata['fields'][0]['type'])->toBe('static_text')
+        ->and($metadata['fields'][0]['name'])->toContain('not linked');
 });
 
-test('form fetches the task name from the Asana API for unsynced tasks', function () {
+test('an unsynced task gid also gets the blocked form', function () {
     asanaAppSetup();
 
-    // A task on an unmapped board is not in our asana_tasks sync, so the name
-    // comes from Asana's API using the acting user's OAuth token.
-    Http::fake([
-        'app.asana.com/api/1.0/tasks/REMOTE1*' => Http::response([
-            'data' => ['gid' => 'REMOTE1', 'name' => 'Ticket only Asana knows about'],
-        ]),
-    ]);
+    // A gid we have never synced: brand new on a linked board (not pulled
+    // yet), or any task on an unlinked board.
+    $metadata = signedGet('/asana-app/form', ['task' => 'NEVER-SYNCED', 'user' => 'AU1'])->assertOk()->json('metadata');
 
-    // The token manager needs a token to build the client.
-    User::where('asana_user_gid', 'AU1')->first()
-        ->forceFill(['asana_access_token' => 'token-1', 'asana_token_expires_at' => now()->addHour()])
-        ->save();
-
-    $fields = collect(signedGet('/asana-app/form', ['task' => 'REMOTE1', 'user' => 'AU1'])->json('metadata.fields'))->keyBy('id');
-
-    expect($fields['linked_asana_task']['name'])->toContain('Ticket only Asana knows about')
-        ->and($fields['notes']['value'])->toBe('Ticket only Asana knows about');
-});
-
-test('form still renders when the Asana API lookup fails', function () {
-    asanaAppSetup();
-
-    Http::fake([
-        'app.asana.com/*' => Http::response([], 500),
-    ]);
-
-    User::where('asana_user_gid', 'AU1')->first()
-        ->forceFill(['asana_access_token' => 'token-1', 'asana_token_expires_at' => now()->addHour()])
-        ->save();
-
-    $response = signedGet('/asana-app/form', ['task' => 'REMOTE1', 'user' => 'AU1'])->assertOk();
-
-    expect($response->json('metadata.title'))->toBe('Log time to Internal Tools');
+    expect($metadata)->not->toHaveKey('on_submit_callback')
+        ->and($metadata['fields'][0]['name'])->toContain('not linked');
 });
 
 test('form fields never contain null values (Asana rejects them)', function () {
@@ -331,6 +302,27 @@ test('submit creates a linked time entry and remembers the association', functio
     expect($assoc->project_id)->toBe($project->id)
         ->and($assoc->task_id)->toBe($task->id)
         ->and($assoc->asana_project_gid)->toBe('BOARD1');
+});
+
+test('only the first entry on a task attaches the widget card', function () {
+    [$user, $project, $task] = asanaAppSetup();
+
+    $payload = fn () => [
+        'task' => 'AT1',
+        'user' => 'AU1',
+        'values' => [
+            'task' => (string) $task->id,
+            'hours' => '1',
+            'timer' => [],
+        ],
+    ];
+
+    // First entry attaches the card (this is what makes the widget appear);
+    // repeats must not — Asana logs every attachment as an activity story.
+    expect(signedPost('/asana-app/submit', $payload())->json('resource_url'))->toContain('/asana-app/tasks/AT1')
+        ->and(signedPost('/asana-app/submit', $payload())->json())->not->toHaveKey('resource_url');
+
+    expect(TimeEntry::where('asana_task_gid', 'AT1')->count())->toBe(2);
 });
 
 test('submit rejects unparseable hours with a form error', function () {

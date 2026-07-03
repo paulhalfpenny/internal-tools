@@ -6,7 +6,6 @@ use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
-use App\Services\Asana\AsanaService;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -22,7 +21,6 @@ final class AsanaAppService
     public function __construct(
         private readonly TimeEntryService $timeEntries,
         private readonly AsanaProjectAssociationService $associations,
-        private readonly AsanaService $asana,
     ) {}
 
     public function resolveUser(?string $asanaUserGid): ?User
@@ -61,6 +59,33 @@ final class AsanaAppService
     }
 
     /**
+     * Shown when the task's board has no linked internal project the acting
+     * user is assigned to (or the task has not synced yet). No
+     * on_submit_callback => the submit button is disabled.
+     *
+     * @return array<string, mixed>
+     */
+    public function boardNotLinkedForm(): array
+    {
+        return [
+            'template' => 'form_metadata_v0',
+            'metadata' => [
+                'title' => 'Log time to Internal Tools',
+                'fields' => [
+                    [
+                        'type' => 'static_text',
+                        'id' => 'board_not_linked',
+                        'name' => 'This Asana board is not linked to an Internal Tools project you are assigned to, '
+                            .'so time cannot be logged from here. An admin can link the board under '
+                            .'Admin -> Projects -> edit -> Asana boards. If the board is already linked, '
+                            .'this task may not have synced yet - use the Refresh button on the timesheet task picker, then reopen this form.',
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
      * Build the log-time form for a task. $values carries the user's current
      * selections during on_change round-trips (keyed by field id).
      *
@@ -76,13 +101,20 @@ final class AsanaAppService
 
         // Projects the task's board is linked to determine the project field:
         // exactly one => fixed read-only line (the normal case); several =>
-        // dropdown restricted to those; none => full dropdown so time can
-        // still be logged from unmapped boards (just without the Asana link).
+        // dropdown restricted to those; none => logging is blocked (see below).
         $linkedProjects = $boardGid === ''
             ? collect()
             : $projects->filter(fn (Project $p): bool => $p->asanaProjects->contains('gid', $boardGid))->sortBy('name')->values();
+
+        // Unsynced task or no linked project => don't offer the form at all.
+        // Guessing a default project silently misattributes time, and an
+        // unlinked entry can't sync back to Asana anyway.
+        if ($asanaTask === null || $linkedProjects->isEmpty()) {
+            return $this->boardNotLinkedForm();
+        }
+
         $fixedProject = $linkedProjects->count() === 1 ? $linkedProjects->first() : null;
-        $projectOptions = $linkedProjects->isNotEmpty() ? $linkedProjects : $projects;
+        $projectOptions = $linkedProjects;
 
         if ($fixedProject !== null) {
             $selectedProject = $fixedProject;
@@ -94,26 +126,15 @@ final class AsanaAppService
         $running = $this->runningEntryForTask($user, $taskGid);
         $timerTicked = is_array($values['timer'] ?? null) && in_array('start', $values['timer'], true);
 
-        // Tasks on boards we don't sync aren't in asana_tasks — fall back to
-        // asking Asana's API for the name so the form can still show it.
-        $taskName = $asanaTask?->name ?? $this->remoteTaskName($user, $taskGid);
-
         $fields = [];
 
-        if ($taskName !== null) {
-            // The entry is linked to the Asana task by gid regardless of what
-            // the user types in Notes — surface that as a fixed, read-only line.
-            $willBeLinked = $asanaTask !== null && ($selectedProject === null
-                || $selectedProject->asanaProjects->contains('gid', $boardGid));
-
-            $fields[] = [
-                'type' => 'static_text',
-                'id' => 'linked_asana_task',
-                'name' => 'Asana task: '.$taskName.($willBeLinked
-                    ? ''
-                    : ' — note: this board is not linked to the selected Internal Tools project, so the entry will be saved without the Asana link'),
-            ];
-        }
+        // The entry is linked to the Asana task by gid regardless of what
+        // the user types in Notes — surface that as a fixed, read-only line.
+        $fields[] = [
+            'type' => 'static_text',
+            'id' => 'linked_asana_task',
+            'name' => 'Asana task: '.$asanaTask->name,
+        ];
 
         $fields[] = $fixedProject !== null
             ? [
@@ -181,7 +202,7 @@ final class AsanaAppService
             'is_required' => false,
             'value' => isset($values['notes']) && is_string($values['notes'])
                 ? $values['notes']
-                : $taskName,
+                : $asanaTask->name,
         ];
 
         $fields[] = $running !== null
@@ -421,7 +442,13 @@ final class AsanaAppService
 
         Cache::forget('asana_app_widget_'.$taskGid);
 
-        return $this->attachmentResource($taskGid);
+        // Attach the widget card only once per task (Asana logs every
+        // attachment as an activity story) and only when the entry actually
+        // links to the task.
+        $isFirstLinkedEntry = $gidToStore !== null
+            && TimeEntry::where('asana_task_gid', $gidToStore)->count() === 1;
+
+        return $isFirstLinkedEntry ? $this->attachmentResource($taskGid) : [];
     }
 
     /**
@@ -437,7 +464,8 @@ final class AsanaAppService
         $this->timeEntries->stopTimer($entry);
         Cache::forget('asana_app_widget_'.$taskGid);
 
-        return $this->attachmentResource($taskGid);
+        // The card was attached when the timer entry was created.
+        return [];
     }
 
     private function runningEntryForTask(User $user, string $taskGid): ?TimeEntry
@@ -484,26 +512,6 @@ final class AsanaAppService
         // dropdown would render with zero options, which Asana's form
         // renderer rejects outright ("Something went wrong").
         return $options->sortBy('name')->first()?->id;
-    }
-
-    /**
-     * The task's name straight from Asana's API, for tasks we don't sync.
-     * Cached briefly; any failure (no token, API error) just means the form
-     * renders without the name rather than not at all.
-     */
-    private function remoteTaskName(User $user, string $taskGid): ?string
-    {
-        if ($taskGid === '') {
-            return null;
-        }
-
-        return Cache::remember('asana_app_task_name_'.$taskGid, 600, function () use ($user, $taskGid): ?string {
-            try {
-                return $this->asana->forUser($user)->getTaskName($taskGid);
-            } catch (\Throwable) {
-                return null;
-            }
-        });
     }
 
     /**
