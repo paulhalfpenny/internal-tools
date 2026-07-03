@@ -1,0 +1,438 @@
+<?php
+
+namespace App\Domain\TimeTracking;
+
+use App\Models\AsanaTask;
+use App\Models\Project;
+use App\Models\TimeEntry;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Validation\ValidationException;
+
+/**
+ * Backs the Asana app-components endpoints: the in-task "log time" modal
+ * form, its submission, and the per-task widget. See
+ * docs/superpowers/specs/2026-07-03-asana-app-components-time-logging-design.md
+ */
+final class AsanaAppService
+{
+    public function __construct(
+        private readonly TimeEntryService $timeEntries,
+        private readonly AsanaProjectAssociationService $associations,
+    ) {}
+
+    public function resolveUser(?string $asanaUserGid): ?User
+    {
+        if ($asanaUserGid === null || $asanaUserGid === '') {
+            return null;
+        }
+
+        return User::where('asana_user_gid', $asanaUserGid)
+            ->where('is_active', true)
+            ->first();
+    }
+
+    /**
+     * Form shown when the acting Asana user has no linked Internal Tools
+     * account. No on_submit_callback => Asana disables the submit button.
+     *
+     * @return array<string, mixed>
+     */
+    public function connectPromptForm(): array
+    {
+        return [
+            'template' => 'form_metadata_v0',
+            'metadata' => [
+                'title' => 'Connect Internal Tools',
+                'fields' => [
+                    [
+                        'type' => 'static_text',
+                        'id' => 'connect_prompt',
+                        'name' => 'Your Asana account is not linked to Filter Internal Tools yet. '
+                            .'Open '.rtrim((string) config('app.url'), '/').'/profile/asana and click "Connect Asana", then reopen this form.',
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Build the log-time form for a task. $values carries the user's current
+     * selections during on_change round-trips (keyed by field id).
+     *
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    public function formMetadata(User $user, string $taskGid, array $values = []): array
+    {
+        $asanaTask = AsanaTask::find($taskGid);
+        $boardGid = $asanaTask?->asana_project_gid ?? '';
+
+        $projects = $this->projectsForUser($user);
+        $selectedProjectId = $this->resolveSelectedProject($user, $projects, $boardGid, $values);
+        $selectedProject = $projects->firstWhere('id', $selectedProjectId);
+
+        $running = $this->runningEntryForTask($user, $taskGid);
+
+        $fields = [
+            [
+                'type' => 'dropdown',
+                'id' => 'project',
+                'name' => 'Project',
+                'is_required' => true,
+                'is_watched' => true,
+                'options' => $projects
+                    ->map(fn (Project $p): array => ['id' => (string) $p->id, 'label' => mb_substr($p->timesheetDisplayName(), 0, 80)])
+                    ->values()
+                    ->all(),
+                'value' => $selectedProjectId !== null ? (string) $selectedProjectId : null,
+                'width' => 'full',
+            ],
+            [
+                'type' => 'dropdown',
+                'id' => 'task',
+                'name' => 'Task',
+                'is_required' => true,
+                'options' => $selectedProject !== null
+                    ? $selectedProject->tasks
+                        ->where('is_archived', false)
+                        ->sortBy('name')
+                        ->map(fn ($t): array => ['id' => (string) $t->id, 'label' => mb_substr($t->name, 0, 80)])
+                        ->values()
+                        ->all()
+                    : [],
+                'value' => $this->resolveSelectedTask($user, $selectedProject, $boardGid, $values),
+                'width' => 'full',
+            ],
+            [
+                'type' => 'single_line_text',
+                'id' => 'hours',
+                'name' => 'Hours',
+                'is_required' => false,
+                'placeholder' => '0.25 or 0:15',
+                'value' => isset($values['hours']) && is_string($values['hours']) ? $values['hours'] : null,
+                'width' => 'half',
+            ],
+            [
+                'type' => 'date',
+                'id' => 'date',
+                'name' => 'Date',
+                'is_required' => true,
+                'value' => isset($values['date']) && is_string($values['date']) ? $values['date'] : today()->toDateString(),
+                'width' => 'half',
+            ],
+            [
+                'type' => 'multi_line_text',
+                'id' => 'notes',
+                'name' => 'Notes',
+                'is_required' => false,
+                'value' => isset($values['notes']) && is_string($values['notes'])
+                    ? $values['notes']
+                    : ($asanaTask?->name ?? null),
+            ],
+            $running !== null
+                ? [
+                    'type' => 'checkbox',
+                    'id' => 'timer',
+                    'name' => 'Timer',
+                    'is_required' => false,
+                    'options' => [[
+                        'id' => 'stop',
+                        'label' => 'Stop the running timer ('.HoursFormatter::format($this->timeEntries->currentHours($running), $user->hoursDisplayFormat()).' so far)',
+                    ]],
+                ]
+                : [
+                    'type' => 'checkbox',
+                    'id' => 'timer',
+                    'name' => 'Timer',
+                    'is_required' => false,
+                    'options' => [[
+                        'id' => 'start',
+                        'label' => 'Start a timer instead of logging hours',
+                    ]],
+                ],
+        ];
+
+        return [
+            'template' => 'form_metadata_v0',
+            'metadata' => [
+                'title' => 'Log time to Internal Tools',
+                'on_submit_callback' => route('asana-app.submit'),
+                'on_change_callback' => route('asana-app.form.change'),
+                'fields' => $fields,
+            ],
+        ];
+    }
+
+    /**
+     * Handle a form submission. Returns Asana's expected on_submit payload:
+     * a resource to attach on success (which makes the widget appear), or
+     * an error message.
+     *
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    public function submit(User $user, string $taskGid, array $values): array
+    {
+        $timerChoices = is_array($values['timer'] ?? null) ? $values['timer'] : [];
+
+        try {
+            if (in_array('stop', $timerChoices, true)) {
+                return $this->stopTimer($user, $taskGid);
+            }
+
+            return $this->logEntry($user, $taskGid, $values, startTimer: in_array('start', $timerChoices, true));
+        } catch (ValidationException $e) {
+            return ['error' => collect($e->errors())->flatten()->first() ?? 'Could not log time.'];
+        } catch (AuthorizationException $e) {
+            return ['error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Widget payload for a task, cached briefly — Asana requests it on every
+     * task open. $user may be null (viewer without a linked account).
+     *
+     * @return array<string, mixed>
+     */
+    public function widget(?User $user, string $taskGid): array
+    {
+        $cacheKey = 'asana_app_widget_'.$taskGid.'_'.($user?->id ?? 'anon');
+
+        return Cache::remember($cacheKey, 60, function () use ($user, $taskGid): array {
+            $entries = TimeEntry::with('user')
+                ->where('asana_task_gid', $taskGid)
+                ->get();
+
+            $format = $user?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_DECIMAL;
+            $total = (float) $entries->sum('hours');
+            $own = $user !== null ? (float) $entries->where('user_id', $user->id)->sum('hours') : null;
+            $latest = $entries->sortByDesc('created_at')->first();
+            $running = $entries->firstWhere('is_running', true);
+
+            $fields = [
+                [
+                    'name' => 'Total logged',
+                    'type' => 'text_with_icon',
+                    'text' => HoursFormatter::format($total, $format).' hrs',
+                ],
+            ];
+
+            if ($own !== null) {
+                $fields[] = [
+                    'name' => 'Your time',
+                    'type' => 'text_with_icon',
+                    'text' => HoursFormatter::format($own, $format).' hrs',
+                ];
+            }
+
+            $fields[] = [
+                'name' => 'Entries',
+                'type' => 'pill',
+                'text' => (string) $entries->count(),
+                'color' => 'none',
+            ];
+
+            if ($latest !== null && $latest->created_at !== null) {
+                $fields[] = [
+                    'name' => 'Last entry',
+                    'type' => 'datetime_with_icon',
+                    'datetime' => $latest->created_at->toIso8601String(),
+                ];
+            }
+
+            if ($running !== null) {
+                $fields[] = [
+                    'name' => 'Timer',
+                    'type' => 'pill',
+                    'text' => 'Running — '.($running->user->name ?? 'unknown'),
+                    'color' => 'green',
+                ];
+            }
+
+            return [
+                'template' => 'summary_with_details_v0',
+                'metadata' => [
+                    'title' => 'Time logged',
+                    'fields' => array_slice($fields, 0, 5),
+                    'footer' => [
+                        'footer_type' => 'custom_text',
+                        'text' => 'Filter Internal Tools',
+                    ],
+                ],
+            ];
+        });
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function attachmentResource(string $taskGid): array
+    {
+        return [
+            'resource_name' => 'Time log — Filter Internal Tools',
+            'resource_url' => route('asana-app.tasks.show', $taskGid),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     * @return array<string, mixed>
+     */
+    private function logEntry(User $user, string $taskGid, array $values, bool $startTimer): array
+    {
+        $projectId = (int) ($values['project'] ?? 0);
+        $taskId = (int) ($values['task'] ?? 0);
+        if ($projectId <= 0 || $taskId <= 0) {
+            return ['error' => 'Pick a project and task first.'];
+        }
+
+        $hoursInput = is_string($values['hours'] ?? null) ? trim($values['hours']) : '';
+        if (! $startTimer && $hoursInput === '') {
+            return ['error' => 'Enter the hours to log, or tick "Start a timer instead".'];
+        }
+
+        $hours = 0.0;
+        if ($hoursInput !== '') {
+            try {
+                $hours = HoursParser::parse($hoursInput);
+            } catch (\InvalidArgumentException $e) {
+                return ['error' => $e->getMessage()];
+            }
+        }
+
+        $date = is_string($values['date'] ?? null) && $values['date'] !== ''
+            ? Carbon::parse($values['date'])->toDateString()
+            : today()->toDateString();
+
+        // Only link the Asana task when the chosen project is actually linked
+        // to this task's board — otherwise log without the gid (subject to the
+        // project's own asana_task_required rule).
+        $asanaTask = AsanaTask::find($taskGid);
+        $boardGid = $asanaTask?->asana_project_gid;
+        $projectIsLinked = $boardGid !== null
+            && Project::whereKey($projectId)->whereHas('asanaProjects', fn ($q) => $q->where('gid', $boardGid))->exists();
+        $gidToStore = $projectIsLinked ? $taskGid : null;
+
+        ProjectTaskUsability::ensure($user, $projectId, $taskId, $gidToStore);
+
+        $notes = is_string($values['notes'] ?? null) && trim($values['notes']) !== '' ? trim($values['notes']) : null;
+
+        $entry = $this->timeEntries->create($user, [
+            'project_id' => $projectId,
+            'task_id' => $taskId,
+            'spent_on' => $date,
+            'hours' => $hours,
+            'notes' => $notes,
+            'asana_task_gid' => $gidToStore,
+        ]);
+
+        if ($startTimer) {
+            $this->timeEntries->startTimer($entry);
+        }
+
+        if ($boardGid !== null) {
+            $this->associations->remember($user, $boardGid, $projectId, $taskId);
+        }
+
+        Cache::forget('asana_app_widget_'.$taskGid.'_'.$user->id);
+
+        return $this->attachmentResource($taskGid);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function stopTimer(User $user, string $taskGid): array
+    {
+        $entry = $this->runningEntryForTask($user, $taskGid);
+        if ($entry === null) {
+            return ['error' => 'No running timer on this task.'];
+        }
+
+        $this->timeEntries->stopTimer($entry);
+        Cache::forget('asana_app_widget_'.$taskGid.'_'.$user->id);
+
+        return $this->attachmentResource($taskGid);
+    }
+
+    private function runningEntryForTask(User $user, string $taskGid): ?TimeEntry
+    {
+        return TimeEntry::where('user_id', $user->id)
+            ->where('asana_task_gid', $taskGid)
+            ->where('is_running', true)
+            ->first();
+    }
+
+    /**
+     * @return Collection<int, Project>
+     */
+    private function projectsForUser(User $user)
+    {
+        return Project::with(['client', 'tasks' => fn ($q) => $q->where('tasks.is_archived', false), 'asanaProjects'])
+            ->where('is_archived', false)
+            ->whereHas('users', fn ($q) => $q->where('users.id', $user->id))
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * @param  Collection<int, Project>  $projects
+     * @param  array<string, mixed>  $values
+     */
+    private function resolveSelectedProject(User $user, $projects, string $boardGid, array $values): ?int
+    {
+        // Explicit user choice (on_change round trip) wins.
+        $chosen = $values['project'] ?? null;
+        if (is_string($chosen) && $chosen !== '' && $projects->contains('id', (int) $chosen)) {
+            return (int) $chosen;
+        }
+
+        if ($boardGid === '') {
+            return null;
+        }
+
+        $linked = $projects->filter(
+            fn (Project $p): bool => $p->asanaProjects->contains('gid', $boardGid)
+        );
+
+        $first = $linked->sortBy('name')->first();
+        if ($first !== null && $linked->count() === 1) {
+            return $first->id;
+        }
+
+        $remembered = $this->associations->lookup($user, $boardGid);
+        if ($remembered !== null && $projects->contains('id', $remembered['project_id'])) {
+            return $remembered['project_id'];
+        }
+
+        return $first?->id;
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     */
+    private function resolveSelectedTask(User $user, ?Project $selectedProject, string $boardGid, array $values): ?string
+    {
+        if ($selectedProject === null) {
+            return null;
+        }
+
+        $chosen = $values['task'] ?? null;
+        if (is_string($chosen) && $chosen !== '' && $selectedProject->tasks->contains('id', (int) $chosen)) {
+            return $chosen;
+        }
+
+        $remembered = $boardGid !== '' ? $this->associations->lookup($user, $boardGid) : null;
+        if ($remembered !== null
+            && $remembered['project_id'] === $selectedProject->id
+            && $selectedProject->tasks->contains('id', $remembered['task_id'])) {
+            return (string) $remembered['task_id'];
+        }
+
+        return null;
+    }
+}
