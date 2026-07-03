@@ -8,7 +8,6 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\ValidationException;
 
@@ -200,71 +199,82 @@ final class AsanaAppService
      */
     public function widget(?User $user, string $taskGid): array
     {
-        $cacheKey = 'asana_app_widget_'.$taskGid.'_'.($user?->id ?? 'anon');
-
-        return Cache::remember($cacheKey, 60, function () use ($user, $taskGid): array {
+        // Raw aggregates are cached once per task (not per viewer) so a single
+        // Cache::forget on submit refreshes the widget for everyone at once.
+        // Viewer-specific bits (own hours, HH:MM preference) are applied after
+        // the cache read.
+        $stats = Cache::remember('asana_app_widget_'.$taskGid, 60, function () use ($taskGid): array {
             $entries = TimeEntry::with('user')
                 ->where('asana_task_gid', $taskGid)
                 ->get();
 
-            $format = $user?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_DECIMAL;
-            $total = (float) $entries->sum('hours');
-            $own = $user !== null ? (float) $entries->where('user_id', $user->id)->sum('hours') : null;
-            $latest = $entries->sortByDesc('created_at')->first();
             $running = $entries->firstWhere('is_running', true);
 
-            $fields = [
-                [
-                    'name' => 'Total logged',
-                    'type' => 'text_with_icon',
-                    'text' => HoursFormatter::format($total, $format).' hrs',
-                ],
-            ];
-
-            if ($own !== null) {
-                $fields[] = [
-                    'name' => 'Your time',
-                    'type' => 'text_with_icon',
-                    'text' => HoursFormatter::format($own, $format).' hrs',
-                ];
-            }
-
-            $fields[] = [
-                'name' => 'Entries',
-                'type' => 'pill',
-                'text' => (string) $entries->count(),
-                'color' => 'none',
-            ];
-
-            if ($latest !== null && $latest->created_at !== null) {
-                $fields[] = [
-                    'name' => 'Last entry',
-                    'type' => 'datetime_with_icon',
-                    'datetime' => $latest->created_at->toIso8601String(),
-                ];
-            }
-
-            if ($running !== null) {
-                $fields[] = [
-                    'name' => 'Timer',
-                    'type' => 'pill',
-                    'text' => 'Running — '.($running->user->name ?? 'unknown'),
-                    'color' => 'green',
-                ];
-            }
-
             return [
-                'template' => 'summary_with_details_v0',
-                'metadata' => [
-                    'title' => 'Time logged',
-                    'fields' => array_slice($fields, 0, 5),
-                    'footer' => [
-                        'footer_type' => 'custom_text',
-                        'text' => 'Filter Internal Tools',
-                    ],
-                ],
+                'total' => (float) $entries->sum('hours'),
+                'per_user' => $entries->groupBy('user_id')
+                    ->map(fn ($group): float => (float) $group->sum('hours'))
+                    ->all(),
+                'count' => $entries->count(),
+                'latest_at' => $entries->sortByDesc('created_at')->first()?->created_at?->toIso8601String(),
+                'running_user_name' => $running?->user->name,
             ];
         });
+
+        $format = $user?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_DECIMAL;
+        $own = $user !== null ? ($stats['per_user'][$user->id] ?? null) : null;
+
+        $fields = [
+            [
+                'name' => 'Total logged',
+                'type' => 'text_with_icon',
+                'text' => HoursFormatter::format($stats['total'], $format).' hrs',
+            ],
+        ];
+
+        if ($user !== null) {
+            $fields[] = [
+                'name' => 'Your time',
+                'type' => 'text_with_icon',
+                'text' => HoursFormatter::format($own ?? 0.0, $format).' hrs',
+            ];
+        }
+
+        $fields[] = [
+            'name' => 'Entries',
+            'type' => 'pill',
+            'text' => (string) $stats['count'],
+            'color' => 'none',
+        ];
+
+        if ($stats['latest_at'] !== null) {
+            $fields[] = [
+                'name' => 'Last entry',
+                'type' => 'datetime_with_icon',
+                'datetime' => $stats['latest_at'],
+            ];
+        }
+
+        if ($stats['running_user_name'] !== null) {
+            $fields[] = [
+                'name' => 'Timer',
+                'type' => 'pill',
+                'text' => 'Running — '.$stats['running_user_name'],
+                'color' => 'green',
+            ];
+        }
+
+        return [
+            'template' => 'summary_with_details_v0',
+            'metadata' => [
+                'title' => 'Time logged',
+                'fields' => array_slice($fields, 0, 5),
+                'footer' => [
+                    'footer_type' => 'custom_text',
+                    'text' => 'Filter Internal Tools',
+                ],
+            ],
+        ];
     }
 
     /**
@@ -304,9 +314,15 @@ final class AsanaAppService
             }
         }
 
-        $date = is_string($values['date'] ?? null) && $values['date'] !== ''
-            ? Carbon::parse($values['date'])->toDateString()
-            : today()->toDateString();
+        $dateInput = is_string($values['date'] ?? null) ? trim($values['date']) : '';
+        $date = today()->toDateString();
+        if ($dateInput !== '') {
+            $parsed = \DateTimeImmutable::createFromFormat('Y-m-d', $dateInput);
+            if ($parsed === false || $parsed->format('Y-m-d') !== $dateInput) {
+                return ['error' => 'Enter the date as YYYY-MM-DD.'];
+            }
+            $date = $dateInput;
+        }
 
         // Only link the Asana task when the chosen project is actually linked
         // to this task's board — otherwise log without the gid (subject to the
@@ -338,7 +354,7 @@ final class AsanaAppService
             $this->associations->remember($user, $boardGid, $projectId, $taskId);
         }
 
-        Cache::forget('asana_app_widget_'.$taskGid.'_'.$user->id);
+        Cache::forget('asana_app_widget_'.$taskGid);
 
         return $this->attachmentResource($taskGid);
     }
@@ -354,7 +370,7 @@ final class AsanaAppService
         }
 
         $this->timeEntries->stopTimer($entry);
-        Cache::forget('asana_app_widget_'.$taskGid.'_'.$user->id);
+        Cache::forget('asana_app_widget_'.$taskGid);
 
         return $this->attachmentResource($taskGid);
     }

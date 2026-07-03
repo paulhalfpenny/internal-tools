@@ -242,6 +242,25 @@ test('submit requires hours unless starting a timer', function () {
         ->and(TimeEntry::count())->toBe(0);
 });
 
+test('submit rejects an unparseable date with a form error instead of a 500', function () {
+    [$user, $project, $task] = asanaAppSetup();
+
+    $response = signedPost('/asana-app/submit', [
+        'task' => 'AT1',
+        'user' => 'AU1',
+        'values' => [
+            'project' => (string) $project->id,
+            'task' => (string) $task->id,
+            'hours' => '1',
+            'date' => 'not-a-date',
+            'timer' => [],
+        ],
+    ])->assertOk();
+
+    expect($response->json('error'))->toContain('date')
+        ->and(TimeEntry::count())->toBe(0);
+});
+
 test('submit stores no asana gid when the chosen project is not linked to the board', function () {
     [$user, , $task] = asanaAppSetup();
 
@@ -349,6 +368,31 @@ test('widget reports totals, own time, and a running timer pill', function () {
     expect($fields['Total logged']['text'])->toBe('3.5 hrs')
         ->and($fields['Your time']['text'])->toBe('1.5 hrs')
         ->and($fields['Timer']['text'])->toContain($other->name);
+});
+
+test('widget totals refresh for other viewers immediately after a submit', function () {
+    [$user, $project, $task] = asanaAppSetup();
+    $colleague = User::factory()->create(['asana_user_gid' => 'AU2', 'default_hourly_rate' => 100]);
+
+    // Colleague opens the task first — widget aggregates get cached.
+    $before = collect(signedGet('/asana-app/widget', [
+        'user' => 'AU2',
+        'resource_url' => 'https://internal.filter.agency/asana-app/tasks/AT1',
+    ])->json('metadata.fields'))->keyBy('name');
+    expect($before['Total logged']['text'])->toBe('0.0 hrs');
+
+    signedPost('/asana-app/submit', [
+        'task' => 'AT1',
+        'user' => 'AU1',
+        'values' => ['project' => (string) $project->id, 'task' => (string) $task->id, 'hours' => '2', 'timer' => []],
+    ])->assertOk();
+
+    // Same colleague, straight after: must see the new total, not a 60s-stale cache.
+    $after = collect(signedGet('/asana-app/widget', [
+        'user' => 'AU2',
+        'resource_url' => 'https://internal.filter.agency/asana-app/tasks/AT1',
+    ])->json('metadata.fields'))->keyBy('name');
+    expect($after['Total logged']['text'])->toBe('2.0 hrs');
 });
 
 test('widget still renders totals for viewers without a linked account', function () {
