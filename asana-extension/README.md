@@ -1,10 +1,12 @@
 # Filter Internal Tools — Asana extension
 
-Adds a **Log time** button to Asana's task toolbar. Clicking it opens an
-in-page overlay (Harvest-style) with the entry modal already open and
+Adds a **Log time** button to Asana's task toolbar. Clicking it opens a
+native `<dialog>` (Harvest-style) hosting the compact log-time form,
 prefilled for the task (mapped project, remembered task, Asana link set).
-The overlay closes itself when the entry saves, or via ✕ / Esc / clicking
-outside; "Open in tab" is the fallback if login-in-iframe is ever blocked.
+The dialog sizes itself to the form (the embed page reports its height
+over postMessage), closes on save/Cancel/Esc/backdrop click, and the
+form's "My timesheet" link is the fallback if login-in-iframe is ever
+blocked.
 
 Spec: [docs/superpowers/specs/2026-07-03-asana-browser-extension-design.md](../docs/superpowers/specs/2026-07-03-asana-browser-extension-design.md)
 

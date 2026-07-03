@@ -1,11 +1,12 @@
 // Filter Internal Tools — "Log time" button for Asana tasks.
 //
 // Injects a button into the task-details toolbar. Clicking it opens a
-// centered in-page overlay (iframe) hosting the compact log-time form for
-// the current task (/asana-app/tasks/{gid}). The app
-// posts 'filter-log-time:saved' back when the entry saves so the overlay
-// closes itself. Requires the app to send SameSite=None session cookies
-// and a frame-ancestors policy allowing app.asana.com.
+// native <dialog> (Harvest-style) hosting the compact log-time form for
+// the current task (/asana-app/tasks/{gid}) in an iframe. The embed page
+// drives the dialog over postMessage: it reports its content height,
+// asks to close on Cancel, and announces saves so the dialog dismisses
+// itself. Requires the app to send SameSite=None session cookies and a
+// frame-ancestors policy allowing app.asana.com.
 //
 // Asana is a SPA whose DOM changes without warning; everything here is
 // defensive. If injection fails, the extension does nothing visible and
@@ -16,7 +17,16 @@
 
   const BASE_URL = 'https://internal.filter.agency';
   const BUTTON_ID = 'filter-log-time-button';
-  const OVERLAY_ID = 'filter-log-time-overlay';
+  const DIALOG_ID = 'filter-log-time-dialog';
+
+  // ::backdrop can't be styled inline; one stylesheet for the dialog shell.
+  const style = document.createElement('style');
+  style.textContent =
+    '#' + DIALOG_ID + '::backdrop{background:rgba(0,0,0,0.4);}' +
+    '#' + DIALOG_ID + '{width:520px;max-width:calc(100vw - 32px);' +
+    'height:560px;max-height:calc(100vh - 64px);padding:0;border:none;' +
+    'border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.28);overflow:hidden;}';
+  document.head.appendChild(style);
 
   // The current task gid, from the URL. Asana URL shapes seen in the wild:
   //   /1/{workspace}/project/{project}/task/{task}
@@ -83,110 +93,66 @@
       event.preventDefault();
       event.stopPropagation();
 
-      if (document.getElementById(OVERLAY_ID)) {
-        closeOverlay();
+      if (document.getElementById(DIALOG_ID)) {
+        closeDialog();
         return;
       }
 
       const gid = currentTaskGid() || taskGid;
-      if (gid) openOverlay(gid);
+      if (gid) openDialog(gid);
     });
 
     return button;
   }
 
-  function closeOverlay() {
-    const overlay = document.getElementById(OVERLAY_ID);
-    if (overlay) overlay.remove();
-    document.removeEventListener('keydown', onOverlayKeydown, true);
-    document.removeEventListener('pointerdown', onOverlayPointerdown, true);
+  function closeDialog() {
+    const dialog = document.getElementById(DIALOG_ID);
+    if (dialog) dialog.close();
   }
 
-  function onOverlayKeydown(event) {
-    if (event.key === 'Escape') closeOverlay();
-  }
+  // Native <dialog> gives us the centered top-layer panel, dimmed backdrop,
+  // Esc-to-close and focus containment for free. The embed page inside the
+  // iframe reports its height so the panel hugs the form like Harvest's.
+  function openDialog(gid) {
+    closeDialog();
 
-  function onOverlayPointerdown(event) {
-    if (event.target === document.getElementById(OVERLAY_ID)) closeOverlay();
-  }
-
-  // Harvest-style panel: centered over a dimmed backdrop, hosting the
-  // compact log-time form in an iframe. The user's normal Internal Tools
-  // session applies (cookies are SameSite=None); if they're logged out the
-  // login screen renders in the panel, or they can pop out to a tab.
-  function openOverlay(gid) {
-    closeOverlay();
-
-    const url = BASE_URL + '/asana-app/tasks/' + encodeURIComponent(gid);
-
-    const backdrop = document.createElement('div');
-    backdrop.id = OVERLAY_ID;
-    backdrop.style.cssText = [
-      'position:fixed', 'inset:0', 'z-index:2147483000',
-      'display:flex', 'align-items:center', 'justify-content:center',
-      'background:rgba(0,0,0,0.4)',
-    ].join(';');
-
-    const overlay = document.createElement('div');
-    overlay.style.cssText = [
-      'width:520px', 'max-width:calc(100vw - 32px)',
-      'height:560px', 'max-height:calc(100vh - 64px)',
-      'display:flex', 'flex-direction:column', 'overflow:hidden',
-      'background:#fff', 'border-radius:12px',
-      'box-shadow:0 12px 40px rgba(0,0,0,0.28)',
-    ].join(';');
-
-    const header = document.createElement('div');
-    header.style.cssText = [
-      'display:flex', 'align-items:center', 'justify-content:space-between',
-      'padding:10px 14px', 'border-bottom:1px solid #e8e8e8',
-      'font:600 13px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
-      'color:#1e1f21', 'flex:none',
-    ].join(';');
-
-    const title = document.createElement('span');
-    title.textContent = 'Log time — Filter Internal Tools';
-
-    const actions = document.createElement('span');
-    actions.style.cssText = 'display:inline-flex;align-items:center;gap:12px;';
-
-    const popOut = document.createElement('a');
-    popOut.href = url;
-    popOut.target = '_blank';
-    popOut.rel = 'noopener';
-    popOut.textContent = 'Open in tab ↗';
-    popOut.style.cssText = 'font-weight:400;font-size:12px;color:#6d6e6f;text-decoration:none;';
-    popOut.addEventListener('click', () => closeOverlay());
-
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.setAttribute('aria-label', 'Close');
-    close.textContent = '✕';
-    close.style.cssText = [
-      'border:none', 'background:transparent', 'cursor:pointer',
-      'font-size:14px', 'color:#6d6e6f', 'padding:2px 4px', 'line-height:1',
-    ].join(';');
-    close.addEventListener('click', () => closeOverlay());
-
-    actions.append(popOut, close);
-    header.append(title, actions);
+    const dialog = document.createElement('dialog');
+    dialog.id = DIALOG_ID;
 
     const frame = document.createElement('iframe');
-    frame.src = url;
-    frame.style.cssText = 'flex:1;width:100%;border:none;';
+    frame.src = BASE_URL + '/asana-app/tasks/' + encodeURIComponent(gid);
+    frame.style.cssText = 'display:block;width:100%;height:100%;border:none;';
+    dialog.appendChild(frame);
 
-    overlay.append(header, frame);
-    backdrop.appendChild(overlay);
-    document.body.appendChild(backdrop);
+    // A click on the backdrop lands on the dialog element itself.
+    dialog.addEventListener('click', function (event) {
+      if (event.target === dialog) dialog.close();
+    });
+    dialog.addEventListener('close', function () {
+      dialog.remove();
+    });
 
-    document.addEventListener('keydown', onOverlayKeydown, true);
-    document.addEventListener('pointerdown', onOverlayPointerdown, true);
+    document.body.appendChild(dialog);
+    dialog.showModal();
   }
 
-  // The app posts this after a successful save (see day-view.blade.php).
+  // Messages from the embed page (see asana-log-time.blade.php).
   window.addEventListener('message', function (event) {
-    if (event.origin === BASE_URL && event.data === 'filter-log-time:saved') {
-      setTimeout(closeOverlay, 600);
+    if (event.origin !== BASE_URL) return;
+
+    const type = typeof event.data === 'string' ? event.data : event.data && event.data.type;
+
+    if (type === 'filter-log-time:saved') {
+      // Leave the success state visible for a beat before dismissing.
+      setTimeout(closeDialog, 900);
+    } else if (type === 'filter-log-time:close') {
+      closeDialog();
+    } else if (type === 'filter-log-time:height' && typeof event.data.height === 'number') {
+      const dialog = document.getElementById(DIALOG_ID);
+      if (dialog) {
+        const height = Math.max(180, Math.min(event.data.height, window.innerHeight - 64));
+        dialog.style.height = height + 'px';
+      }
     }
   });
 
