@@ -138,6 +138,7 @@
                             <th class="text-left px-4 py-3 font-medium">Date</th>
                             <th class="text-left px-4 py-3 font-medium">User</th>
                             <th class="text-left px-4 py-3 font-medium">Task</th>
+                            <th class="text-left px-4 py-3 font-medium">Asana task</th>
                             <th class="text-right px-4 py-3 font-medium">Hours</th>
                             <th class="text-left px-4 py-3 font-medium">Notes</th>
                         </tr>
@@ -148,6 +149,7 @@
                                 <td class="px-4 py-3 tabular-nums text-gray-500">{{ $entry->spent_on->format('d M Y') }}</td>
                                 <td class="px-4 py-3 font-medium text-gray-900">{{ $entry->user?->name }}</td>
                                 <td class="px-4 py-3 text-gray-500">{{ $entry->task?->name }}</td>
+                                <td class="px-4 py-3 text-gray-500 truncate max-w-xs">{{ $entry->asanaTask?->name ?? '—' }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums">{{ \App\Domain\TimeTracking\HoursFormatter::asDecimal((float) $entry->hours) }}</td>
                                 <td class="px-4 py-3 text-gray-500 truncate max-w-xs">{{ $entry->notes }}</td>
                             </tr>

@@ -5,6 +5,8 @@ use App\Enums\BudgetType;
 use App\Enums\Role;
 use App\Livewire\Reports\ProjectBudget;
 use App\Livewire\Reports\ProjectsReport;
+use App\Models\AsanaProject;
+use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
@@ -104,6 +106,29 @@ test('budget page lists time entries for this project only, with who/what/when',
         ->assertSee('Kickoff call')
         ->assertSee('2.5')
         ->assertDontSee('Should not appear');
+});
+
+test('budget page shows the linked Asana task for entries that have one', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $user = User::factory()->create();
+    $task = Task::factory()->create();
+
+    $project = Project::factory()->create([
+        'budget_type' => BudgetType::MonthlyCi,
+        'budget_amount' => 500.00,
+        'budget_starts_on' => '2026-04-01',
+    ]);
+
+    AsanaProject::create(['gid' => 'AP1', 'workspace_gid' => 'WS1', 'name' => 'Asana AP1', 'is_archived' => false]);
+    AsanaTask::create(['gid' => 'AT1', 'asana_project_gid' => 'AP1', 'name' => 'Fix the header bug', 'is_completed' => false]);
+
+    budgetReportEntry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 1.0, 'asana_task_gid' => 'AT1']);
+    budgetReportEntry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 2.0, 'asana_task_gid' => null]);
+
+    $this->actingAs($admin);
+
+    Livewire::test(ProjectBudget::class, ['project' => $project])
+        ->assertSee('Fix the header bug');
 });
 
 test('budget page paginates time entries', function () {
