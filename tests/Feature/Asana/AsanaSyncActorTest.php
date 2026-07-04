@@ -25,6 +25,15 @@ test('designating a sync actor clears the previous one', function () {
         ->toBe([$second->id]);
 });
 
+test('re-designating the current actor keeps exactly one', function () {
+    $bot = User::factory()->create();
+    User::designateAsanaSyncActor($bot);
+    User::designateAsanaSyncActor($bot->fresh());
+
+    expect(User::asanaSyncActor()?->id)->toBe($bot->id);
+    expect(User::query()->where('is_asana_sync_actor', true)->count())->toBe(1);
+});
+
 test('designating null clears any existing sync actor', function () {
     $bot = User::factory()->create();
     User::designateAsanaSyncActor($bot);

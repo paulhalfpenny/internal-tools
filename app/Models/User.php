@@ -132,7 +132,7 @@ class User extends Authenticatable implements OAuthenticatable
             static::query()->where('is_asana_sync_actor', true)->update(['is_asana_sync_actor' => false]);
 
             if ($user !== null) {
-                $user->forceFill(['is_asana_sync_actor' => true])->save();
+                static::query()->whereKey($user->getKey())->update(['is_asana_sync_actor' => true]);
             }
         });
     }
