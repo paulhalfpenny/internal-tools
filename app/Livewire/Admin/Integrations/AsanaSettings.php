@@ -17,9 +17,27 @@ use Livewire\Component;
 #[Layout('layouts.app')]
 class AsanaSettings extends Component
 {
+    public ?int $syncActorUserId = null;
+
     public function mount(): void
     {
         Gate::authorize('access-admin');
+        $this->syncActorUserId = User::asanaSyncActor()?->id;
+    }
+
+    public function updatedSyncActorUserId(mixed $value): void
+    {
+        Gate::authorize('access-admin');
+
+        $user = $value
+            ? User::query()->whereNotNull('asana_access_token')->find((int) $value)
+            : null;
+
+        User::designateAsanaSyncActor($user);
+
+        session()->flash('asana_status', $user
+            ? 'Asana sync account set to '.$user->name.'.'
+            : 'Asana sync account cleared.');
     }
 
     public function pullProjects(): void
@@ -74,6 +92,11 @@ class AsanaSettings extends Component
             'lastSuccessfulTaskPull' => $lastSuccessfulTaskPull,
             'workerLikelyRunning' => $workerLikelyRunning,
             'recentLogs' => AsanaSyncLog::query()->orderByDesc('id')->limit(20)->get(),
+            'syncActorFallbackRecently' => AsanaSyncLog::query()
+                ->where('event', 'asana.sync_hours.actor_fallback')
+                ->where('created_at', '>=', now()->subDay())
+                ->exists(),
+            'syncActorUserId' => $this->syncActorUserId,
             'connectedUsers' => User::query()
                 ->whereNotNull('asana_access_token')
                 ->whereNotNull('asana_user_gid')
