@@ -165,3 +165,24 @@ Or trigger the global refresh via SSH:
 ```bash
 php artisan asana:refresh-tasks
 ```
+
+## Dedicated hours-sync account
+
+Hours-tracked updates pushed to Asana are attributed to whichever account is
+designated as the **sync account** in Admin → Asana Settings. Use a dedicated
+bot account so changes aren't credited to a random admin.
+
+One-time setup:
+
+1. Create the Asana account `internaltools@filteragency.com`.
+2. Add it to the Filter workspace and to every board whose projects sync hours,
+   and authorise the Internal Tools Asana app for it.
+3. Sign into Internal Tools as that account and connect Asana via the profile
+   page (the normal OAuth flow).
+4. As an admin, open **Admin → Asana Settings** and select the bot account under
+   **Asana sync account**.
+
+If the bot account's token later expires or is revoked, hours keep syncing under
+an admin's identity and the settings page shows a warning banner
+(`asana.sync_hours.actor_fallback` in the sync log). Reconnect the bot account
+and reselect it to restore correct attribution.
