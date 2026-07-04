@@ -96,7 +96,6 @@ class AsanaSettings extends Component
                 ->where('event', 'asana.sync_hours.actor_fallback')
                 ->where('created_at', '>=', now()->subDay())
                 ->exists(),
-            'syncActorUserId' => $this->syncActorUserId,
             'connectedUsers' => User::query()
                 ->whereNotNull('asana_access_token')
                 ->whereNotNull('asana_user_gid')

@@ -186,3 +186,10 @@ If the bot account's token later expires or is revoked, hours keep syncing under
 an admin's identity and the settings page shows a warning banner
 (`asana.sync_hours.actor_fallback` in the sync log). Reconnect the bot account
 and reselect it to restore correct attribution.
+
+Note the banner can lag by one sync: if the bot's token has *expired* (rather
+than being cleared), the first sync after expiry surfaces as an
+`asana.sync_hours.failed` job failure while the token refresh is attempted. Once
+the refresh fails and the token is cleared, the following sync falls back to an
+admin and raises the amber banner. So a freshly expired bot token shows up first
+as a failed job, then as the banner on the next run.
