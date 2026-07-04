@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Laravel\Passport\Contracts\OAuthenticatable;
 use Laravel\Passport\HasApiTokens;
 
@@ -27,6 +28,7 @@ use Laravel\Passport\HasApiTokens;
  * @property Carbon|null $asana_token_expires_at
  * @property string|null $asana_user_gid
  * @property string|null $asana_workspace_gid
+ * @property bool $is_asana_sync_actor
  * @property string|null $slack_user_id
  * @property Carbon|null $notifications_paused_until
  * @property bool $email_notifications_enabled
@@ -61,6 +63,7 @@ class User extends Authenticatable implements OAuthenticatable
         'asana_token_expires_at',
         'asana_user_gid',
         'asana_workspace_gid',
+        'is_asana_sync_actor',
         'slack_user_id',
         'email',
         'name',
@@ -106,6 +109,7 @@ class User extends Authenticatable implements OAuthenticatable
             'asana_access_token' => 'encrypted',
             'asana_refresh_token' => 'encrypted',
             'asana_token_expires_at' => 'datetime',
+            'is_asana_sync_actor' => 'boolean',
             'notifications_paused_until' => 'date',
             'email_notifications_enabled' => 'boolean',
             'slack_notifications_enabled' => 'boolean',
@@ -115,6 +119,22 @@ class User extends Authenticatable implements OAuthenticatable
     public function asanaConnected(): bool
     {
         return $this->asana_access_token !== null && $this->asana_user_gid !== null;
+    }
+
+    public static function asanaSyncActor(): ?self
+    {
+        return static::query()->where('is_asana_sync_actor', true)->first();
+    }
+
+    public static function designateAsanaSyncActor(?self $user): void
+    {
+        DB::transaction(function () use ($user) {
+            static::query()->where('is_asana_sync_actor', true)->update(['is_asana_sync_actor' => false]);
+
+            if ($user !== null) {
+                $user->forceFill(['is_asana_sync_actor' => true])->save();
+            }
+        });
     }
 
     /** @return BelongsToMany<Project, $this> */
