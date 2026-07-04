@@ -157,13 +157,34 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
 
     private function pickActor(string $workspaceGid): ?User
     {
-        return User::query()
+        $designated = User::asanaSyncActor();
+
+        if ($designated !== null
+            && $designated->asana_access_token !== null
+            && $designated->asana_workspace_gid === $workspaceGid) {
+            return $designated;
+        }
+
+        $fallback = User::query()
             ->whereNotNull('asana_access_token')
             ->whereNotNull('asana_user_gid')
             ->where('asana_workspace_gid', $workspaceGid)
             ->where('is_active', true)
             ->orderByRaw('CASE WHEN role = "admin" THEN 0 WHEN role = "manager" THEN 1 ELSE 2 END')
             ->first();
+
+        if ($designated !== null) {
+            AsanaSyncLog::warn('asana.sync_hours.actor_fallback', [
+                'asana_task_gid' => $this->asanaTaskGid,
+                'project_id' => $this->projectId,
+                'designated_user_id' => $designated->id,
+                'reason' => $designated->asana_access_token === null
+                    ? 'actor_no_token'
+                    : 'actor_workspace_mismatch',
+            ]);
+        }
+
+        return $fallback;
     }
 
     private function markEntriesError(string $message): void

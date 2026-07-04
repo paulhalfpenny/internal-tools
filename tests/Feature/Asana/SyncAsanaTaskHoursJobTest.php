@@ -3,6 +3,7 @@
 use App\Enums\Role;
 use App\Jobs\Asana\SyncAsanaTaskHoursJob;
 use App\Models\AsanaProject;
+use App\Models\AsanaSyncLog;
 use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\Task;
@@ -225,4 +226,114 @@ test('soft-fails when the asana task belongs to a board that is no longer linked
     );
 
     expect($entry->fresh()->asana_sync_error)->toContain('no longer linked');
+});
+
+test('prefers the designated sync actor over admins', function () {
+    $project = asanaTestLinkedProject();
+    asanaTestConnectedAdmin(); // token "tok"
+    $bot = User::factory()->create([
+        'role' => Role::User,
+        'asana_access_token' => 'bottok',
+        'asana_token_expires_at' => now()->addHour(),
+        'asana_user_gid' => 'bot-gid',
+        'asana_workspace_gid' => 'WS1',
+    ]);
+    User::designateAsanaSyncActor($bot);
+
+    $task = Task::factory()->create();
+    Http::preventStrayRequests();
+    Http::fake(['app.asana.com/api/1.0/tasks/T1' => Http::response(['data' => []])]);
+
+    asanaTestEnsureCachedTask('T1');
+    asanaTestEntry($project, $task, $bot, 'T1', 1.0);
+
+    (new SyncAsanaTaskHoursJob('T1', $project->id))->handle(
+        app(AsanaService::class),
+        app(AsanaTaskHoursAggregator::class),
+    );
+
+    Http::assertSent(fn ($r) => str_contains($r->url(), '/tasks/T1')
+        && $r->hasHeader('Authorization', 'Bearer bottok'));
+
+    expect(AsanaSyncLog::query()->where('event', 'asana.sync_hours.actor_fallback')->exists())
+        ->toBeFalse();
+});
+
+test('falls back to an admin and warns when the designated actor has no token', function () {
+    $project = asanaTestLinkedProject();
+    asanaTestConnectedAdmin(); // token "tok"
+    $bot = User::factory()->create([
+        'role' => Role::User,
+        'asana_access_token' => null,
+        'asana_workspace_gid' => 'WS1',
+    ]);
+    User::designateAsanaSyncActor($bot);
+
+    $task = Task::factory()->create();
+    Http::preventStrayRequests();
+    Http::fake(['app.asana.com/api/1.0/tasks/T1' => Http::response(['data' => []])]);
+
+    asanaTestEnsureCachedTask('T1');
+    asanaTestEntry($project, $task, $bot, 'T1', 1.0);
+
+    (new SyncAsanaTaskHoursJob('T1', $project->id))->handle(
+        app(AsanaService::class),
+        app(AsanaTaskHoursAggregator::class),
+    );
+
+    Http::assertSent(fn ($r) => $r->hasHeader('Authorization', 'Bearer tok'));
+
+    $log = AsanaSyncLog::query()->where('event', 'asana.sync_hours.actor_fallback')->first();
+    expect($log)->not->toBeNull();
+    expect($log->context['reason'])->toBe('actor_no_token');
+});
+
+test('falls back and warns when the designated actor is in another workspace', function () {
+    $project = asanaTestLinkedProject();
+    asanaTestConnectedAdmin(); // token "tok", workspace WS1
+    $bot = User::factory()->create([
+        'role' => Role::User,
+        'asana_access_token' => 'bottok',
+        'asana_token_expires_at' => now()->addHour(),
+        'asana_user_gid' => 'bot-gid',
+        'asana_workspace_gid' => 'WS-OTHER',
+    ]);
+    User::designateAsanaSyncActor($bot);
+
+    $task = Task::factory()->create();
+    Http::preventStrayRequests();
+    Http::fake(['app.asana.com/api/1.0/tasks/T1' => Http::response(['data' => []])]);
+
+    asanaTestEnsureCachedTask('T1');
+    asanaTestEntry($project, $task, $bot, 'T1', 1.0);
+
+    (new SyncAsanaTaskHoursJob('T1', $project->id))->handle(
+        app(AsanaService::class),
+        app(AsanaTaskHoursAggregator::class),
+    );
+
+    Http::assertSent(fn ($r) => $r->hasHeader('Authorization', 'Bearer tok'));
+
+    $log = AsanaSyncLog::query()->where('event', 'asana.sync_hours.actor_fallback')->first();
+    expect($log?->context['reason'])->toBe('actor_workspace_mismatch');
+});
+
+test('does not warn on fallback when no sync actor is designated', function () {
+    $project = asanaTestLinkedProject();
+    $admin = asanaTestConnectedAdmin(); // token "tok"
+    $task = Task::factory()->create();
+
+    Http::preventStrayRequests();
+    Http::fake(['app.asana.com/api/1.0/tasks/T1' => Http::response(['data' => []])]);
+
+    asanaTestEnsureCachedTask('T1');
+    asanaTestEntry($project, $task, $admin, 'T1', 1.0);
+
+    (new SyncAsanaTaskHoursJob('T1', $project->id))->handle(
+        app(AsanaService::class),
+        app(AsanaTaskHoursAggregator::class),
+    );
+
+    expect(AsanaSyncLog::query()->where('event', 'asana.sync_hours.actor_fallback')->exists())
+        ->toBeFalse();
 });

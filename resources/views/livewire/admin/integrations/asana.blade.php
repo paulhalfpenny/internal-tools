@@ -1,4 +1,11 @@
 <div>
+    @if($syncActorFallbackRecently)
+        <div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            The designated Asana sync account is disconnected — hours are being
+            attributed to an admin until it is reconnected. Reconnect it, then
+            reselect it below.
+        </div>
+    @endif
     <div class="mb-6">
         <h1 class="text-xl font-semibold text-gray-900">Asana integration</h1>
         <p class="text-sm text-gray-500 mt-1">Connection state and recent sync activity. Each user authorises Asana on their profile page.</p>
@@ -80,6 +87,22 @@
                 @endforeach
             </ul>
         @endif
+        <div class="mt-4 pt-4 border-t border-gray-100">
+            <label for="syncActor" class="block text-xs font-medium text-gray-700 mb-1">
+                Asana sync account
+            </label>
+            <p class="text-xs text-gray-500 mb-2">
+                Hours-tracked updates in Asana are attributed to this account. Leave as
+                “None” to fall back to an admin.
+            </p>
+            <select id="syncActor" wire:model.live="syncActorUserId"
+                    class="w-full max-w-sm text-sm border-gray-300 rounded">
+                <option value="">None (fall back to an admin)</option>
+                @foreach($connectedUsers as $u)
+                    <option value="{{ $u->id }}">{{ $u->name }} ({{ $u->email }})</option>
+                @endforeach
+            </select>
+        </div>
     </div>
 
     <div class="bg-white rounded-lg border border-gray-200 p-6">
