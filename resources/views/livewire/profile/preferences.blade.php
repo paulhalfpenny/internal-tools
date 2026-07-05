@@ -5,7 +5,17 @@
     </div>
 
     <div class="bg-white rounded-lg border border-gray-200 p-6 max-w-xl">
-        <label class="block text-sm font-medium text-gray-700 mb-2">Time display format</label>
+        <div class="flex items-center justify-between mb-2">
+            <label class="block text-sm font-medium text-gray-700">Time display format</label>
+            <span x-data="{ saved: false, timeout: null }"
+                  x-on:preference-saved.window="saved = true; clearTimeout(timeout); timeout = setTimeout(() => saved = false, 2000)"
+                  x-show="saved"
+                  x-transition.opacity.duration.300ms
+                  class="text-xs font-medium text-green-600"
+                  style="display: none"
+                  role="status"
+                  aria-live="polite">Saved ✓</span>
+        </div>
         <p class="text-xs text-gray-500 mb-3">Applies to your timesheet totals and entries. You can still type hours as decimal (e.g. 0.25) or HH:MM (e.g. 0:15) either way.</p>
 
         <div class="space-y-2">

@@ -57,6 +57,24 @@ test('setting an invalid format is ignored', function () {
     expect($user->fresh()->hoursDisplayFormat())->toBe(HoursFormatter::FORMAT_DECIMAL);
 });
 
+test('saving a valid format dispatches a saved event', function () {
+    $user = User::factory()->create(['schedule_preferences' => null]);
+    $this->actingAs($user);
+
+    Livewire::test(Preferences::class)
+        ->call('setFormat', HoursFormatter::FORMAT_HHMM)
+        ->assertDispatched('preference-saved');
+});
+
+test('an ignored invalid format does not dispatch a saved event', function () {
+    $user = User::factory()->create(['schedule_preferences' => null]);
+    $this->actingAs($user);
+
+    Livewire::test(Preferences::class)
+        ->call('setFormat', 'nonsense')
+        ->assertNotDispatched('preference-saved');
+});
+
 test('switching preference does not clobber other schedule preferences', function () {
     $user = User::factory()->create(['schedule_preferences' => ['some_other_key' => 'keep-me']]);
     $this->actingAs($user);

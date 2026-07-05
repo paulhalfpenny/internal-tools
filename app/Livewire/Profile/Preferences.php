@@ -30,6 +30,7 @@ class Preferences extends Component
 
         $user->forceFill(['schedule_preferences' => $preferences])->save();
         $this->hoursFormat = $format;
+        $this->dispatch('preference-saved');
     }
 
     public function render(): View
