@@ -1,5 +1,6 @@
+@use('App\Domain\TimeTracking\HoursFormatter')
 <div>
-    @include('livewire.reports.partials.header', ['title' => 'Projects', 'totals' => $totals])
+    @include('livewire.reports.partials.header', ['title' => 'Projects', 'totals' => $totals, 'hoursFormat' => $hoursFormat])
 
     <div class="bg-white rounded-lg border border-gray-200 overflow-x-auto">
         @if($rows->isEmpty())
@@ -47,12 +48,12 @@
                             {{ $row->label }}
                         @endif
                     </td>
-                    <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ number_format($row->total_hours, 1) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ HoursFormatter::format((float) $row->total_hours, $hoursFormat) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->billable_amount, 0) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100" title="{{ $tooltip }}">{{ $b ? '£'.number_format($b->budgetAmount, 0) : '—' }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">{{ $b ? '£'.number_format($b->actualAmount, 0) : '—' }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums">{{ $b && $b->budgetHours !== null ? number_format($b->budgetHours, 1) : '—' }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums">{{ $b ? number_format($b->actualHours, 1) : '—' }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums">{{ $b && $b->budgetHours !== null ? HoursFormatter::format((float) $b->budgetHours, $hoursFormat) : '—' }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums">{{ $b ? HoursFormatter::format((float) $b->actualHours, $hoursFormat) : '—' }}</td>
                     <td class="px-4 py-3 text-right tabular-nums {{ $pctClass }}">{{ $pct === null ? '—' : number_format($pct, 1).'%' }}</td>
                 </tr>
                 @endforeach
@@ -60,7 +61,7 @@
             <tfoot class="border-t border-gray-200 bg-gray-50">
                 <tr class="text-sm font-semibold text-gray-900">
                     <td class="px-4 py-3" colspan="2">Total</td>
-                    <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ number_format($totals->totalHours, 1) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ HoursFormatter::format((float) $totals->totalHours, $hoursFormat) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($totals->billableAmount, 0) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100" colspan="5"></td>
                 </tr>

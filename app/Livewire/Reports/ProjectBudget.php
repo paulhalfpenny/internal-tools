@@ -5,8 +5,10 @@ namespace App\Livewire\Reports;
 use App\Domain\Budgeting\ProjectBudgetCalculator;
 use App\Domain\Reporting\DetailedTimeCsvExport;
 use App\Domain\Reporting\TimeReportQuery;
+use App\Domain\TimeTracking\HoursFormatter;
 use App\Models\Project;
 use App\Models\TimeEntry;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -60,10 +62,14 @@ class ProjectBudget extends Component
             projectId: $this->project->id,
         ))->paginate();
 
+        /** @var User|null $user */
+        $user = auth()->user();
+
         return view('livewire.reports.project-budget', [
             'status' => $calculator->forProject($this->project),
             'monthlyRows' => $calculator->monthlyBreakdown($this->project),
             'entries' => $entries,
+            'hoursFormat' => $user?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_HHMM,
         ]);
     }
 

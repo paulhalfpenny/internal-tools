@@ -1,3 +1,4 @@
+@use('App\Domain\TimeTracking\HoursFormatter')
 <div>
     <div class="flex items-start justify-between mb-6">
         <div>
@@ -42,7 +43,7 @@
             <div class="bg-white rounded-lg border border-gray-200 p-4">
                 <div class="text-xs uppercase tracking-wide text-gray-500">This month spent</div>
                 <div class="text-base font-semibold text-gray-900 mt-1">£{{ number_format($thisMonthAmount, 2) }}</div>
-                <div class="text-xs text-gray-500 mt-0.5">{{ number_format($thisMonthHours, 1) }} hrs</div>
+                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::format((float) $thisMonthHours, $hoursFormat) }} hrs</div>
             </div>
             <div class="bg-white rounded-lg border border-gray-200 p-4">
                 <div class="text-xs uppercase tracking-wide text-gray-500">This month budget</div>
@@ -71,13 +72,13 @@
                 <div class="text-xs uppercase tracking-wide text-gray-500">Cumulative budget</div>
                 <div class="text-base font-semibold text-gray-900 mt-1">£{{ number_format($status->budgetAmount, 2) }}</div>
                 @if($status->budgetHours !== null)
-                    <div class="text-xs text-gray-500 mt-0.5">{{ number_format($status->budgetHours, 1) }} hrs target</div>
+                    <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::format((float) $status->budgetHours, $hoursFormat) }} hrs target</div>
                 @endif
             </div>
             <div class="bg-white rounded-lg border border-gray-200 p-4">
                 <div class="text-xs uppercase tracking-wide text-gray-500">Cumulative spent</div>
                 <div class="text-base font-semibold text-gray-900 mt-1">£{{ number_format($status->actualAmount, 2) }}</div>
-                <div class="text-xs text-gray-500 mt-0.5">{{ number_format($status->actualHours, 1) }} hrs</div>
+                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::format((float) $status->actualHours, $hoursFormat) }} hrs</div>
             </div>
             <div class="bg-white rounded-lg border border-gray-200 p-4">
                 <div class="text-xs uppercase tracking-wide text-gray-500">Variance</div>
@@ -116,7 +117,7 @@
                                 </td>
                                 <td class="px-4 py-3 text-right tabular-nums">{{ $row->month_budget > 0 ? '£'.number_format($row->month_budget, 2) : '—' }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->month_amount, 2) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ number_format($row->month_hours, 1) }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::format((float) $row->month_hours, $hoursFormat) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->running_budget, 2) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->running_amount, 2) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums {{ $varClass }}">£{{ number_format($row->running_variance, 2) }}</td>
@@ -159,7 +160,7 @@
                                         —
                                     @endif
                                 </td>
-                                <td class="px-4 py-3 text-right tabular-nums">{{ \App\Domain\TimeTracking\HoursFormatter::asDecimal((float) $entry->hours) }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums">{{ HoursFormatter::format((float) $entry->hours, $hoursFormat) }}</td>
                                 <td class="px-4 py-3 text-gray-500 truncate max-w-xs">{{ $entry->notes }}</td>
                             </tr>
                         @endforeach

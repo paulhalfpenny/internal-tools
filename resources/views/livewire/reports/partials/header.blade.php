@@ -1,4 +1,8 @@
-{{-- Report header: title, period selector, totals cards, filters --}}
+@use('App\Domain\TimeTracking\HoursFormatter')
+{{-- Report header: title, period selector, totals cards, filters.
+     $hoursFormat is optional and defaults to decimal so reports that have not
+     opted into HH:MM display are unaffected. --}}
+@php($hoursFormat = $hoursFormat ?? HoursFormatter::FORMAT_DECIMAL)
 <div class="flex items-center justify-between mb-6">
     <div class="flex items-center gap-3">
         @isset($backLink)
@@ -53,11 +57,11 @@
 <div class="mb-6" style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">
     <div class="bg-white rounded-lg border border-gray-200 p-4">
         <p class="text-xs text-gray-500 mb-1">Total hours</p>
-        <p class="text-2xl font-semibold text-gray-900">{{ number_format($totals->totalHours, 1) }}</p>
+        <p class="text-2xl font-semibold text-gray-900">{{ HoursFormatter::format((float) $totals->totalHours, $hoursFormat) }}</p>
     </div>
     <div class="bg-white rounded-lg border border-gray-200 p-4">
         <p class="text-xs text-gray-500 mb-1">Billable hours</p>
-        <p class="text-2xl font-semibold text-gray-900">{{ number_format($totals->billableHours, 1) }}</p>
+        <p class="text-2xl font-semibold text-gray-900">{{ HoursFormatter::format((float) $totals->billableHours, $hoursFormat) }}</p>
     </div>
     <div class="bg-white rounded-lg border border-gray-200 p-4">
         <p class="text-xs text-gray-500 mb-1">Billable %</p>
