@@ -101,8 +101,8 @@
             <thead class="bg-gray-50">
                 <tr>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Code</th>
-                    <th class="px-4 py-3 text-left font-medium text-gray-600">Project</th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Client</th>
+                    <th class="px-4 py-3 text-left font-medium text-gray-600">Project</th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Billable</th>
                     <th class="px-4 py-3"></th>
                 </tr>
@@ -111,8 +111,8 @@
                 @forelse($projects as $project)
                     <tr class="{{ $project->is_archived ? 'opacity-50' : '' }}">
                         <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ $project->code }}</td>
-                        <td class="px-4 py-3 font-medium">{{ $project->name }}</td>
                         <td class="px-4 py-3 text-gray-500">{{ $project->client->name }}</td>
+                        <td class="px-4 py-3 font-medium">{{ $project->name }}</td>
                         <td class="px-4 py-3">
                             <span class="text-xs px-2 py-0.5 rounded-full {{ $project->is_billable ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500' }}">
                                 {{ $project->is_billable ? 'Billable' : 'Non-billable' }}
