@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\GoogleController;
+use App\Http\Controllers\Diagnostics\PickerDiagnosticController;
 use App\Http\Controllers\Integrations\AsanaOAuthController;
 use App\Http\Controllers\Integrations\AsanaTimerStatusController;
 use App\Http\Controllers\Mcp\PendingActionController as McpPendingActionController;
@@ -64,6 +65,11 @@ Route::get('/asana-app/timer-status', AsanaTimerStatusController::class)
 // Authenticated routes
 Route::middleware('auth')->group(function () {
     Route::get('/', fn () => redirect()->route('timesheet'));
+
+    // Client-side diagnostic sink for the "dead task picker" investigation.
+    Route::post('/diagnostics/picker', [PickerDiagnosticController::class, 'store'])
+        ->name('diagnostics.picker')
+        ->middleware('throttle:20,1');
     // The compact log-time form rendered inside the browser extension's
     // overlay iframe on app.asana.com (also target of legacy Asana
     // attachment cards).
