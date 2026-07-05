@@ -13,7 +13,11 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 test('opening edit modal renders hours as decimal', function () {
-    $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
+    $user = User::factory()->create([
+        'role' => Role::User,
+        'default_hourly_rate' => 100,
+        'schedule_preferences' => ['hours_display_format' => 'decimal'],
+    ]);
     $this->actingAs($user);
 
     $project = Project::factory()->create(['default_hourly_rate' => 100]);
@@ -140,7 +144,11 @@ test('saving an edited entry closes the modal (no quick-add)', function () {
 });
 
 test('typing 0:15 saves as 0.25 hours and re-opens as decimal', function () {
-    $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
+    $user = User::factory()->create([
+        'role' => Role::User,
+        'default_hourly_rate' => 100,
+        'schedule_preferences' => ['hours_display_format' => 'decimal'],
+    ]);
     $this->actingAs($user);
 
     $project = Project::factory()->create(['default_hourly_rate' => 100]);

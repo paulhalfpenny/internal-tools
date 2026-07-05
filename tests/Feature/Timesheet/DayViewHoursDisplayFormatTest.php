@@ -36,7 +36,7 @@ test('day totals render as HH:MM when the user prefers that format', function ()
         ->assertSee('1:30');
 });
 
-test('day totals render as decimal by default', function () {
+test('day totals render as HH:MM by default', function () {
     $user = User::factory()->create(['role' => Role::User, 'default_hourly_rate' => 100]);
     $this->actingAs($user);
 
@@ -54,8 +54,7 @@ test('day totals render as decimal by default', function () {
     ]);
 
     Livewire::test(DayView::class)
-        ->assertSee('1.5')
-        ->assertDontSee('1:30');
+        ->assertSee('1:30');
 });
 
 test('opening edit modal prefills hoursInput as HH:MM when the user prefers that format', function () {

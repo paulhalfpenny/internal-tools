@@ -229,15 +229,17 @@ class User extends Authenticatable implements OAuthenticatable
 
     /**
      * How this user prefers time durations displayed: decimal hours (e.g.
-     * "2.8") or HH:MM (e.g. "2:48"). Stored in schedule_preferences.
+     * "2.8") or HH:MM (e.g. "2:48"). Stored in schedule_preferences. The
+     * default for everyone is HH:MM; only an explicit "decimal" preference
+     * opts out.
      */
     public function hoursDisplayFormat(): string
     {
         $value = $this->schedule_preferences['hours_display_format'] ?? null;
 
-        return $value === HoursFormatter::FORMAT_HHMM
-            ? HoursFormatter::FORMAT_HHMM
-            : HoursFormatter::FORMAT_DECIMAL;
+        return $value === HoursFormatter::FORMAT_DECIMAL
+            ? HoursFormatter::FORMAT_DECIMAL
+            : HoursFormatter::FORMAT_HHMM;
     }
 
     public function notificationsArePaused(?\DateTimeInterface $on = null): bool

@@ -11,7 +11,7 @@ use Livewire\Component;
 #[Layout('layouts.app')]
 class Preferences extends Component
 {
-    public string $hoursFormat = HoursFormatter::FORMAT_DECIMAL;
+    public string $hoursFormat = HoursFormatter::FORMAT_HHMM;
 
     public function mount(): void
     {

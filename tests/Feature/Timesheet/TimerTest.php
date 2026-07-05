@@ -145,7 +145,7 @@ test('day view renders elapsed time for a running timer', function () {
         $this->actingAs($user);
 
         Livewire::test(DayView::class)
-            ->assertSeeInOrder(['Running', '1.0']);
+            ->assertSeeInOrder(['Running', '1:00']);
     } finally {
         Carbon::setTestNow();
     }

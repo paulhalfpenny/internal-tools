@@ -120,8 +120,8 @@ test('week view groups existing entries into rows by (project, task)', function 
 
     $rowKey = weekViewRowKey($project, $task);
     Livewire::test(WeekView::class)
-        ->assertSet("cellValues.{$rowKey}.0", '1.0')
-        ->assertSet("cellValues.{$rowKey}.2", '2.0')
+        ->assertSet("cellValues.{$rowKey}.0", '1:00')
+        ->assertSet("cellValues.{$rowKey}.2", '2:00')
         ->assertSet("cellValues.{$rowKey}.1", '');
 });
 
@@ -147,7 +147,7 @@ test('week view sums same-day entries that only differ by notes', function () {
 
     $rowKey = weekViewRowKey($project, $task);
     $component = Livewire::test(WeekView::class)
-        ->assertSet("cellValues.{$rowKey}.0", '1.5');
+        ->assertSet("cellValues.{$rowKey}.0", '1:30');
 
     expect($component->viewData('dayTotals')[0])->toBe(1.5)
         ->and($component->viewData('weekTotal'))->toBe(1.5);
@@ -176,7 +176,7 @@ test('saving an unchanged summed week cell keeps the existing total', function (
     $rowKey = weekViewRowKey($project, $task);
 
     Livewire::test(WeekView::class)
-        ->assertSet("cellValues.{$rowKey}.0", '1.5')
+        ->assertSet("cellValues.{$rowKey}.0", '1:30')
         ->call('save');
 
     expect((float) TimeEntry::whereDate('spent_on', $monday)->sum('hours'))->toBe(1.5);
@@ -206,7 +206,7 @@ test('week view totals include elapsed time for a running timer', function () {
 
         $dayTotals = $component->viewData('dayTotals');
 
-        $component->assertSet("cellValues.{$rowKey}.2", '0.25');
+        $component->assertSet("cellValues.{$rowKey}.2", '0:15');
         expect($dayTotals[2])->toBe(1.0)
             ->and($component->viewData('weekTotal'))->toBe(1.0);
     } finally {
@@ -231,8 +231,8 @@ test('save creates new entries from filled cells', function () {
     expect(TimeEntry::whereDate('spent_on', $wednesday)->where('user_id', $user->id)->first()->hours)->toBe('3.00');
 
     Livewire::test(WeekView::class)
-        ->assertSet("cellValues.{$rowKey}.0", '2.0')
-        ->assertSet("cellValues.{$rowKey}.2", '3.0');
+        ->assertSet("cellValues.{$rowKey}.0", '2:00')
+        ->assertSet("cellValues.{$rowKey}.2", '3:00');
 });
 
 test('save keeps added rows that do not have time yet', function () {
@@ -449,8 +449,9 @@ test('week view cell values render as HH:MM when the user prefers that format', 
         ->assertSet("cellValues.{$rowKey}.0", '1:30');
 });
 
-test('week view cell values render as decimal by default', function () {
+test('week view cell values render as decimal when the user prefers that format', function () {
     [$user, $project, $task] = weekViewSetup();
+    $user->update(['schedule_preferences' => ['hours_display_format' => 'decimal']]);
     $this->actingAs($user);
 
     $monday = now()->startOfWeek()->toDateString();

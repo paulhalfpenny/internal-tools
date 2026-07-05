@@ -556,7 +556,7 @@ class WeekView extends Component
         /** @var User|null $authUser */
         $authUser = auth()->user();
 
-        return $authUser?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_DECIMAL;
+        return $authUser?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_HHMM;
     }
 
     public function render(): View

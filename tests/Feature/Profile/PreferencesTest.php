@@ -16,12 +16,12 @@ test('mounts with the users current hours display format', function () {
         ->assertSet('hoursFormat', HoursFormatter::FORMAT_HHMM);
 });
 
-test('defaults to decimal when no preference has been saved', function () {
+test('defaults to hhmm when no preference has been saved', function () {
     $user = User::factory()->create(['schedule_preferences' => null]);
     $this->actingAs($user);
 
     Livewire::test(Preferences::class)
-        ->assertSet('hoursFormat', HoursFormatter::FORMAT_DECIMAL);
+        ->assertSet('hoursFormat', HoursFormatter::FORMAT_HHMM);
 });
 
 test('user can switch their hours display format to hhmm', function () {
@@ -52,9 +52,9 @@ test('setting an invalid format is ignored', function () {
 
     Livewire::test(Preferences::class)
         ->call('setFormat', 'nonsense')
-        ->assertSet('hoursFormat', HoursFormatter::FORMAT_DECIMAL);
+        ->assertSet('hoursFormat', HoursFormatter::FORMAT_HHMM);
 
-    expect($user->fresh()->hoursDisplayFormat())->toBe(HoursFormatter::FORMAT_DECIMAL);
+    expect($user->fresh()->hoursDisplayFormat())->toBe(HoursFormatter::FORMAT_HHMM);
 });
 
 test('saving a valid format dispatches a saved event', function () {
