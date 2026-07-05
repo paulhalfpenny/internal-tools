@@ -43,6 +43,33 @@ test('pulling projects upserts and removes stale rows', function () {
     expect(AsanaProject::count())->toBe(2);
 });
 
+test('pulling projects keeps stale rows that are still linked to an internal project', function () {
+    $user = asanaTestConnectedUser();
+    AsanaProject::create(['gid' => 'p-linked', 'workspace_gid' => 'WS1', 'name' => 'Linked', 'is_archived' => false]);
+    AsanaProject::create(['gid' => 'p-orphan', 'workspace_gid' => 'WS1', 'name' => 'Orphan', 'is_archived' => false]);
+
+    $project = \App\Models\Project::factory()->create();
+    $project->asanaProjects()->attach('p-linked', ['asana_custom_field_gid' => null]);
+
+    Http::fake([
+        'app.asana.com/api/1.0/projects*' => Http::response([
+            'data' => [
+                ['gid' => 'p1', 'name' => 'Active', 'archived' => false],
+            ],
+            'next_page' => null,
+        ]),
+    ]);
+
+    (new PullAsanaProjectsJob('WS1', $user->id))->handle(app(AsanaService::class));
+
+    // The linked board is no longer returned by Asana but must survive the prune,
+    // because project_asana_links.asana_project_gid is ON DELETE RESTRICT.
+    expect(AsanaProject::find('p-linked'))->not->toBeNull();
+    // An unlinked stale row is still pruned as before.
+    expect(AsanaProject::find('p-orphan'))->toBeNull();
+    expect(AsanaProject::find('p1')->name)->toBe('Active');
+});
+
 test('pulling projects merges visibility across fallback actors', function () {
     $firstUser = User::factory()->create([
         'asana_access_token' => 'tok-first',

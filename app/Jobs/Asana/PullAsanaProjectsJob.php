@@ -62,6 +62,9 @@ class PullAsanaProjectsJob implements ShouldQueue
             AsanaProject::query()
                 ->where('workspace_gid', $this->workspaceGid)
                 ->whereNotIn('gid', $seenGids)
+                // Boards still linked to an internal project can't be deleted — the
+                // project_asana_links FK is ON DELETE RESTRICT and would abort the prune.
+                ->whereDoesntHave('projects')
                 ->delete();
         }
 
