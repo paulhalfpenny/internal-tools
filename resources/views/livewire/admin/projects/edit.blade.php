@@ -211,10 +211,13 @@
             {{-- Tasks --}}
             <div class="bg-white rounded-lg border border-gray-200 p-6">
                 <h2 class="text-sm font-semibold text-gray-700 mb-4">Tasks</h2>
-                <div class="grid grid-cols-2 gap-x-6">
+                {{-- Multi-column (not grid) so the alphabetical list fills the
+                     left column top-to-bottom before the right (FLTR-2388),
+                     rather than snaking left-to-right across both. --}}
+                <div class="columns-2 gap-x-6">
                     @foreach($allTasks as $task)
                         @php $assigned = isset($taskAssignments[$task->id]); @endphp
-                        <div class="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+                        <div class="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0 break-inside-avoid">
                             <input
                                 type="checkbox"
                                 id="task-{{ $task->id }}"
