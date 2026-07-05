@@ -5,6 +5,7 @@ use App\Jobs\Asana\PullAsanaTasksJob;
 use App\Models\AsanaProject;
 use App\Models\AsanaSyncLog;
 use App\Models\AsanaTask;
+use App\Models\Project;
 use App\Models\User;
 use App\Services\Asana\AsanaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -48,7 +49,7 @@ test('pulling projects keeps stale rows that are still linked to an internal pro
     AsanaProject::create(['gid' => 'p-linked', 'workspace_gid' => 'WS1', 'name' => 'Linked', 'is_archived' => false]);
     AsanaProject::create(['gid' => 'p-orphan', 'workspace_gid' => 'WS1', 'name' => 'Orphan', 'is_archived' => false]);
 
-    $project = \App\Models\Project::factory()->create();
+    $project = Project::factory()->create();
     $project->asanaProjects()->attach('p-linked', ['asana_custom_field_gid' => null]);
 
     Http::fake([
