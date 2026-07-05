@@ -650,8 +650,11 @@
                     {{-- Project / Task label --}}
                     <div class="text-sm font-semibold text-gray-700">Project / Task</div>
 
-                    {{-- Project dropdown --}}
-                    <div class="relative z-30" @click.outside="closeProjectPicker()">
+                    {{-- Project dropdown. wire:ignore: this picker's options are
+                         Alpine x-for clones over client-side data; keeping Livewire's
+                         morph out of it stops any round-trip from orphaning those
+                         clones (dead option clicks until a hard refresh). --}}
+                    <div wire:ignore class="relative z-30" @click.outside="closeProjectPicker()">
                         <div class="relative">
                             <input
                                 type="text"
@@ -712,7 +715,7 @@
                     {{-- Asana task picker — shown whenever the project has linked boards.
                          Required vs optional is gated by selectedProject.asana_task_required (see asanaRequired). --}}
                     <template x-if="asanaBoardGids.length > 0">
-                        <div class="relative z-20" @click.outside="closeAsanaTaskPicker()">
+                        <div wire:ignore class="relative z-20" @click.outside="closeAsanaTaskPicker()">
                             <template x-if="!asanaRequired">
                                 <p class="text-xs text-gray-500 mb-1">Asana task (optional)</p>
                             </template>
@@ -813,8 +816,10 @@
                         </div>
                     </template>
 
-                    {{-- Task dropdown --}}
-                    <div class="relative z-10" @click.outside="closeTaskPicker()">
+                    {{-- Task dropdown. wire:ignore for the same reason as the
+                         project picker above: shield the Alpine option clones from
+                         Livewire morph so option clicks never go dead. --}}
+                    <div wire:ignore class="relative z-10" @click.outside="closeTaskPicker()">
                         <div class="relative">
                             <template x-if="selectedTask && !taskOpen">
                                 <span class="absolute left-4 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full" :style="'background:' + (selectedTask?.colour ?? '')"></span>
