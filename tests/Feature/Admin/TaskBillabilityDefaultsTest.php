@@ -79,6 +79,37 @@ test('project default task billability uses agency or jdw task defaults', functi
         ->and((bool) $jdwProject->tasks()->whereKey($task->id)->firstOrFail()->pivot->is_billable)->toBeTrue();
 });
 
+test('editing a task billable default re-syncs existing project task pivots', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $this->actingAs($admin);
+
+    $agencyClient = Client::factory()->create(['name' => 'Agency Client']);
+    $jdwClient = Client::factory()->create(['name' => 'JDW Projects']);
+
+    $task = Task::factory()->create([
+        'is_default_billable' => false,
+        'is_jdw_default_billable' => false,
+    ]);
+
+    $agencyProject = Project::factory()->create(['client_id' => $agencyClient->id]);
+    $jdwProject = Project::factory()->create(['client_id' => $jdwClient->id]);
+
+    // Existing links reflect the old (non-billable) defaults.
+    $agencyProject->tasks()->attach($task->id, ['is_billable' => false]);
+    $jdwProject->tasks()->attach($task->id, ['is_billable' => false]);
+
+    // Admin turns on JDW billable for the task in Admin > Tasks.
+    Livewire::test(AdminTasks::class)
+        ->call('edit', $task->id)
+        ->set('editIsDefaultBillable', false)
+        ->set('editIsJdwDefaultBillable', true)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect((bool) $agencyProject->fresh()->tasks()->whereKey($task->id)->firstOrFail()->pivot->is_billable)->toBeFalse()
+        ->and((bool) $jdwProject->fresh()->tasks()->whereKey($task->id)->firstOrFail()->pivot->is_billable)->toBeTrue();
+});
+
 test('saving project assignments reapplies agency or jdw task defaults', function () {
     $admin = User::factory()->create(['role' => Role::Admin]);
     $this->actingAs($admin);
