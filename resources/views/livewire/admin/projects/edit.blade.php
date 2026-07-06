@@ -227,7 +227,7 @@
                             >
                             <label for="task-{{ $task->id }}" class="flex-1 text-sm cursor-pointer">
                                 <span class="inline-block w-2.5 h-2.5 rounded-full mr-1.5" style="background-color: {{ $task->colour }}"></span>
-                                {{ $task->name }}@unless($task->is_default_billable)
+                                {{ $task->name }}@unless($task->defaultBillableForProject($project))
                                     <span class="text-xs text-gray-400 ml-1">(not billable)</span>
                                 @endunless
                             </label>
