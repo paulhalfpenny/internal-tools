@@ -69,7 +69,7 @@ class Edit extends Component
     {
         Gate::authorize('manage-projects');
 
-        $this->project = $project->load(['tasks', 'users', 'asanaProjects']);
+        $this->project = $project->load(['client', 'tasks', 'users', 'asanaProjects']);
         $this->clientId = $project->client_id;
         $this->managerUserId = $project->manager_user_id;
         $this->code = $project->code;

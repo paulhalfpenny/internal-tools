@@ -79,6 +79,32 @@ test('project default task billability uses agency or jdw task defaults', functi
         ->and((bool) $jdwProject->tasks()->whereKey($task->id)->firstOrFail()->pivot->is_billable)->toBeTrue();
 });
 
+test('project edit page labels tasks not billable using the project agency or jdw default', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $this->actingAs($admin);
+
+    $agencyClient = Client::factory()->create(['name' => 'Agency Client']);
+    $jdwClient = Client::factory()->create(['name' => 'JDW Projects']);
+
+    // Billable for JDW, not for Agency.
+    Task::factory()->create([
+        'name' => 'Programme Activity',
+        'is_default_billable' => false,
+        'is_jdw_default_billable' => true,
+    ]);
+
+    $agencyProject = Project::factory()->create(['client_id' => $agencyClient->id]);
+    $jdwProject = Project::factory()->create(['client_id' => $jdwClient->id]);
+
+    // On an Agency project the task is non-billable, so it is flagged.
+    Livewire::test(AdminProjectEdit::class, ['project' => $agencyProject])
+        ->assertSee('(not billable)');
+
+    // On a JDW project the same task is billable, so it must NOT be flagged.
+    Livewire::test(AdminProjectEdit::class, ['project' => $jdwProject])
+        ->assertDontSee('(not billable)');
+});
+
 test('editing a task billable default re-syncs existing project task pivots', function () {
     $admin = User::factory()->create(['role' => Role::Admin]);
     $this->actingAs($admin);
