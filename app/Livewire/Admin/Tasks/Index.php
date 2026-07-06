@@ -85,6 +85,7 @@ class Index extends Component
             'is_jdw_default_billable' => $this->editIsJdwDefaultBillable,
             'colour' => $this->editColour,
         ]);
+        $task->reapplyBillabilityToProjects();
         $this->forgetProjectPickerCachesForTask($task);
 
         $this->editingId = null;

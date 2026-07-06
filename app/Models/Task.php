@@ -48,4 +48,20 @@ class Task extends Model
             ? (bool) $this->is_jdw_default_billable
             : (bool) $this->is_default_billable;
     }
+
+    /**
+     * Re-apply this task's Agency/JDW billable default to every project it is
+     * already attached to. Project-task billability is never overridden per
+     * project, so it is always a copy of the task default and can be resynced.
+     */
+    public function reapplyBillabilityToProjects(): void
+    {
+        $this->loadMissing('projects.client');
+
+        foreach ($this->projects as $project) {
+            $this->projects()->updateExistingPivot($project->id, [
+                'is_billable' => $this->defaultBillableForProject($project),
+            ]);
+        }
+    }
 }
