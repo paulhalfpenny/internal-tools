@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ClientTaskBillabilityProfile;
 use App\Enums\Role;
 use App\Livewire\Admin\Clients\Index as AdminClients;
 use App\Livewire\Admin\Projects\Create as AdminProjectCreate;
@@ -111,6 +112,31 @@ test('clients search filters by name', function () {
         ->set('search', 'acm')
         ->assertSee('Acme')
         ->assertDontSee('Beta');
+});
+
+test('client admin can set task billability profile', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $this->actingAs($admin);
+
+    Livewire::test(AdminClients::class)
+        ->set('name', 'Non-named profile client')
+        ->set('code', 'NNP')
+        ->set('taskBillabilityProfile', ClientTaskBillabilityProfile::Jdw->value)
+        ->call('create')
+        ->assertHasNoErrors();
+
+    $client = Client::where('code', 'NNP')->firstOrFail();
+
+    expect($client->task_billability_profile)->toBe(ClientTaskBillabilityProfile::Jdw);
+
+    Livewire::test(AdminClients::class)
+        ->call('edit', $client->id)
+        ->assertSetStrict('editTaskBillabilityProfile', ClientTaskBillabilityProfile::Jdw->value)
+        ->set('editTaskBillabilityProfile', ClientTaskBillabilityProfile::Agency->value)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($client->fresh()->task_billability_profile)->toBe(ClientTaskBillabilityProfile::Agency);
 });
 
 test('client edit exposes default task ids as checkbox option values', function () {

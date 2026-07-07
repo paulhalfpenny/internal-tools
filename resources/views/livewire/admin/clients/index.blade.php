@@ -32,6 +32,14 @@
                 <input wire:model="code" type="text" placeholder="e.g. AAB" class="w-full border border-gray-300 rounded text-sm px-3 py-2 uppercase">
                 @error('code')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
             </div>
+            <div class="w-44">
+                <label class="block text-xs font-medium text-gray-600 mb-1">Task defaults</label>
+                <select wire:model="taskBillabilityProfile" class="w-full border border-gray-300 rounded text-sm px-3 py-2">
+                    @foreach($taskBillabilityProfiles as $profile)
+                        <option value="{{ $profile->value }}">{{ $profile->label() }}</option>
+                    @endforeach
+                </select>
+            </div>
             <button wire:click="create" class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">Add</button>
         </div>
     </div>
@@ -43,6 +51,7 @@
                 <tr>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Name</th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Code</th>
+                    <th class="px-4 py-3 text-left font-medium text-gray-600">Task defaults</th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Status</th>
                     <th class="px-4 py-3"></th>
                 </tr>
@@ -59,6 +68,14 @@
                                 <input wire:model="editCode" type="text" class="w-28 border border-gray-300 rounded text-sm px-3 py-2 uppercase">
                                 @error('editCode')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                             </td>
+                            <td class="px-4 py-2">
+                                <select wire:model="editTaskBillabilityProfile" class="w-36 border border-gray-300 rounded text-sm px-3 py-2">
+                                    @foreach($taskBillabilityProfiles as $profile)
+                                        <option value="{{ $profile->value }}">{{ $profile->label() }}</option>
+                                    @endforeach
+                                </select>
+                                @error('editTaskBillabilityProfile')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+                            </td>
                             <td colspan="2" class="px-4 py-2">
                                 <div class="flex gap-2">
                                     <button wire:click="save" class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">Save</button>
@@ -67,7 +84,7 @@
                             </td>
                         </tr>
                         <tr class="bg-blue-50 border-t border-blue-100">
-                            <td colspan="4" class="px-4 py-3">
+                            <td colspan="5" class="px-4 py-3">
                                 <div class="text-xs font-semibold text-gray-700 mb-2">Default tasks for new projects under this client</div>
                                 @if($allTasks->isEmpty())
                                     <p class="text-xs text-gray-400">No tasks defined yet.</p>
@@ -88,6 +105,7 @@
                         <tr class="{{ $client->is_archived ? 'opacity-50' : '' }}">
                             <td class="px-4 py-3 font-medium">{{ $client->name }}</td>
                             <td class="px-4 py-3 text-gray-500 font-mono text-xs">{{ $client->code ?? '—' }}</td>
+                            <td class="px-4 py-3 text-gray-500 text-xs">{{ $client->task_billability_profile->label() }}</td>
                             <td class="px-4 py-3">
                                 @if($client->is_archived)
                                     <span class="text-xs text-gray-400">Archived</span>
@@ -104,7 +122,7 @@
                         </tr>
                     @endif
                 @empty
-                    <tr><td colspan="4" class="px-4 py-8 text-center text-gray-400 text-sm">No clients yet.</td></tr>
+                    <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400 text-sm">No clients yet.</td></tr>
                 @endforelse
             </tbody>
         </table>

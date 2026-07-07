@@ -9,6 +9,7 @@ use App\Domain\TimeTracking\ProjectPickerCache;
 use App\Domain\TimeTracking\ProjectTaskUsability;
 use App\Domain\TimeTracking\TimeEntryService;
 use App\Enums\BudgetType;
+use App\Enums\ClientTaskBillabilityProfile;
 use App\Enums\GroupBy;
 use App\Models\AsanaTask;
 use App\Models\Client;
@@ -165,6 +166,7 @@ final class InternalMcpActions
         $validated = Validator::validate($data, [
             'name' => ['required', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:20', 'unique:clients,code'],
+            'task_billability_profile' => ['sometimes', Rule::in(['agency', 'jdw'])],
             'default_task_ids' => ['sometimes', 'array'],
             'default_task_ids.*' => ['integer', 'exists:tasks,id'],
         ]);
@@ -172,6 +174,9 @@ final class InternalMcpActions
         $client = Client::create([
             'name' => $validated['name'],
             'code' => $validated['code'] ?? null,
+            'task_billability_profile' => isset($validated['task_billability_profile'])
+                ? ClientTaskBillabilityProfile::from($validated['task_billability_profile'])
+                : ClientTaskBillabilityProfile::Agency,
         ]);
 
         if (array_key_exists('default_task_ids', $validated)) {
@@ -191,14 +196,28 @@ final class InternalMcpActions
         $validated = Validator::validate($data, [
             'name' => ['sometimes', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:20', Rule::unique('clients', 'code')->ignore($client->id)],
+            'task_billability_profile' => ['sometimes', Rule::in(['agency', 'jdw'])],
             'default_task_ids' => ['sometimes', 'array'],
             'default_task_ids.*' => ['integer', 'exists:tasks,id'],
         ]);
 
-        $client->update(Arr::only($validated, ['name', 'code']));
+        $taskBillabilityProfileChanged = array_key_exists('task_billability_profile', $validated)
+            && $client->task_billability_profile !== ClientTaskBillabilityProfile::from($validated['task_billability_profile']);
+
+        $update = Arr::only($validated, ['name', 'code']);
+        if (array_key_exists('task_billability_profile', $validated)) {
+            $update['task_billability_profile'] = ClientTaskBillabilityProfile::from($validated['task_billability_profile']);
+        }
+
+        $client->update($update);
 
         if (array_key_exists('default_task_ids', $validated)) {
             $this->syncClientDefaultTasks($client, $validated['default_task_ids']);
+        }
+
+        if ($taskBillabilityProfileChanged) {
+            $client->reapplyTaskBillabilityToProjects();
+            $this->forgetProjectPickerCachesForClient($client);
         }
 
         return $client->refresh();
@@ -258,6 +277,8 @@ final class InternalMcpActions
 
         if (array_key_exists('task_ids', $validated)) {
             $this->syncProjectTasks($project, $validated['task_ids']);
+        } else {
+            $project->attachClientDefaultTasks();
         }
 
         if (array_key_exists('user_ids', $validated)) {
@@ -298,6 +319,9 @@ final class InternalMcpActions
             'user_ids.*' => ['integer', 'exists:users,id'],
         ]);
 
+        $clientChanged = array_key_exists('client_id', $validated)
+            && (int) $validated['client_id'] !== $project->client_id;
+
         $update = Arr::only($validated, [
             'client_id',
             'manager_user_id',
@@ -321,6 +345,9 @@ final class InternalMcpActions
 
         if (array_key_exists('task_ids', $validated)) {
             $this->syncProjectTasks($project, $validated['task_ids']);
+        } elseif ($clientChanged) {
+            $project->refresh();
+            $project->reapplyTaskBillabilityToTasks();
         }
 
         if (array_key_exists('user_ids', $validated)) {
@@ -653,6 +680,7 @@ final class InternalMcpActions
             'id' => $client->id,
             'name' => $client->name,
             'code' => $client->code,
+            'task_billability_profile' => $client->task_billability_profile->value,
             'is_archived' => (bool) $client->is_archived,
         ];
     }
@@ -793,6 +821,15 @@ final class InternalMcpActions
         }
 
         $client->defaultTasks()->sync($sync);
+    }
+
+    private function forgetProjectPickerCachesForClient(Client $client): void
+    {
+        $client->loadMissing('projects.users:id');
+
+        ProjectPickerCache::forgetForUsers(
+            $client->projects->flatMap(fn ($project) => $project->users->pluck('id'))
+        );
     }
 
     /**

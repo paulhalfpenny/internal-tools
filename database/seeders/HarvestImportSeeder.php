@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\ClientTaskBillabilityProfile;
 use App\Models\Client;
 use App\Models\Task;
 use Illuminate\Database\Seeder;
@@ -78,8 +79,17 @@ class HarvestImportSeeder extends Seeder
         ];
 
         foreach ($clients as $name) {
-            Client::firstOrCreate(['name' => $name]);
+            Client::firstOrCreate(['name' => $name], [
+                'task_billability_profile' => $this->taskBillabilityProfileForImportedClient($name),
+            ]);
         }
+    }
+
+    private function taskBillabilityProfileForImportedClient(string $name): ClientTaskBillabilityProfile
+    {
+        return str_starts_with(strtolower(trim($name)), 'jdw')
+            ? ClientTaskBillabilityProfile::Jdw
+            : ClientTaskBillabilityProfile::Agency;
     }
 
     private function seedTasks(): void

@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ClientTaskBillabilityProfile;
 use App\Mcp\InternalToolsServer;
 use App\Mcp\Tools\ArchiveClient;
 use App\Mcp\Tools\ArchiveProject;
@@ -10,6 +11,8 @@ use App\Mcp\Tools\DeleteTimeEntry;
 use App\Mcp\Tools\ListAsanaTasks;
 use App\Mcp\Tools\ListProjects;
 use App\Mcp\Tools\LogTimeEntry;
+use App\Mcp\Tools\UpdateClient;
+use App\Mcp\Tools\UpdateProject;
 use App\Mcp\Tools\UpdateTimeEntry;
 use App\Models\AsanaProject;
 use App\Models\AsanaTask;
@@ -499,6 +502,7 @@ test('mcp tools advertise complete input schemas for accepted arguments', functi
                 'code' => ['type' => 'string'],
                 'default_task_ids' => ['type' => 'array', 'items' => 'integer'],
                 'name' => ['type' => 'string'],
+                'task_billability_profile' => ['type' => 'string', 'enum' => ['agency', 'jdw']],
             ],
         ],
         'delete-time-entry' => [
@@ -579,6 +583,7 @@ test('mcp tools advertise complete input schemas for accepted arguments', functi
                 'code' => ['type' => 'string'],
                 'default_task_ids' => ['type' => 'array', 'items' => 'integer'],
                 'name' => ['type' => 'string'],
+                'task_billability_profile' => ['type' => 'string', 'enum' => ['agency', 'jdw']],
             ],
         ],
         'update-project' => [
@@ -987,12 +992,28 @@ test('admin project and client writes audit immediately without approval', funct
         ->tool(CreateClient::class, [
             'name' => 'Globex',
             'code' => 'GLX',
+            'task_billability_profile' => ClientTaskBillabilityProfile::Jdw->value,
         ])
         ->assertOk()
         ->assertStructuredContent([
             'approval_required' => false,
             'client_id' => 1,
         ]);
+
+    expect(Client::firstOrFail()->task_billability_profile)->toBe(ClientTaskBillabilityProfile::Jdw);
+
+    InternalToolsServer::actingAs($admin, 'api')
+        ->tool(UpdateClient::class, [
+            'client_id' => Client::firstOrFail()->id,
+            'task_billability_profile' => ClientTaskBillabilityProfile::Agency->value,
+        ])
+        ->assertOk()
+        ->assertStructuredContent([
+            'approval_required' => false,
+            'client_id' => 1,
+        ]);
+
+    expect(Client::firstOrFail()->task_billability_profile)->toBe(ClientTaskBillabilityProfile::Agency);
 
     InternalToolsServer::actingAs($admin, 'api')
         ->tool(CreateProject::class, [
@@ -1023,4 +1044,53 @@ test('admin project and client writes audit immediately without approval', funct
     expect(McpAuditLog::where('action', 'create_client')->where('status', 'completed')->exists())->toBeTrue();
     expect(McpAuditLog::where('action', 'create_project')->where('status', 'completed')->exists())->toBeTrue();
     expect(McpAuditLog::where('action', 'assign_project_member')->where('status', 'completed')->exists())->toBeTrue();
+});
+
+test('mcp createProject applies client default task billability profile', function () {
+    $admin = User::factory()->admin()->create();
+    $client = Client::factory()->create([
+        'task_billability_profile' => ClientTaskBillabilityProfile::Jdw,
+    ]);
+    $task = Task::factory()->create([
+        'is_default_billable' => false,
+        'is_jdw_default_billable' => true,
+    ]);
+    $client->defaultTasks()->attach($task->id, ['sort_order' => 0]);
+
+    InternalToolsServer::actingAs($admin, 'api')
+        ->tool(CreateProject::class, [
+            'client_id' => $client->id,
+            'code' => 'MCP-JDW-001',
+            'name' => 'MCP-created JDW project',
+        ])
+        ->assertOk();
+
+    $project = Project::where('code', 'MCP-JDW-001')->firstOrFail();
+
+    expect((bool) $project->tasks()->whereKey($task->id)->firstOrFail()->pivot->is_billable)->toBeTrue();
+});
+
+test('mcp updateProject re-applies task billability when the client changes', function () {
+    $admin = User::factory()->admin()->create();
+    $agencyClient = Client::factory()->create([
+        'task_billability_profile' => ClientTaskBillabilityProfile::Agency,
+    ]);
+    $jdwClient = Client::factory()->create([
+        'task_billability_profile' => ClientTaskBillabilityProfile::Jdw,
+    ]);
+    $task = Task::factory()->create([
+        'is_default_billable' => false,
+        'is_jdw_default_billable' => true,
+    ]);
+    $project = Project::factory()->create(['client_id' => $agencyClient->id]);
+    $project->tasks()->attach($task->id, ['is_billable' => false]);
+
+    InternalToolsServer::actingAs($admin, 'api')
+        ->tool(UpdateProject::class, [
+            'project_id' => $project->id,
+            'client_id' => $jdwClient->id,
+        ])
+        ->assertOk();
+
+    expect((bool) $project->fresh()->tasks()->whereKey($task->id)->firstOrFail()->pivot->is_billable)->toBeTrue();
 });

@@ -34,6 +34,9 @@ class UpdateClient extends Tool
                 ->description('Optional replacement unique client code, up to 20 characters. Send null to clear it.')
                 ->max(20)
                 ->nullable(),
+            'task_billability_profile' => $schema->string()
+                ->description('Optional replacement task billability defaults profile: agency or jdw.')
+                ->enum(['agency', 'jdw']),
             'default_task_ids' => $schema->array()
                 ->description('Optional replacement list of default Internal Tools task IDs for this client.')
                 ->items($schema->integer()),
@@ -47,6 +50,7 @@ class UpdateClient extends Tool
             'client_id' => ['required', 'integer', 'exists:clients,id'],
             'name' => ['sometimes', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:20'],
+            'task_billability_profile' => ['sometimes', 'string', 'in:agency,jdw'],
             'default_task_ids' => ['sometimes', 'array'],
             'default_task_ids.*' => ['integer', 'exists:tasks,id'],
         ]);

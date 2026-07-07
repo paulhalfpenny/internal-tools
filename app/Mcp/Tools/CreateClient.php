@@ -30,6 +30,9 @@ class CreateClient extends Tool
                 ->description('Optional unique client code, up to 20 characters.')
                 ->max(20)
                 ->nullable(),
+            'task_billability_profile' => $schema->string()
+                ->description('Which task billability defaults to use for this client: agency or jdw. Defaults to agency.')
+                ->enum(['agency', 'jdw']),
             'default_task_ids' => $schema->array()
                 ->description('Optional default Internal Tools task IDs to associate with this client.')
                 ->items($schema->integer()),

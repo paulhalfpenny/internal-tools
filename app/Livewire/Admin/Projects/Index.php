@@ -68,14 +68,7 @@ class Index extends Component
             'budget_starts_on' => $this->budgetType === 'monthly_ci' && $this->budgetStartsOn !== '' ? $this->budgetStartsOn : null,
         ]);
 
-        // Pre-attach the client's default tasks, if any have been set up for this client.
-        $defaults = Client::with('defaultTasks')->find($project->client_id)?->defaultTasks ?? collect();
-        foreach ($defaults as $task) {
-            $project->tasks()->attach($task->id, [
-                'is_billable' => $task->defaultBillableForProject($project),
-                'hourly_rate_override' => null,
-            ]);
-        }
+        $project->attachClientDefaultTasks();
 
         $this->redirect(route('admin.projects.edit', $project));
     }

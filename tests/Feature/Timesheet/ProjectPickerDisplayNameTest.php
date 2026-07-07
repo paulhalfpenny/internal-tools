@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ClientTaskBillabilityProfile;
 use App\Enums\Role;
 use App\Livewire\Timesheet\DayView;
 use App\Livewire\Timesheet\WeekView;
@@ -27,7 +28,11 @@ function projectPickerDisplayNameSetup(): User
         'name' => 'CRO Improvements - carehome.co.uk - Build Phase',
     ]);
 
-    $jdwClient = Client::factory()->create(['name' => 'JDW Projects', 'code' => 'JDW']);
+    $jdwClient = Client::factory()->create([
+        'name' => 'JDW Projects',
+        'code' => 'JDW',
+        'task_billability_profile' => ClientTaskBillabilityProfile::Jdw,
+    ]);
     $jdwProject = Project::factory()->create([
         'client_id' => $jdwClient->id,
         'code' => 'JDW001',

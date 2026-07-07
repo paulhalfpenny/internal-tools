@@ -225,9 +225,36 @@ class Project extends Model
 
     public function belongsToJdwClient(): bool
     {
-        $clientName = strtolower(trim($this->client->name));
+        return $this->client->usesJdwTaskDefaults();
+    }
 
-        return str_starts_with($clientName, 'jdw');
+    public function attachClientDefaultTasks(): void
+    {
+        $this->loadMissing('client.defaultTasks');
+
+        $sync = [];
+        foreach ($this->client->defaultTasks as $task) {
+            $sync[$task->id] = [
+                'is_billable' => $task->defaultBillableForProject($this),
+                'hourly_rate_override' => null,
+                'rate_id' => null,
+            ];
+        }
+
+        if ($sync !== []) {
+            $this->tasks()->syncWithoutDetaching($sync);
+        }
+    }
+
+    public function reapplyTaskBillabilityToTasks(): void
+    {
+        $this->loadMissing(['client', 'tasks']);
+
+        foreach ($this->tasks as $task) {
+            $this->tasks()->updateExistingPivot($task->id, [
+                'is_billable' => $task->defaultBillableForProject($this),
+            ]);
+        }
     }
 
     /** @return array<int, string> */

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\ClientTaskBillabilityProfile;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
@@ -204,7 +205,10 @@ class HarvestImport extends Command
 
         if ($client === null) {
             if (! $dryRun) {
-                $client = Client::create(['name' => $name]);
+                $client = Client::create([
+                    'name' => $name,
+                    'task_billability_profile' => $this->taskBillabilityProfileForImportedClient($name),
+                ]);
                 $this->line("  Created client: {$name}");
             } else {
                 $this->clientCache[$key] = 0;
@@ -216,6 +220,13 @@ class HarvestImport extends Command
         $this->clientCache[$key] = $client->id;
 
         return $client->id;
+    }
+
+    private function taskBillabilityProfileForImportedClient(string $name): ClientTaskBillabilityProfile
+    {
+        return str_starts_with(strtolower(trim($name)), 'jdw')
+            ? ClientTaskBillabilityProfile::Jdw
+            : ClientTaskBillabilityProfile::Agency;
     }
 
     private function resolveProject(string $name, string $code, int $clientId, bool $dryRun): int

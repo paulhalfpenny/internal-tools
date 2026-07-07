@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\ClientTaskBillabilityProfile;
 use App\Models\Client;
 use App\Models\Project;
 use App\Models\Task;
@@ -9,7 +10,10 @@ uses(RefreshDatabase::class);
 
 test('backfill command re-applies task billable defaults to existing project pivots', function () {
     $agencyClient = Client::factory()->create(['name' => 'Agency Client']);
-    $jdwClient = Client::factory()->create(['name' => 'JDW Projects']);
+    $jdwClient = Client::factory()->create([
+        'name' => 'JDW Projects',
+        'task_billability_profile' => ClientTaskBillabilityProfile::Jdw,
+    ]);
 
     $task = Task::factory()->create([
         'is_default_billable' => false,

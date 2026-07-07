@@ -64,6 +64,8 @@ class Create extends Component
             'budget_starts_on' => $this->budgetType === 'monthly_ci' && $this->budgetStartsOn !== '' ? $this->budgetStartsOn : null,
         ]);
 
+        $project->attachClientDefaultTasks();
+
         $this->redirect(route('admin.projects.edit', $project));
     }
 
