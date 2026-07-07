@@ -181,7 +181,7 @@ class OneOffProjectBudgetBalances extends Command
      */
     private function reconciledRows(Collection $sheetRows, Collection $projects, CarbonImmutable $asOf): Collection
     {
-        return $sheetRows->map(function (array $row) use ($projects, $asOf): array {
+        $rows = $sheetRows->map(function (array $row) use ($projects, $asOf): array {
             /** @var Project $project */
             $project = $projects->get($row['code']);
             $actualSpend = (float) TimeEntry::query()
@@ -203,6 +203,9 @@ class OneOffProjectBudgetBalances extends Command
                 'allocation_diff' => round($modelAllocation - (float) $row['sheet_allocation'], 2),
             ];
         })->values();
+
+        /** @var Collection<int, array<string, mixed>> $rows */
+        return $rows;
     }
 
     /**
@@ -339,20 +342,21 @@ class OneOffProjectBudgetBalances extends Command
             return [null, null];
         }
 
+        $startYearValue = (string) $matches['startYear'];
         $endYear = $this->year((string) $matches['endYear']);
-        $startYear = isset($matches['startYear']) && $matches['startYear'] !== ''
-            ? $this->year((string) $matches['startYear'])
+        $startYear = $startYearValue !== ''
+            ? $this->year($startYearValue)
             : $endYear;
         $startMonth = $this->month((string) $matches['start']);
         $endMonth = $this->month((string) $matches['end']);
 
-        if ($startMonth > $endMonth && (! isset($matches['startYear']) || $matches['startYear'] === '')) {
+        if ($startMonth > $endMonth && $startYearValue === '') {
             $startYear--;
         }
 
         return [
-            CarbonImmutable::create($startYear, $startMonth, 1)->toDateString(),
-            CarbonImmutable::create($endYear, $endMonth, 1)->endOfMonth()->toDateString(),
+            CarbonImmutable::parse(sprintf('%04d-%02d-01', $startYear, $startMonth))->toDateString(),
+            CarbonImmutable::parse(sprintf('%04d-%02d-01', $endYear, $endMonth))->endOfMonth()->toDateString(),
         ];
     }
 
