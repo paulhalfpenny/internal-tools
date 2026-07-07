@@ -33,15 +33,36 @@
         <table class="min-w-full divide-y divide-gray-200 text-sm">
             <thead class="bg-gray-50">
                 <tr>
-                    <th class="px-4 py-3 text-left font-medium text-gray-600">Name</th>
+                    <th class="px-4 py-3 text-left font-medium text-gray-600"
+                        aria-sort="{{ $sortField === 'name' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}">
+                        <button type="button"
+                            wire:click="sortBy('name')"
+                            class="inline-flex items-center gap-1 rounded-md text-left font-medium text-gray-600 transition hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                            title="Sort by name">
+                            <span class="whitespace-nowrap">Name</span>
+                            <svg class="h-3.5 w-3.5 {{ $sortField === 'name' ? 'text-gray-900' : 'text-gray-400' }}"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true">
+                                @if($sortField === 'name' && $sortDirection === 'asc')
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                @elseif($sortField === 'name')
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                @else
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4M16 15l-4 4-4-4"/>
+                                @endif
+                            </svg>
+                        </button>
+                    </th>
                     <th class="px-4 py-3 text-left font-medium text-gray-600">Email</th>
                     <th class="px-4 py-3 text-right font-medium text-gray-600"
                         aria-sort="{{ $sortField === 'week_hours' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}">
                         <button type="button"
-                            wire:click="sortByHoursThisWeek"
+                            wire:click="sortBy('week_hours')"
                             class="ml-auto inline-flex items-center justify-end gap-1 rounded-md text-right font-medium text-gray-600 transition hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                             title="Sort by hours this week">
-                            <span>Hours this week</span>
+                            <span class="whitespace-nowrap">Hours this week</span>
                             <svg class="h-3.5 w-3.5 {{ $sortField === 'week_hours' ? 'text-gray-900' : 'text-gray-400' }}"
                                 fill="none"
                                 stroke="currentColor"
@@ -57,7 +78,28 @@
                             </svg>
                         </button>
                     </th>
-                    <th class="px-4 py-3 text-left font-medium text-gray-600">Last entry</th>
+                    <th class="px-4 py-3 text-left font-medium text-gray-600"
+                        aria-sort="{{ $sortField === 'last_entry' ? ($sortDirection === 'asc' ? 'ascending' : 'descending') : 'none' }}">
+                        <button type="button"
+                            wire:click="sortBy('last_entry')"
+                            class="inline-flex items-center gap-1 rounded-md text-left font-medium text-gray-600 transition hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                            title="Sort by last entry">
+                            <span class="whitespace-nowrap">Last entry</span>
+                            <svg class="h-3.5 w-3.5 {{ $sortField === 'last_entry' ? 'text-gray-900' : 'text-gray-400' }}"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true">
+                                @if($sortField === 'last_entry' && $sortDirection === 'asc')
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                                @elseif($sortField === 'last_entry')
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                @else
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4M16 15l-4 4-4-4"/>
+                                @endif
+                            </svg>
+                        </button>
+                    </th>
                     <th class="px-4 py-3"></th>
                 </tr>
             </thead>

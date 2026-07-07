@@ -77,6 +77,68 @@ test('admin can sort timesheet rows by hours this week', function () {
     }
 });
 
+test('admin can sort timesheet rows by name', function () {
+    $admin = User::factory()->create(['role' => Role::Admin, 'name' => 'Zoe Admin']);
+
+    User::factory()->create(['name' => 'Cara Zero', 'email' => 'cara@example.com']);
+    User::factory()->create(['name' => 'Ada Eight', 'email' => 'ada@example.com']);
+    User::factory()->create(['name' => 'Bea Four', 'email' => 'bea@example.com']);
+
+    $this->actingAs($admin);
+
+    Livewire::test(AdminTimesheetsIndex::class)
+        ->assertSeeInOrder(['Ada Eight', 'Bea Four', 'Cara Zero'])
+        ->call('sortBy', 'name')
+        ->assertSet('sortField', 'name')
+        ->assertSet('sortDirection', 'desc')
+        ->assertSeeInOrder(['Cara Zero', 'Bea Four', 'Ada Eight'])
+        ->call('sortBy', 'name')
+        ->assertSet('sortDirection', 'asc')
+        ->assertSeeInOrder(['Ada Eight', 'Bea Four', 'Cara Zero']);
+});
+
+test('admin can sort timesheet rows by last entry', function () {
+    Carbon::setTestNow(Carbon::parse('2026-07-08 09:00:00'));
+
+    try {
+        $admin = User::factory()->create(['role' => Role::Admin, 'name' => 'Zoe Admin']);
+        $project = Project::factory()->create();
+        $task = Task::factory()->create();
+
+        $oldEntry = User::factory()->create(['name' => 'Ada Old', 'email' => 'ada@example.com']);
+        $recentEntry = User::factory()->create(['name' => 'Bea Recent', 'email' => 'bea@example.com']);
+        $noEntry = User::factory()->create(['name' => 'Cara Missing', 'email' => 'cara@example.com']);
+
+        foreach ([[$oldEntry, '2026-07-01'], [$recentEntry, '2026-07-08']] as [$user, $spentOn]) {
+            TimeEntry::create([
+                'user_id' => $user->id,
+                'project_id' => $project->id,
+                'task_id' => $task->id,
+                'spent_on' => $spentOn,
+                'hours' => 1.0,
+                'is_running' => false,
+                'is_billable' => true,
+                'billable_rate_snapshot' => 80,
+                'billable_amount' => 80,
+            ]);
+        }
+
+        $this->actingAs($admin);
+
+        Livewire::test(AdminTimesheetsIndex::class)
+            ->assertSeeInOrder(['Ada Old', 'Bea Recent', 'Cara Missing'])
+            ->call('sortBy', 'last_entry')
+            ->assertSet('sortField', 'last_entry')
+            ->assertSet('sortDirection', 'asc')
+            ->assertSeeInOrder(['Cara Missing', 'Ada Old', 'Bea Recent'])
+            ->call('sortBy', 'last_entry')
+            ->assertSet('sortDirection', 'desc')
+            ->assertSeeInOrder(['Bea Recent', 'Ada Old', 'Cara Missing']);
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
 test('admin can mount DayView for another user and load that users entries', function () {
     [$admin, $employee, $project, $task] = adminTimesheetSetup();
 
