@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\Role;
+use App\Livewire\Admin\Timesheets\Index as AdminTimesheetsIndex;
 use App\Livewire\Timesheet\DayView;
 use App\Models\Project;
 use App\Models\Task;
@@ -32,6 +33,48 @@ test('admin index page renders with employee rows', function () {
         ->assertOk()
         ->assertSee($employee->name)
         ->assertSee($employee->email);
+});
+
+test('admin can sort timesheet rows by hours this week', function () {
+    Carbon::setTestNow(Carbon::parse('2026-07-08 09:00:00'));
+
+    try {
+        $admin = User::factory()->create(['role' => Role::Admin, 'name' => 'Zoe Admin']);
+        $project = Project::factory()->create();
+        $task = Task::factory()->create();
+
+        $highHours = User::factory()->create(['name' => 'Ada Eight', 'email' => 'ada@example.com']);
+        $midHours = User::factory()->create(['name' => 'Bea Four', 'email' => 'bea@example.com']);
+        $noHours = User::factory()->create(['name' => 'Cara Zero', 'email' => 'cara@example.com']);
+
+        foreach ([[$highHours, 8.0], [$midHours, 4.0]] as [$user, $hours]) {
+            TimeEntry::create([
+                'user_id' => $user->id,
+                'project_id' => $project->id,
+                'task_id' => $task->id,
+                'spent_on' => Carbon::parse('2026-07-08')->toDateString(),
+                'hours' => $hours,
+                'is_running' => false,
+                'is_billable' => true,
+                'billable_rate_snapshot' => 80,
+                'billable_amount' => $hours * 80,
+            ]);
+        }
+
+        $this->actingAs($admin);
+
+        Livewire::test(AdminTimesheetsIndex::class)
+            ->assertSeeInOrder(['Ada Eight', 'Bea Four', 'Cara Zero'])
+            ->call('sortByHoursThisWeek')
+            ->assertSet('sortField', 'week_hours')
+            ->assertSet('sortDirection', 'asc')
+            ->assertSeeInOrder(['Cara Zero', 'Bea Four', 'Ada Eight'])
+            ->call('sortByHoursThisWeek')
+            ->assertSet('sortDirection', 'desc')
+            ->assertSeeInOrder(['Ada Eight', 'Bea Four', 'Cara Zero']);
+    } finally {
+        Carbon::setTestNow();
+    }
 });
 
 test('admin can mount DayView for another user and load that users entries', function () {

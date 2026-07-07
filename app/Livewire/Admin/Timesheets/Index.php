@@ -16,6 +16,10 @@ class Index extends Component
 {
     public string $weekStart;
 
+    public string $sortField = 'name';
+
+    public string $sortDirection = 'asc';
+
     public function mount(): void
     {
         Gate::authorize('access-admin');
@@ -36,6 +40,18 @@ class Index extends Component
     public function thisWeek(): void
     {
         $this->weekStart = CarbonImmutable::now()->startOfWeek()->toDateString();
+    }
+
+    public function sortByHoursThisWeek(): void
+    {
+        if ($this->sortField === 'week_hours') {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+
+            return;
+        }
+
+        $this->sortField = 'week_hours';
+        $this->sortDirection = 'asc';
     }
 
     public function render(): View
@@ -72,6 +88,20 @@ class Index extends Component
             'week_hours' => (float) ($weekTotals[$u->id]->hours ?? 0),
             'last_entry' => $lastEntry[$u->id]->last_spent_on ?? null,
         ]);
+
+        if ($this->sortField === 'week_hours') {
+            $rows = $rows
+                ->sort(function (object $a, object $b): int {
+                    $hoursComparison = $a->week_hours <=> $b->week_hours;
+
+                    if ($hoursComparison !== 0) {
+                        return $this->sortDirection === 'desc' ? -$hoursComparison : $hoursComparison;
+                    }
+
+                    return strcasecmp($a->name, $b->name);
+                })
+                ->values();
+        }
 
         return view('livewire.admin.timesheets.index', [
             'rows' => $rows,
