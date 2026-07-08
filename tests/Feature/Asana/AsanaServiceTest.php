@@ -100,6 +100,46 @@ test('getTasks exposes custom field values as searchable text', function () {
     Http::assertSent(fn ($request) => str_contains($request->url(), 'custom_fields.display_value'));
 });
 
+test('getTasks requests completed and incomplete project tasks', function () {
+    [, $service] = asanaTestServiceWithUser();
+
+    Http::fake([
+        'app.asana.com/api/1.0/projects/p1/tasks*' => Http::response([
+            'data' => [
+                [
+                    'gid' => 'open-task',
+                    'name' => 'Open task',
+                    'completed' => false,
+                    'parent' => null,
+                    'custom_fields' => [],
+                ],
+                [
+                    'gid' => 'completed-task',
+                    'name' => 'Completed task with logged time',
+                    'completed' => true,
+                    'parent' => null,
+                    'custom_fields' => [],
+                ],
+            ],
+            'next_page' => null,
+        ]),
+    ]);
+
+    $tasks = $service->getTasks('p1');
+
+    expect($tasks)->toHaveCount(2)
+        ->and($tasks[0]['completed'])->toBeFalse()
+        ->and($tasks[1]['completed'])->toBeTrue()
+        ->and($tasks[1]['name'])->toBe('Completed task with logged time');
+
+    Http::assertSent(function ($request) {
+        parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+        return str_contains($request->url(), '/projects/p1/tasks')
+            && ! array_key_exists('completed_since', $query);
+    });
+});
+
 test('ensureHoursCustomField returns existing field when name matches', function () {
     [, $service] = asanaTestServiceWithUser();
 

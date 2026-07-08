@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\TimeTracking\TimeEntryService;
 use App\Livewire\Timesheet\DayView;
 use App\Models\AsanaProject;
 use App\Models\AsanaProjectAssociation;
@@ -90,6 +91,29 @@ test('saving an entry with an Asana task remembers the board association', funct
     Livewire::withQueryParams(['log_asana' => 'AT1'])
         ->test(DayView::class)
         ->assertSet('selectedTaskId', $task->id);
+});
+
+test('day view shows the cached title for completed linked Asana tasks', function () {
+    [$user, $project, $task] = deepLinkSetup();
+    AsanaTask::whereKey('AT1')->update([
+        'name' => 'Completed ticket title',
+        'is_completed' => true,
+    ]);
+
+    $this->actingAs($user);
+
+    app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => now()->toDateString(),
+        'hours' => 1.0,
+        'notes' => null,
+        'asana_task_gid' => 'AT1',
+    ]);
+
+    Livewire::test(DayView::class)
+        ->assertSee('Completed ticket title')
+        ->assertDontSee('Linked Asana task');
 });
 
 test('the asana-app task URL renders the compact log-time form', function () {

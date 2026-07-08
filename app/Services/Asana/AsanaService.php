@@ -80,7 +80,6 @@ final class AsanaService
                 'custom_fields.multi_enum_values.name',
                 'custom_fields.date_value',
             ]),
-            'completed_since' => 'now',
         ], fn (array $t) => [
             'gid' => $t['gid'],
             'name' => $t['name'],
