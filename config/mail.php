@@ -113,4 +113,14 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    'queued_notifications' => [
+        'rate_limit_key' => env('MAIL_QUEUE_RATE_LIMIT_KEY', 'resend'),
+        'rate_limit_per_second' => (int) env('MAIL_QUEUE_RATE_LIMIT_PER_SECOND', 9),
+        'retry_for_minutes' => (int) env('MAIL_QUEUE_RETRY_FOR_MINUTES', 30),
+        'backoff' => array_map(
+            static fn (string $delay): int => (int) trim($delay),
+            explode(',', env('MAIL_QUEUE_BACKOFF_SECONDS', '30,120,300')),
+        ),
+    ],
+
 ];

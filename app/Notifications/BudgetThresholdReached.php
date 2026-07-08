@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\Project;
 use App\Models\User;
+use App\Notifications\Concerns\ThrottlesQueuedMail;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,7 +13,7 @@ use Illuminate\Notifications\Notification;
 
 class BudgetThresholdReached extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, ThrottlesQueuedMail;
 
     public function __construct(
         public readonly Project $project,

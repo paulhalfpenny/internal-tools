@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\User;
+use App\Notifications\Concerns\ThrottlesQueuedMail;
 use App\Settings\NotificationSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
@@ -12,7 +13,7 @@ use Illuminate\Notifications\Notification;
 
 class ManagerWeeklyDigest extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, ThrottlesQueuedMail;
 
     /**
      * @param  array<int, array{name: string, email: string, hours: float, target: float}>  $rows

@@ -34,6 +34,11 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($request->ip());
         });
 
+        RateLimiter::for('queued-mail-notifications', function () {
+            return Limit::perSecond(max(1, (int) config('mail.queued_notifications.rate_limit_per_second', 9)))
+                ->by((string) config('mail.queued_notifications.rate_limit_key', 'resend'));
+        });
+
         Gate::define('access-admin', fn (User $user) => $user->isAdmin());
         Gate::define('manage-projects', fn (User $user) => $user->isManager());
         Gate::define('access-reports', fn (User $user) => $user->isManager());
