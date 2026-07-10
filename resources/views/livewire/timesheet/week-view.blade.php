@@ -514,6 +514,8 @@
                         <div class="relative">
                             <input
                                 type="text"
+                                autocomplete="off"
+                                data-bwignore="true"
                                 :value="projectOpen ? projectSearch : selectedProjectLabel"
                                 @focus="openProjectPicker()"
                                 @click="openProjectPicker()"
@@ -588,6 +590,8 @@
                                         <div class="relative min-w-0 flex-1">
                                             <input
                                                 type="text"
+                                                autocomplete="off"
+                                                data-bwignore="true"
                                                 :value="asanaTaskOpen ? asanaTaskSearch : selectedAsanaTaskLabel"
                                                 @focus="openAsanaTaskPicker()"
                                                 @click="openAsanaTaskPicker()"
@@ -673,13 +677,17 @@
                     </template>
 
                     {{-- Task dropdown --}}
-                    <div class="relative z-10" @click.outside="closeTaskPicker()">
+                    <div class="relative z-10" @click.outside="closeTaskPicker()"
+                         data-picker="task" :data-selected="selectedTaskId ?? ''"
+                         :data-open="taskOpen ? 'true' : 'false'">
                         <div class="relative">
                             <template x-if="selectedTask && !taskOpen">
                                 <span class="absolute left-4 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full" :style="'background:' + (selectedTask?.colour ?? '')"></span>
                             </template>
                             <input
                                 type="text"
+                                autocomplete="off"
+                                data-bwignore="true"
                                 :disabled="!selectedProjectId"
                                 :value="taskOpen ? taskSearch : selectedTaskLabel"
                                 @focus="openTaskPicker()"
@@ -726,7 +734,8 @@
                                             <div>
                                                 <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 py-1.5">Billable</div>
                                                 <template x-for="task in filteredBillableTasks" :key="task.id">
-                                                    <button type="button" @click="pickTask(task.id)"
+                                                    <button type="button" @mousedown.prevent @click="pickTask(task.id)"
+                                                        data-task-option :data-task-option="task.id"
                                                         class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-green-50 hover:text-green-700 transition flex items-center gap-2">
                                                         <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="'background:' + task.colour"></span>
                                                         <span x-text="task.name"></span>
@@ -738,7 +747,8 @@
                                             <div>
                                                 <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide px-3 py-1.5">Non-billable</div>
                                                 <template x-for="task in filteredNonBillableTasks" :key="task.id">
-                                                    <button type="button" @click="pickTask(task.id)"
+                                                    <button type="button" @mousedown.prevent @click="pickTask(task.id)"
+                                                        data-task-option :data-task-option="task.id"
                                                         class="w-full text-left px-4 py-2 text-sm text-gray-800 hover:bg-gray-50 hover:text-gray-700 transition flex items-center gap-2">
                                                         <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="'background:' + task.colour"></span>
                                                         <span x-text="task.name"></span>

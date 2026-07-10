@@ -100,6 +100,37 @@ function assertPickersSearchFromMainInputs(string $html): void
         ->toContain('No tasks match.');
 }
 
+function assertPickerInputsIgnoreAutofillOverlays(string $html): void
+{
+    $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5);
+    preg_match_all('/<input\b(?=[^>]*\brole="combobox")[^>]*>/s', $html, $matches);
+
+    expect($matches[0])->toHaveCount(3);
+
+    foreach ($matches[0] as $input) {
+        expect($input)
+            ->toContain('autocomplete="off"')
+            ->toContain('data-bwignore="true"');
+    }
+}
+
+function assertTaskPickerExposesVisibilityState(string $html): void
+{
+    $html = html_entity_decode($html, ENT_QUOTES | ENT_HTML5);
+    preg_match_all('/<button\b(?=[^>]*\bdata-task-option)[^>]*>/s', $html, $options);
+
+    expect($html)
+        ->toContain('data-picker="task"')
+        ->toContain(':data-open="taskOpen ? \'true\' : \'false\'"')
+        ->toContain('data-task-option');
+
+    expect($options[0])->toHaveCount(2);
+
+    foreach ($options[0] as $option) {
+        expect($option)->toContain('@mousedown.prevent');
+    }
+}
+
 test('day view closes the task dropdown before syncing the selected task', function () {
     $user = taskPickerDropdownSetup();
     $this->actingAs($user);
@@ -144,6 +175,36 @@ test('week view dropdowns search from their main inputs', function () {
         ->html();
 
     assertPickersSearchFromMainInputs($html);
+});
+
+test('timesheet picker inputs opt out of autofill overlays', function () {
+    $user = taskPickerDropdownSetup();
+    $this->actingAs($user);
+
+    $dayHtml = Livewire::test(DayView::class)
+        ->call('openNewModal')
+        ->html();
+    $weekHtml = Livewire::test(WeekView::class)
+        ->call('openAddRowModal')
+        ->html();
+
+    assertPickerInputsIgnoreAutofillOverlays($dayHtml);
+    assertPickerInputsIgnoreAutofillOverlays($weekHtml);
+});
+
+test('timesheet task pickers expose committed and open state to diagnostics', function () {
+    $user = taskPickerDropdownSetup();
+    $this->actingAs($user);
+
+    $dayHtml = Livewire::test(DayView::class)
+        ->call('openNewModal')
+        ->html();
+    $weekHtml = Livewire::test(WeekView::class)
+        ->call('openAddRowModal')
+        ->html();
+
+    assertTaskPickerExposesVisibilityState($dayHtml);
+    assertTaskPickerExposesVisibilityState($weekHtml);
 });
 
 // A thrown Alpine expression kills the component's reactivity (dropdowns stop
