@@ -122,14 +122,29 @@ class OneOffHistoricalHarvestTime extends Command
             $rows,
             fn (array $row): bool => ! isset($ledgerTargets[$row['source_id']])
         ));
-        $conflicts = $this->conflicts($unimportedRows, array_values($ledgerTargets));
-        $report = $this->reportRows($rows, $ledgerTargets, $conflicts);
+
+        try {
+            $allConflicts = $this->conflicts($unimportedRows, array_values($ledgerTargets));
+            $approvedSkips = $this->validateApprovedSkips($rows, $ledgerTargets, $allConflicts);
+            $rowsToInsert = array_values(array_filter(
+                $unimportedRows,
+                fn (array $row): bool => ! isset($approvedSkips[$row['source_id']])
+            ));
+            $conflicts = $this->conflicts($rowsToInsert, array_values($ledgerTargets));
+            $report = $this->reportRows($rows, $ledgerTargets, $conflicts, $approvedSkips);
+        } catch (RuntimeException $exception) {
+            $this->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
+
         $this->printReport($report, $actualHash);
+        $this->printApprovedSkips(array_values($approvedSkips));
         $this->printConflicts($conflicts);
 
-        $blocked = array_filter($report, fn (array $row): bool => $row['status'] !== 'OK');
+        $blocked = array_filter($report, fn (array $row): bool => in_array($row['status'], ['BLOCKED', 'CONFLICT'], true));
         if ($blocked !== []) {
-            $this->error('Import is blocked until every project matches its approved row count and table amount.');
+            $this->error('Import is blocked until every project matches its approved row count, amount, and conflict state.');
 
             return self::FAILURE;
         }
@@ -138,13 +153,19 @@ class OneOffHistoricalHarvestTime extends Command
             $this->warn('DRY RUN only. No database rows were written.');
             $this->info('Selected '.number_format(count($rows)).' row(s).');
             $this->info('Already imported: '.number_format(count($ledgerTargets)));
-            $this->info('Would insert: '.number_format(count($unimportedRows)));
+            $this->info('Approved skips: '.number_format(count($approvedSkips)));
+            $this->info('Would insert: '.number_format(count($rowsToInsert)));
 
             return self::SUCCESS;
         }
 
         try {
-            $inserted = $this->insertRows($unimportedRows, $actualHash, array_values($ledgerTargets), $rows);
+            $inserted = $this->insertRows(
+                $rowsToInsert,
+                $actualHash,
+                $rows,
+                $unimportedRows,
+            );
         } catch (RuntimeException $exception) {
             $this->error($exception->getMessage());
 
@@ -153,6 +174,7 @@ class OneOffHistoricalHarvestTime extends Command
 
         $this->info('Imported: '.number_format($inserted));
         $this->info('Already imported: '.number_format(count($ledgerTargets)));
+        $this->info('Approved skips: '.number_format(count($approvedSkips)));
 
         return self::SUCCESS;
     }
@@ -369,6 +391,167 @@ class OneOffHistoricalHarvestTime extends Command
         return $mappings;
     }
 
+    /** @return array<string, float> */
+    private function approvedAmountExceptions(): array
+    {
+        $configured = $this->manifest->approvedAmountExceptions();
+        $mappingCodes = array_column($this->mappings(), 'target_code');
+        $exceptions = [];
+
+        foreach ($configured as $index => $exception) {
+            if (! is_array($exception)
+                || ! isset($exception['target_code'], $exception['csv_amount'])
+                || ! is_string($exception['target_code'])
+                || (! is_int($exception['csv_amount']) && ! is_float($exception['csv_amount']))
+                || ! is_finite((float) $exception['csv_amount'])
+                || (float) $exception['csv_amount'] < 0
+                || ! in_array($exception['target_code'], $mappingCodes, true)
+                || isset($exceptions[$exception['target_code']])) {
+                throw new RuntimeException("Historical Harvest amount exception {$index} is invalid.");
+            }
+
+            $exceptions[$exception['target_code']] = (float) $exception['csv_amount'];
+        }
+
+        return $exceptions;
+    }
+
+    /**
+     * @return list<array{
+     *     source_id: string,
+     *     target_code: string,
+     *     spent_on: string,
+     *     user_name: string,
+     *     task_name: string,
+     *     source_hours: float,
+     *     source_amount: float,
+     *     existing_rows: int,
+     *     existing_hours: float,
+     *     existing_amount: float
+     * }>
+     */
+    private function approvedSkips(): array
+    {
+        $configured = $this->manifest->approvedSkips();
+        $mappingCodes = array_column($this->mappings(), 'target_code');
+        $skips = [];
+        $seen = [];
+
+        foreach ($configured as $index => $skip) {
+            if (! is_array($skip)
+                || ! isset(
+                    $skip['source_id'],
+                    $skip['target_code'],
+                    $skip['spent_on'],
+                    $skip['user_name'],
+                    $skip['task_name'],
+                    $skip['source_hours'],
+                    $skip['source_amount'],
+                    $skip['existing_rows'],
+                    $skip['existing_hours'],
+                    $skip['existing_amount'],
+                )
+                || ! is_string($skip['source_id'])
+                || ! preg_match('/^historical-time:v1:[a-f0-9]{64}:[1-9]\d*$/', $skip['source_id'])
+                || ! is_string($skip['target_code'])
+                || ! in_array($skip['target_code'], $mappingCodes, true)
+                || ! is_string($skip['spent_on'])
+                || ! is_string($skip['user_name'])
+                || $skip['user_name'] === ''
+                || ! is_string($skip['task_name'])
+                || $skip['task_name'] === ''
+                || (! is_int($skip['source_hours']) && ! is_float($skip['source_hours']))
+                || (! is_int($skip['source_amount']) && ! is_float($skip['source_amount']))
+                || ! is_int($skip['existing_rows'])
+                || $skip['existing_rows'] < 1
+                || (! is_int($skip['existing_hours']) && ! is_float($skip['existing_hours']))
+                || (! is_int($skip['existing_amount']) && ! is_float($skip['existing_amount']))
+                || isset($seen[$skip['source_id']])) {
+                throw new RuntimeException("Historical Harvest approved skip {$index} is invalid.");
+            }
+
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $skip['spent_on']);
+            $numbers = [
+                (float) $skip['source_hours'],
+                (float) $skip['source_amount'],
+                (float) $skip['existing_hours'],
+                (float) $skip['existing_amount'],
+            ];
+            $hasInvalidNumber = false;
+            foreach ($numbers as $number) {
+                if (! is_finite($number) || $number < 0) {
+                    $hasInvalidNumber = true;
+                    break;
+                }
+            }
+
+            if ($date === false
+                || $date->format('Y-m-d') !== $skip['spent_on']
+                || $hasInvalidNumber) {
+                throw new RuntimeException("Historical Harvest approved skip {$index} is invalid.");
+            }
+
+            $seen[$skip['source_id']] = true;
+            $skips[] = [
+                'source_id' => $skip['source_id'],
+                'target_code' => $skip['target_code'],
+                'spent_on' => $skip['spent_on'],
+                'user_name' => $skip['user_name'],
+                'task_name' => $skip['task_name'],
+                'source_hours' => (float) $skip['source_hours'],
+                'source_amount' => (float) $skip['source_amount'],
+                'existing_rows' => $skip['existing_rows'],
+                'existing_hours' => (float) $skip['existing_hours'],
+                'existing_amount' => (float) $skip['existing_amount'],
+            ];
+        }
+
+        return $skips;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $sourceRows
+     * @param  array<string, int>  $ledgerTargets
+     * @param  list<array<string, mixed>>  $conflicts
+     * @return array<string, array<string, mixed>>
+     */
+    private function validateApprovedSkips(array $sourceRows, array $ledgerTargets, array $conflicts): array
+    {
+        $sourceIds = array_fill_keys(array_column($sourceRows, 'source_id'), true);
+        $conflictsBySourceId = [];
+        foreach ($conflicts as $conflict) {
+            foreach ($conflict['source_ids'] as $sourceId) {
+                $conflictsBySourceId[$sourceId] = $conflict;
+            }
+        }
+
+        $approved = [];
+        foreach ($this->approvedSkips() as $skip) {
+            $sourceId = $skip['source_id'];
+            $conflict = $conflictsBySourceId[$sourceId] ?? null;
+            if (! isset($sourceIds[$sourceId])
+                || isset($ledgerTargets[$sourceId])
+                || $conflict === null
+                || $conflict['source_ids'] !== [$sourceId]
+                || $conflict['target_code'] !== $skip['target_code']
+                || $conflict['spent_on'] !== $skip['spent_on']
+                || $conflict['user_name'] !== $skip['user_name']
+                || $conflict['task_name'] !== $skip['task_name']
+                || $conflict['source_rows'] !== 1
+                || abs($conflict['source_hours'] - $skip['source_hours']) >= 0.005
+                || abs($conflict['source_amount'] - $skip['source_amount']) >= 0.005
+                || $conflict['existing_rows'] !== $skip['existing_rows']
+                || abs($conflict['existing_hours'] - $skip['existing_hours']) >= 0.005
+                || abs($conflict['existing_amount'] - $skip['existing_amount']) >= 0.005) {
+                throw new RuntimeException("Historical Harvest approved skip no longer matches current source and existing entries: {$sourceId}.");
+            }
+
+            $approved[$sourceId] = $conflict;
+        }
+
+        return $approved;
+    }
+
     /**
      * @param  array<string, string>  $values
      * @return array{hours: float, billable_rate: float, billable_amount: float}
@@ -505,11 +688,13 @@ class OneOffHistoricalHarvestTime extends Command
      * @param  list<array<string, mixed>>  $rows
      * @param  array<string, int>  $ledgerTargets
      * @param  list<array{target_code: string, spent_on: string, user_name: string, task_name: string, source_ids: list<string>, source_rows: int, source_hours: float, source_amount: float, existing_rows: int, existing_hours: float, existing_amount: float}>  $conflicts
-     * @return list<array{target_code: string, source: string, rows: int, expected_rows: int, hours: float, amount: float, table_amount: int, already_imported: int, to_insert: int, conflicts: int, status: string}>
+     * @param  array<string, array<string, mixed>>  $approvedSkips
+     * @return list<array{target_code: string, source: string, rows: int, expected_rows: int, hours: float, amount: float, table_amount: int, already_imported: int, skipped: int, to_insert: int, conflicts: int, status: string}>
      */
-    private function reportRows(array $rows, array $ledgerTargets, array $conflicts): array
+    private function reportRows(array $rows, array $ledgerTargets, array $conflicts, array $approvedSkips): array
     {
         $report = [];
+        $amountExceptions = $this->approvedAmountExceptions();
 
         foreach ($this->mappings() as $mapping) {
             $matching = array_values(array_filter(
@@ -520,9 +705,15 @@ class OneOffHistoricalHarvestTime extends Command
             $hours = array_sum(array_map(fn (array $row): float => (float) $row['hours'], $matching));
             $countMatches = count($matching) === $mapping['expected_rows'];
             $amountMatches = (int) round($amount, 0, PHP_ROUND_HALF_UP) === $mapping['table_amount'];
+            $amountApproved = isset($amountExceptions[$mapping['target_code']])
+                && abs(round($amount, 2) - $amountExceptions[$mapping['target_code']]) < 0.005;
             $alreadyImported = count(array_filter(
                 $matching,
                 fn (array $row): bool => isset($ledgerTargets[$row['source_id']])
+            ));
+            $skipped = count(array_filter(
+                $matching,
+                fn (array $row): bool => isset($approvedSkips[$row['source_id']])
             ));
             $conflictCount = count(array_filter(
                 $conflicts,
@@ -538,11 +729,14 @@ class OneOffHistoricalHarvestTime extends Command
                 'amount' => round($amount, 2),
                 'table_amount' => $mapping['table_amount'],
                 'already_imported' => $alreadyImported,
-                'to_insert' => count($matching) - $alreadyImported,
+                'skipped' => $skipped,
+                'to_insert' => count($matching) - $alreadyImported - $skipped,
                 'conflicts' => $conflictCount,
-                'status' => ! $countMatches || ! $amountMatches
+                'status' => ! $countMatches || (! $amountMatches && ! $amountApproved)
                     ? 'BLOCKED'
-                    : ($conflictCount > 0 ? 'CONFLICT' : 'OK'),
+                    : ($conflictCount > 0
+                        ? 'CONFLICT'
+                        : ($amountApproved || $skipped > 0 ? 'APPROVED' : 'OK')),
             ];
         }
 
@@ -555,7 +749,7 @@ class OneOffHistoricalHarvestTime extends Command
         $this->line("Source SHA-256: {$hash}");
         $this->line('Cutoff: '.self::CUTOFF);
         $this->table(
-            ['Target', 'Source', 'Rows', 'Expected', 'Hours', 'CSV amount', 'Table amount', 'Ledger', 'Insert', 'Conflicts', 'Status'],
+            ['Target', 'Source', 'Rows', 'Expected', 'Hours', 'CSV amount', 'Table amount', 'Ledger', 'Skip', 'Insert', 'Conflicts', 'Status'],
             array_map(fn (array $row): array => [
                 $row['target_code'],
                 $row['source'],
@@ -565,6 +759,7 @@ class OneOffHistoricalHarvestTime extends Command
                 '£'.number_format((float) $row['amount'], 2),
                 '£'.number_format((int) $row['table_amount']),
                 number_format((int) $row['already_imported']),
+                number_format((int) $row['skipped']),
                 number_format((int) $row['to_insert']),
                 number_format((int) $row['conflicts']),
                 $row['status'],
@@ -810,6 +1005,26 @@ class OneOffHistoricalHarvestTime extends Command
         return implode('|', [$row['project_id'], $row['spent_on'], $row['user_id'], $row['task_id']]);
     }
 
+    /** @param list<array<string, mixed>> $approvedSkips */
+    private function printApprovedSkips(array $approvedSkips): void
+    {
+        foreach ($approvedSkips as $skip) {
+            $this->warn(sprintf(
+                'APPROVED SKIP: %s %s / %s / %s - Harvest %.2f h, £%.2f; preserving %d existing row(s), %.2f h, £%.2f.',
+                $skip['target_code'],
+                $skip['spent_on'],
+                $skip['user_name'],
+                $skip['task_name'],
+                $skip['source_hours'],
+                $skip['source_amount'],
+                $skip['existing_rows'],
+                $skip['existing_hours'],
+                $skip['existing_amount'],
+            ));
+            $this->line('  Source fingerprint: '.$skip['source_ids'][0]);
+        }
+    }
+
     /** @param list<array<string, mixed>> $conflicts */
     private function printConflicts(array $conflicts): void
     {
@@ -833,10 +1048,10 @@ class OneOffHistoricalHarvestTime extends Command
 
     /**
      * @param  list<array<string, mixed>>  $rows
-     * @param  list<int>  $loggedTargetIds
      * @param  list<array<string, mixed>>  $sourceRows
+     * @param  list<array<string, mixed>>  $pendingRows
      */
-    private function insertRows(array $rows, string $sourceHash, array $loggedTargetIds, array $sourceRows): int
+    private function insertRows(array $rows, string $sourceHash, array $sourceRows, array $pendingRows): int
     {
         if ($rows === []) {
             return 0;
@@ -844,7 +1059,7 @@ class OneOffHistoricalHarvestTime extends Command
 
         $this->assertLockingIsolation();
 
-        return DB::transaction(function () use ($rows, $sourceHash, $loggedTargetIds, $sourceRows): int {
+        return DB::transaction(function () use ($rows, $sourceHash, $sourceRows, $pendingRows): int {
             Project::query()
                 ->whereIn('id', array_values(array_unique(array_map(fn (array $row): int => (int) $row['project_id'], $sourceRows))))
                 ->lockForUpdate()
@@ -856,11 +1071,23 @@ class OneOffHistoricalHarvestTime extends Command
                 throw new RuntimeException('Import ledger changed while waiting for the transaction lock; rerun the dry run.');
             }
 
-            if ($this->conflicts($rows, $loggedTargetIds, true, $sourceRows) !== []) {
+            $lockedLedgerTargets = $this->ledgerTargets(array_column($sourceRows, 'source_id'));
+            $allConflicts = $this->conflicts($pendingRows, array_values($lockedLedgerTargets), true, $sourceRows);
+            $approvedSkips = $this->validateApprovedSkips($sourceRows, $lockedLedgerTargets, $allConflicts);
+            $lockedRowsToInsert = array_values(array_filter(
+                $pendingRows,
+                fn (array $row): bool => ! isset($lockedLedgerTargets[$row['source_id']])
+                    && ! isset($approvedSkips[$row['source_id']])
+            ));
+
+            if (array_column($lockedRowsToInsert, 'source_id') !== array_column($rows, 'source_id')) {
+                throw new RuntimeException('Import state changed while waiting for the transaction lock; rerun the dry run.');
+            }
+
+            if ($this->conflicts($lockedRowsToInsert, array_values($lockedLedgerTargets), true, $sourceRows) !== []) {
                 throw new RuntimeException('Existing time entries changed after preflight; rerun the dry run.');
             }
 
-            $lockedLedgerTargets = $this->ledgerTargets(array_column($sourceRows, 'source_id'));
             $this->assertLedgerEntriesAreUnchanged($sourceRows, $lockedLedgerTargets, true);
 
             $importedAt = now();

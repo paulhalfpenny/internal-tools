@@ -129,6 +129,18 @@ function reconciledHistoricalHarvestRows(): array
     return $rows;
 }
 
+/** @param array<string, string> $row */
+function historicalHarvestSourceId(array $row, string $targetCode, int $occurrence = 1): string
+{
+    $values = array_map(fn (string $header): string => trim($row[$header]), HISTORICAL_HARVEST_HEADERS);
+    $fingerprint = hash('sha256', json_encode([
+        'target_code' => $targetCode,
+        'row' => $values,
+    ], JSON_THROW_ON_ERROR));
+
+    return "historical-time:v1:{$fingerprint}:{$occurrence}";
+}
+
 /** @param list<array<string, string>> $rows */
 function writeHistoricalHarvestCsv(string $path, array $rows): string
 {
@@ -335,6 +347,25 @@ test('historical Harvest import is idempotent and preserves identical source eve
 test('historical Harvest import aborts on an untracked existing-entry overlap without changing it', function () {
     createHistoricalHarvestReferences();
     $rows = reconciledHistoricalHarvestRows();
+    $rows[1]['Date'] = '2025-09-02';
+    $rows[2]['Date'] = '2025-09-03';
+    $sourceId = historicalHarvestSourceId($rows[0], 'DEN004');
+    $skip = [
+        'source_id' => $sourceId,
+        'target_code' => 'DEN004',
+        'spent_on' => '2025-09-01',
+        'user_name' => 'Import User',
+        'task_name' => 'Development',
+        'source_hours' => 1.0,
+        'source_amount' => 100.0,
+        'existing_rows' => 1,
+        'existing_hours' => 7.0,
+        'existing_amount' => 700.0,
+    ];
+    app()->instance(
+        HistoricalHarvestTimeImportManifest::class,
+        new HistoricalHarvestTimeImportManifest(historicalHarvestTestManifest(), [], [$skip])
+    );
     $project = Project::query()->where('code', 'DEN004')->firstOrFail();
     $user = User::query()->where('name', 'Import User')->firstOrFail();
     $task = Task::query()->where('name', 'Development')->firstOrFail();
@@ -346,28 +377,64 @@ test('historical Harvest import aborts on an untracked existing-entry overlap wi
         'hours' => 7.00,
         'notes' => 'Existing entry',
         'billable_rate_snapshot' => 100.00,
-        'billable_amount' => 700.00,
+        'billable_amount' => 699.99,
     ]);
-    $before = (array) DB::table('time_entries')->where('id', $existing->id)->first();
+    $unapproved = TimeEntry::factory()->create([
+        'project_id' => Project::query()->where('code', 'EAA001')->firstOrFail()->id,
+        'user_id' => $user->id,
+        'task_id' => $task->id,
+        'spent_on' => '2026-02-01',
+        'hours' => 2.00,
+        'notes' => 'Unapproved overlap',
+        'billable_rate_snapshot' => 100.00,
+        'billable_amount' => 200.00,
+    ]);
 
     $path = storage_path('framework/testing/historical-harvest-overlap.csv');
-    writeHistoricalHarvestCsv($path, $rows);
-    unset($rows);
+    $hash = writeHistoricalHarvestCsv($path, $rows);
+
+    $this->artisan('app:one-off-historical-harvest-time', ['path' => $path])
+        ->assertFailed()
+        ->expectsOutputToContain('approved skip no longer matches');
+
+    $existing->update(['billable_amount' => 700.00]);
+    $before = (array) DB::table('time_entries')->where('id', $existing->id)->first();
+    $unapprovedBefore = (array) DB::table('time_entries')->where('id', $unapproved->id)->first();
 
     $exitCode = Artisan::call('app:one-off-historical-harvest-time', ['path' => $path]);
     $output = Artisan::output();
-
     expect($exitCode)->toBe(Command::FAILURE)
-        ->and($output)->toContain('CONFLICT: DEN004 2025-09-01')
-        ->and($output)->toContain('Source fingerprint(s): historical-time:v1:');
+        ->and($output)->toContain('APPROVED SKIP: DEN004 2025-09-01')
+        ->and($output)->toContain('CONFLICT: EAA001 2026-02-01');
 
-    expect(TimeEntry::count())->toBe(1)
-        ->and((array) DB::table('time_entries')->where('id', $existing->id)->first())->toBe($before)
+    expect((array) DB::table('time_entries')->where('id', $existing->id)->first())->toBe($before)
+        ->and((array) DB::table('time_entries')->where('id', $unapproved->id)->first())->toBe($unapprovedBefore)
         ->and(DB::table('harvest_import_log')->count())->toBe(0);
+
+    $unapproved->delete();
+    $arguments = ['path' => $path, '--expected-sha256' => $hash, '--commit' => true];
+
+    $this->artisan('app:one-off-historical-harvest-time', $arguments)
+        ->assertSuccessful()
+        ->expectsOutputToContain('Approved skips: 1');
+    $this->artisan('app:one-off-historical-harvest-time', $arguments)
+        ->assertSuccessful()
+        ->expectsOutputToContain('Imported: 0');
+
+    expect(TimeEntry::count())->toBe(7)
+        ->and((array) DB::table('time_entries')->where('id', $existing->id)->first())->toBe($before)
+        ->and(DB::table('harvest_import_log')->count())->toBe(6);
 });
 
 test('historical Harvest import blocks mismatched approved row counts or totals', function () {
     createHistoricalHarvestReferences();
+    app()->instance(
+        HistoricalHarvestTimeImportManifest::class,
+        new HistoricalHarvestTimeImportManifest(
+            historicalHarvestTestManifest(),
+            [['target_code' => 'DEN004', 'csv_amount' => 938.0]]
+        )
+    );
     $rows = reconciledHistoricalHarvestRows();
     array_pop($rows);
     $path = storage_path('framework/testing/historical-harvest-row-count-mismatch.csv');
@@ -380,15 +447,21 @@ test('historical Harvest import blocks mismatched approved row counts or totals'
         ->expectsOutputToContain('Import is blocked');
 
     $rows = reconciledHistoricalHarvestRows();
-    $rows[0]['Billable Amount'] = number_format((float) $rows[0]['Billable Amount'] + 638, 2, '.', '');
+    $rows[0]['Billable Amount'] = number_format((float) $rows[0]['Billable Amount'] + 637.99, 2, '.', '');
     $path = storage_path('framework/testing/historical-harvest-mismatch.csv');
     writeHistoricalHarvestCsv($path, $rows);
-    unset($rows);
 
     $this->artisan('app:one-off-historical-harvest-time', ['path' => $path])
         ->assertFailed()
         ->expectsOutputToContain('DEN004')
         ->expectsOutputToContain('Import is blocked');
+
+    $rows[0]['Billable Amount'] = number_format((float) $rows[0]['Billable Amount'] + 0.01, 2, '.', '');
+    writeHistoricalHarvestCsv($path, $rows);
+    unset($rows);
+    $this->artisan('app:one-off-historical-harvest-time', ['path' => $path])
+        ->assertSuccessful()
+        ->expectsOutputToContain('APPROVED');
 
     expect(TimeEntry::count())->toBe(0)
         ->and(DB::table('harvest_import_log')->count())->toBe(0);
@@ -509,7 +582,9 @@ test('historical Harvest import validates ledger metadata and its imported time 
 });
 
 test('production historical Harvest manifest pins every approved source mapping', function () {
-    expect((new HistoricalHarvestTimeImportManifest)->mappings())->toBe([
+    $manifest = new HistoricalHarvestTimeImportManifest;
+
+    expect($manifest->mappings())->toBe([
         ['target_code' => 'DEN004', 'source_client' => '123Dentist', 'source_code' => 'DEN004', 'source_project' => 'Continuous Improvements Retainer (September 2025 - August 2026)', 'from' => '2025-09-01', 'expected_rows' => 282, 'table_amount' => 24105],
         ['target_code' => 'CEP001', 'source_client' => 'CEPA', 'source_code' => 'CEP001', 'source_project' => 'Website Maintenance Retainer (January 2026 - December 2026)', 'from' => '2026-01-01', 'expected_rows' => 165, 'table_amount' => 11025],
         ['target_code' => 'EAA001', 'source_client' => 'East Anglian Air Ambulance (EAAA)', 'source_code' => 'EAA001', 'source_project' => 'Continuous Improvements Retainer (August 2025 - July 2026)', 'from' => '2026-02-01', 'expected_rows' => 134, 'table_amount' => 10144],
@@ -522,5 +597,45 @@ test('production historical Harvest manifest pins every approved source mapping'
         ['target_code' => 'TOG012', 'source_client' => 'Tomorrows Guides', 'source_code' => 'TOG012', 'source_project' => 'CRO Improvements - carehome.co.uk - Build Phase', 'from' => null, 'expected_rows' => 96, 'table_amount' => 14947],
         ['target_code' => 'HOP005', 'source_client' => 'Homeprotect', 'source_code' => 'HOP005', 'source_project' => 'WebMCP Project', 'from' => null, 'expected_rows' => 15, 'table_amount' => 1337],
         ['target_code' => 'MED057', 'source_client' => 'Medivet', 'source_code' => 'MED057', 'source_project' => 'Key Modules Articles - Content Updates', 'from' => null, 'expected_rows' => 6, 'table_amount' => 1200],
+    ])->and($manifest->approvedAmountExceptions())->toBe([
+        ['target_code' => 'DEN004', 'csv_amount' => 24743.0],
+        ['target_code' => 'EAA001', 'csv_amount' => 10884.5],
+    ])->and($manifest->approvedSkips())->toBe([
+        [
+            'source_id' => 'historical-time:v1:2711fc10ba973071d9914fb40d3f97a9e4e0b895dff7d51a6d35ff1eafdd9cb6:1',
+            'target_code' => 'MED001',
+            'spent_on' => '2026-06-29',
+            'user_name' => 'Chris Parsons',
+            'task_name' => 'Development',
+            'source_hours' => 6.0,
+            'source_amount' => 600.0,
+            'existing_rows' => 1,
+            'existing_hours' => 7.5,
+            'existing_amount' => 750.0,
+        ],
+        [
+            'source_id' => 'historical-time:v1:fe2bf1b23a1557692d23c2dd8f8acb6df82d04cf5a0d8ea42dc23a2d952a05ae:1',
+            'target_code' => 'AAB003',
+            'spent_on' => '2026-06-29',
+            'user_name' => 'Hayk Sargsyan',
+            'task_name' => 'Development',
+            'source_hours' => 7.0,
+            'source_amount' => 700.0,
+            'existing_rows' => 4,
+            'existing_hours' => 7.0,
+            'existing_amount' => 700.0,
+        ],
+        [
+            'source_id' => 'historical-time:v1:3b89388219ac026137a1f2306eb540126813ea4b5f880b127a4ca05ed5aaee5f:1',
+            'target_code' => 'AAB003',
+            'spent_on' => '2026-06-30',
+            'user_name' => 'Hayk Sargsyan',
+            'task_name' => 'Development',
+            'source_hours' => 7.75,
+            'source_amount' => 775.0,
+            'existing_rows' => 2,
+            'existing_hours' => 7.0,
+            'existing_amount' => 700.0,
+        ],
     ]);
 });
