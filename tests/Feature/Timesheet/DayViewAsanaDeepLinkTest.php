@@ -6,6 +6,7 @@ use App\Models\AsanaProjectAssociation;
 use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -32,22 +33,45 @@ function deepLinkSetup(): array
     return [$user, $project, $task];
 }
 
-test('saving an entry with an Asana task remembers the board association', function () {
+test('saving an entry keeps the entry UI open and remembers the Asana board association', function () {
     [$user, $project, $task] = deepLinkSetup();
     $this->actingAs($user);
 
-    Livewire::test(DayView::class)
+    $component = Livewire::test(DayView::class)
         ->call('openNewModal')
+        ->set('showCalendarPanel', true)
         ->set('selectedProjectId', $project->id)
         ->set('selectedTaskId', $task->id)
         ->set('selectedAsanaTaskGid', 'AT1')
         ->set('hoursInput', '0.5')
-        ->call('save');
+        ->call('save')
+        ->assertSet('showModal', true)
+        ->assertSet('showCalendarPanel', true)
+        ->assertSet('hoursInput', '')
+        ->assertSet('editingEntryId', null);
+
+    $html = $component->html();
+
+    expect($html)
+        ->toContain('wire:click="closeModal"')
+        ->toContain('wire:click="closeCalendarPanel"')
+        ->toContain('@mousedown.self="$wire.closeModal()"')
+        ->toContain('@keydown.escape.window="$wire.closeModal()"');
+    expect(substr_count($html, 'wire:click="closeModal"'))->toBe(2);
 
     $assoc = AsanaProjectAssociation::sole();
     expect($assoc->asana_project_gid)->toBe('BOARD1')
         ->and($assoc->project_id)->toBe($project->id)
         ->and($assoc->task_id)->toBe($task->id);
+
+    $component
+        ->set('selectedProjectId', $project->id)
+        ->set('selectedTaskId', $task->id)
+        ->call('startTimerFromModal')
+        ->assertSet('showModal', false)
+        ->assertSet('showCalendarPanel', false);
+
+    expect(TimeEntry::count())->toBe(2);
 
     Livewire::withQueryParams(['log_asana' => 'AT1'])
         ->test(DayView::class)

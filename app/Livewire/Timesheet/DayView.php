@@ -388,6 +388,8 @@ class DayView extends Component
                 // close (forwarded as a postMessage from the blade).
                 $this->dispatch('asana-entry-saved');
             }
+        } else {
+            return;
         }
 
         if ($this->lastCalendarPullTitle !== null) {
@@ -395,14 +397,7 @@ class DayView extends Component
                 ->remember($user, $this->lastCalendarPullTitle, $projectId, $taskId);
         }
 
-        if ($isEdit) {
-            // Editing: close as before.
-            $this->closeModal();
-
-            return;
-        }
-
-        $this->closeModal();
+        $this->resetEntryFormAfterSave();
     }
 
     private function validateAsanaTaskRequirement(): bool
@@ -866,6 +861,13 @@ class DayView extends Component
         $this->entryDate = $this->selectedDate;
         $this->lastCalendarPullTitle = null;
         $this->resetErrorBag();
+    }
+
+    private function resetEntryFormAfterSave(): void
+    {
+        $entryDate = $this->entryDate;
+        $this->resetModal();
+        $this->entryDate = $entryDate;
     }
 
     private function rememberLastSavedProjectAndTask(int $projectId, int $taskId): void
