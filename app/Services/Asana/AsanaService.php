@@ -3,10 +3,12 @@
 namespace App\Services\Asana;
 
 use App\Models\User;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
+use Throwable;
 
 final class AsanaService
 {
@@ -303,6 +305,12 @@ final class AsanaService
 
         return Http::withToken($token)
             ->acceptJson()
-            ->retry(2, 200, throw: false);
+            ->retry(
+                2,
+                200,
+                static fn (Throwable $exception): bool => $exception instanceof ConnectionException
+                    || ($exception instanceof RequestException && $exception->response->serverError()),
+                throw: false,
+            );
     }
 }

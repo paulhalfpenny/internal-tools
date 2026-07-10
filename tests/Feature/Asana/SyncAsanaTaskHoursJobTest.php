@@ -14,6 +14,7 @@ use App\Services\Asana\AsanaTaskHoursAggregator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 
 uses(RefreshDatabase::class);
 
@@ -336,4 +337,120 @@ test('does not warn on fallback when no sync actor is designated', function () {
 
     expect(AsanaSyncLog::query()->where('event', 'asana.sync_hours.actor_fallback')->exists())
         ->toBeFalse();
+});
+
+test('handles permission denied while setting hours without retrying', function () {
+    Queue::fake();
+    $project = asanaTestLinkedProject();
+    $actor = asanaTestConnectedAdmin();
+    User::designateAsanaSyncActor($actor);
+    $task = Task::factory()->create();
+
+    asanaTestEnsureCachedTask('T403');
+
+    $requests = 0;
+    Http::fake(function ($request) use (&$requests) {
+        $requests++;
+
+        return Http::response([
+            'errors' => [['message' => 'Only project admins can edit this field.']],
+        ], 403);
+    });
+    $entry = asanaTestEntry($project, $task, $actor, 'T403', 1.0);
+
+    $thrown = null;
+    try {
+        (new SyncAsanaTaskHoursJob('T403', $project->id))->handle(
+            app(AsanaService::class),
+            app(AsanaTaskHoursAggregator::class),
+        );
+    } catch (Throwable $e) {
+        $thrown = $e;
+    }
+
+    $log = AsanaSyncLog::query()->where('event', 'asana.sync_hours.permission_denied')->first();
+
+    expect($thrown)->toBeNull()
+        ->and($requests)->toBe(1)
+        ->and($entry->fresh()->asana_sync_error)
+        ->toContain('Grant it project-admin and custom-field edit access')
+        ->and($log)->not->toBeNull()
+        ->and($log->context['stage'])->toBe('set_hours')
+        ->and($log->context['asana_task_gid'])->toBe('T403')
+        ->and($log->context['asana_task_name'])->toBe('Task T403')
+        ->and($log->context['board_gid'])->toBe('P1')
+        ->and($log->context['board_name'])->toBe('Asana P1')
+        ->and($log->context['custom_field_gid'])->toBe('F1')
+        ->and($log->context['project_id'])->toBe($project->id)
+        ->and($log->context['actor_user_id'])->toBe($actor->id)
+        ->and($log->context['actor_asana_user_gid'])->toBe('admin-gid');
+});
+
+test('handles permission denied while ensuring field without retrying', function () {
+    Queue::fake();
+    $project = asanaTestLinkedProject(customFieldGid: null);
+    $actor = asanaTestConnectedAdmin();
+    User::designateAsanaSyncActor($actor);
+    $task = Task::factory()->create();
+
+    asanaTestEnsureCachedTask('T403');
+
+    $requests = 0;
+    Http::fake(function ($request) use (&$requests) {
+        $requests++;
+
+        return Http::response([
+            'errors' => [['message' => 'Only project admins can manage custom fields.']],
+        ], 403);
+    });
+    $entry = asanaTestEntry($project, $task, $actor, 'T403', 1.0);
+
+    $thrown = null;
+    try {
+        (new SyncAsanaTaskHoursJob('T403', $project->id))->handle(
+            app(AsanaService::class),
+            app(AsanaTaskHoursAggregator::class),
+        );
+    } catch (Throwable $e) {
+        $thrown = $e;
+    }
+
+    $log = AsanaSyncLog::query()->where('event', 'asana.sync_hours.permission_denied')->first();
+
+    expect($thrown)->toBeNull()
+        ->and($requests)->toBe(1)
+        ->and($entry->fresh()->asana_sync_error)
+        ->toContain('Grant it project-admin and custom-field edit access')
+        ->and($log)->not->toBeNull()
+        ->and($log->context['stage'])->toBe('ensure_field')
+        ->and($log->context['board_gid'])->toBe('P1')
+        ->and($log->context['custom_field_gid'])->toBeNull()
+        ->and($log->context['actor_user_id'])->toBe($actor->id);
+});
+
+test('releases rate limited jobs without an immediate HTTP retry', function () {
+    Queue::fake();
+    $project = asanaTestLinkedProject();
+    $actor = asanaTestConnectedAdmin();
+    $task = Task::factory()->create();
+
+    asanaTestEnsureCachedTask('T429');
+
+    $requests = 0;
+    Http::fake(function () use (&$requests) {
+        $requests++;
+
+        return Http::response(
+            ['errors' => [['message' => 'Rate limited']]],
+            429,
+            ['Retry-After' => '45'],
+        );
+    });
+    asanaTestEntry($project, $task, $actor, 'T429', 1.0);
+
+    $job = (new SyncAsanaTaskHoursJob('T429', $project->id))->withFakeQueueInteractions();
+    $job->handle(app(AsanaService::class), app(AsanaTaskHoursAggregator::class));
+
+    $job->assertReleased(45);
+    expect($requests)->toBe(1);
 });

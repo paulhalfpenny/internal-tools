@@ -4,6 +4,7 @@ use App\Models\User;
 use App\Services\Asana\AsanaService;
 use App\Services\Asana\AsanaTokenManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
@@ -205,4 +206,36 @@ test('setTaskHours PUTs the rounded value to the task', function () {
             && str_contains($r->url(), '/tasks/T1')
             && $r['data']['custom_fields']['F1'] === 3.46;
     });
+});
+
+test('client errors are not retried', function () {
+    [, $service] = asanaTestServiceWithUser();
+    $requests = 0;
+
+    Http::fake(function () use (&$requests) {
+        $requests++;
+
+        return Http::response(['errors' => [['message' => 'Forbidden']]], 403);
+    });
+
+    expect(fn () => $service->setTaskHours('T1', 'F1', 1.0))
+        ->toThrow(RequestException::class);
+    expect($requests)->toBe(1);
+});
+
+test('server errors are retried', function () {
+    [, $service] = asanaTestServiceWithUser();
+    $requests = 0;
+
+    Http::fake(function () use (&$requests) {
+        $requests++;
+
+        return $requests === 1
+            ? Http::response(['errors' => [['message' => 'Unavailable']]], 500)
+            : Http::response(['data' => []]);
+    });
+
+    $service->setTaskHours('T1', 'F1', 1.0);
+
+    expect($requests)->toBe(2);
 });

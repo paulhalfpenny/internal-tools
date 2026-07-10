@@ -175,8 +175,10 @@ bot account so changes aren't credited to a random admin.
 One-time setup:
 
 1. Create the Asana account `internaltools@filteragency.com`.
-2. Add it to the Filter workspace and to every board whose projects sync hours,
-   and authorise the Internal Tools Asana app for it.
+2. Add it to the Filter workspace and to every board whose projects sync hours.
+   Make it a **project admin** on each board and confirm it can edit the
+   **Hours tracked (Internal Tools)** custom field, then authorise the Internal
+   Tools Asana app for it.
 3. Sign into Internal Tools as that account and connect Asana via the profile
    page (the normal OAuth flow).
 4. As an admin, open **Admin → Asana Settings** and select the bot account under
@@ -193,3 +195,23 @@ than being cleared), the first sync after expiry surfaces as an
 the refresh fails and the token is cleared, the following sync falls back to an
 admin and raises the amber banner. So a freshly expired bot token shows up first
 as a failed job, then as the banner on the next run.
+
+### Recover from an hours-sync permission error
+
+`asana.sync_hours.permission_denied` means the selected sync account is
+connected but cannot update the task or hours field. The log context includes
+`board_gid`, `board_name`, `custom_field_gid`, and `actor_user_id` so the exact
+Asana access problem can be repaired without joining other tables.
+
+1. In Asana, add the sync account as a project admin on the named board and
+   grant it edit access to the named custom field if that field is restricted.
+2. Confirm the account selected under **Admin → Asana Settings** is the intended
+   dedicated sync account.
+3. Save a matching Internal Tools time entry to dispatch a fresh
+   cumulative-hours sync. If the 403 exhausted its retries before
+   permission-denied handling was deployed, retry only the affected
+   `SyncAsanaTaskHoursJob` UUID listed by `php artisan queue:failed`.
+
+HTTP 403 is treated as terminal until permissions change, so it does not consume
+the job's retry attempts. Connection failures and Asana 5xx responses remain
+retryable; 429 responses continue to honour Asana's `Retry-After` delay.

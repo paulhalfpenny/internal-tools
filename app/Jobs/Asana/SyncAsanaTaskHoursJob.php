@@ -2,6 +2,7 @@
 
 namespace App\Jobs\Asana;
 
+use App\Models\AsanaProject;
 use App\Models\AsanaSyncLog;
 use App\Models\AsanaTask;
 use App\Models\Project;
@@ -92,6 +93,23 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
                     ->where('project_id', $this->projectId)
                     ->where('asana_project_gid', $boardGid)
                     ->update(['asana_custom_field_gid' => $fieldGid, 'updated_at' => now()]);
+            } catch (RequestException $e) {
+                if ($e->response->status() === 403) {
+                    $this->handlePermissionDenied(
+                        $e,
+                        $project,
+                        $linkedBoard,
+                        $asanaTask,
+                        $actor,
+                        null,
+                        'ensure_field',
+                    );
+
+                    return;
+                }
+
+                $this->logFailure($e, $project, 'ensure_field');
+                throw $e;
             } catch (Throwable $e) {
                 $this->logFailure($e, $project, 'ensure_field');
                 throw $e;
@@ -110,6 +128,20 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
         try {
             $svc->setTaskHours($this->asanaTaskGid, $fieldGid, $total);
         } catch (RequestException $e) {
+            if ($e->response->status() === 403) {
+                $this->handlePermissionDenied(
+                    $e,
+                    $project,
+                    $linkedBoard,
+                    $asanaTask,
+                    $actor,
+                    $fieldGid,
+                    'set_hours',
+                );
+
+                return;
+            }
+
             if ($e->response->status() === 404) {
                 $this->markEntriesError('Asana task not found ('.$this->asanaTaskGid.').');
                 AsanaSyncLog::error('asana.sync_hours.task_not_found', [
@@ -193,6 +225,34 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
             ->where('asana_task_gid', $this->asanaTaskGid)
             ->where('project_id', $this->projectId)
             ->update(['asana_sync_error' => $message]);
+    }
+
+    private function handlePermissionDenied(
+        RequestException $exception,
+        Project $project,
+        AsanaProject $linkedBoard,
+        AsanaTask $asanaTask,
+        User $actor,
+        ?string $fieldGid,
+        string $stage,
+    ): void {
+        $this->markEntriesError(sprintf(
+            'Asana sync account cannot update hours on Asana board "%s". Grant it project-admin and custom-field edit access, then retry.',
+            $linkedBoard->name,
+        ));
+
+        AsanaSyncLog::error('asana.sync_hours.permission_denied', [
+            'stage' => $stage,
+            'asana_task_gid' => $this->asanaTaskGid,
+            'asana_task_name' => $asanaTask->name,
+            'board_gid' => $linkedBoard->gid,
+            'board_name' => $linkedBoard->name,
+            'custom_field_gid' => $fieldGid,
+            'project_id' => $this->projectId,
+            'actor_user_id' => $actor->id,
+            'actor_asana_user_gid' => $actor->asana_user_gid,
+            'error' => $exception->getMessage(),
+        ], $project);
     }
 
     private function logFailure(Throwable $e, Project $project, string $stage): void
