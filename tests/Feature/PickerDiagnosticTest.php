@@ -19,9 +19,10 @@ test('picker diagnostic requires a kind', function () {
 test('authenticated user can record a picker diagnostic', function () {
     $this->actingAs(User::factory()->create())
         ->postJson(route('diagnostics.picker'), [
-            'kind' => 'task-picker-dead-click',
+            'kind' => 'task-picker-stuck-open',
             'clickedId' => '3',
-            'committed' => '',
+            'committed' => '3',
+            'isOpen' => true,
             'morphCount' => 2,
             'msSinceLoad' => 5000,
         ])

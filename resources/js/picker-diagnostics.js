@@ -3,8 +3,16 @@
 // independent of Alpine's @click binding, so it still fires even if that
 // binding is somehow orphaned — watches task-option clicks. If the picker's
 // committed selection (data-selected, bound to selectedTaskId) doesn't become
-// the clicked task shortly after the click, we report it with context so the
-// cause can be found from real-world occurrences.
+// the clicked task, or the dropdown remains open, we report it with context so
+// the cause can be found from real-world occurrences.
+
+export function taskPickerIssue(clickedId, committed, isOpen) {
+    if (committed !== clickedId) {
+        return 'task-picker-dead-click';
+    }
+
+    return isOpen ? 'task-picker-stuck-open' : null;
+}
 
 if (typeof window !== 'undefined') {
     const loadStart = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
@@ -62,8 +70,11 @@ if (typeof window !== 'undefined') {
         // Give Alpine a beat to commit the selection, then verify it landed.
         window.setTimeout(() => {
             const committed = picker.getAttribute('data-selected') ?? '';
-            if (committed !== clickedId) {
-                report({ kind: 'task-picker-dead-click', clickedId, committed });
+            const isOpen = picker.getAttribute('data-open') === 'true';
+            const kind = taskPickerIssue(clickedId, committed, isOpen);
+
+            if (kind) {
+                report({ kind, clickedId, committed, isOpen });
             }
         }, 350);
     }, true);

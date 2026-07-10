@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Receives client-side reports that a timesheet task-picker option was clicked
- * but the selection never committed (the "dead picker" bug we could not
- * reproduce). Logged so we can catch it in the wild with real context.
+ * but the selection never committed or its dropdown stayed open. Logged so
+ * we can catch intermittent picker failures with real context.
  */
 class PickerDiagnosticController extends Controller
 {
@@ -20,6 +20,7 @@ class PickerDiagnosticController extends Controller
             'kind' => 'required|string|max:64',
             'clickedId' => 'nullable|string|max:64',
             'committed' => 'nullable|string|max:64',
+            'isOpen' => 'nullable|boolean',
             'msSinceLoad' => 'nullable|integer',
             'appVersion' => 'nullable|string|max:32',
             'livewireVersion' => 'nullable|string|max:32',
