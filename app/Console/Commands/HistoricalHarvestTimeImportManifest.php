@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 final class HistoricalHarvestTimeImportManifest
 {
+    private const PRODUCTION_SOURCE_SHA256 = '787ea385c7fc83aadf815df1a979082bcd878f5bd4fa1a6c404dd8a594ac96b5';
+
     /**
      * @var list<array{
      *     target_code: string,
@@ -98,6 +100,7 @@ final class HistoricalHarvestTimeImportManifest
         private readonly ?array $mappings = null,
         private readonly ?array $approvedAmountExceptions = null,
         private readonly ?array $approvedSkips = null,
+        private readonly ?string $expectedSourceSha256 = null,
     ) {}
 
     /** @return array<array-key, mixed> */
@@ -116,5 +119,10 @@ final class HistoricalHarvestTimeImportManifest
     public function approvedSkips(): array
     {
         return $this->approvedSkips ?? ($this->mappings === null ? self::PRODUCTION_SKIPS : []);
+    }
+
+    public function expectedSourceSha256(): ?string
+    {
+        return $this->expectedSourceSha256 ?? ($this->mappings === null ? self::PRODUCTION_SOURCE_SHA256 : null);
     }
 }

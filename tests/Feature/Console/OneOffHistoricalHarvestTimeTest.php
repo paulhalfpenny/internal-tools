@@ -172,7 +172,12 @@ function writeHistoricalHarvestCsv(string $path, array $rows): string
 test('historical Harvest import dry-runs the reconciled target set without writing', function () {
     createHistoricalHarvestReferences();
     $path = storage_path('framework/testing/historical-harvest-reconciled.csv');
-    writeHistoricalHarvestCsv($path, reconciledHistoricalHarvestRows());
+    $rows = reconciledHistoricalHarvestRows();
+    $hash = writeHistoricalHarvestCsv($path, $rows);
+    app()->instance(
+        HistoricalHarvestTimeImportManifest::class,
+        new HistoricalHarvestTimeImportManifest(historicalHarvestTestManifest(), [], [], $hash)
+    );
 
     $before = [
         'clients' => Client::count(),
@@ -186,6 +191,14 @@ test('historical Harvest import dry-runs the reconciled target set without writi
         ->expectsOutputToContain('DRY RUN')
         ->expectsOutputToContain('7')
         ->expectsOutputToContain('FUN006');
+
+    $rows[0]['Notes'] = 'Altered after approval';
+    writeHistoricalHarvestCsv($path, $rows);
+    unset($rows);
+
+    $this->artisan('app:one-off-historical-harvest-time', ['path' => $path])
+        ->assertFailed()
+        ->expectsOutputToContain('does not match the approved source SHA-256');
 
     expect(TimeEntry::count())->toBe(0)
         ->and(DB::table('harvest_import_log')->count())->toBe(0)
@@ -447,6 +460,16 @@ test('historical Harvest import blocks mismatched approved row counts or totals'
         ->expectsOutputToContain('Import is blocked');
 
     $rows = reconciledHistoricalHarvestRows();
+    $path = storage_path('framework/testing/historical-harvest-old-table-total.csv');
+    writeHistoricalHarvestCsv($path, $rows);
+    unset($rows);
+
+    $this->artisan('app:one-off-historical-harvest-time', ['path' => $path])
+        ->assertFailed()
+        ->expectsOutputToContain('DEN004')
+        ->expectsOutputToContain('Import is blocked');
+
+    $rows = reconciledHistoricalHarvestRows();
     $rows[0]['Billable Amount'] = number_format((float) $rows[0]['Billable Amount'] + 637.99, 2, '.', '');
     $path = storage_path('framework/testing/historical-harvest-mismatch.csv');
     writeHistoricalHarvestCsv($path, $rows);
@@ -597,45 +620,46 @@ test('production historical Harvest manifest pins every approved source mapping'
         ['target_code' => 'TOG012', 'source_client' => 'Tomorrows Guides', 'source_code' => 'TOG012', 'source_project' => 'CRO Improvements - carehome.co.uk - Build Phase', 'from' => null, 'expected_rows' => 96, 'table_amount' => 14947],
         ['target_code' => 'HOP005', 'source_client' => 'Homeprotect', 'source_code' => 'HOP005', 'source_project' => 'WebMCP Project', 'from' => null, 'expected_rows' => 15, 'table_amount' => 1337],
         ['target_code' => 'MED057', 'source_client' => 'Medivet', 'source_code' => 'MED057', 'source_project' => 'Key Modules Articles - Content Updates', 'from' => null, 'expected_rows' => 6, 'table_amount' => 1200],
-    ])->and($manifest->approvedAmountExceptions())->toBe([
-        ['target_code' => 'DEN004', 'csv_amount' => 24743.0],
-        ['target_code' => 'EAA001', 'csv_amount' => 10884.5],
-    ])->and($manifest->approvedSkips())->toBe([
-        [
-            'source_id' => 'historical-time:v1:2711fc10ba973071d9914fb40d3f97a9e4e0b895dff7d51a6d35ff1eafdd9cb6:1',
-            'target_code' => 'MED001',
-            'spent_on' => '2026-06-29',
-            'user_name' => 'Chris Parsons',
-            'task_name' => 'Development',
-            'source_hours' => 6.0,
-            'source_amount' => 600.0,
-            'existing_rows' => 1,
-            'existing_hours' => 7.5,
-            'existing_amount' => 750.0,
-        ],
-        [
-            'source_id' => 'historical-time:v1:fe2bf1b23a1557692d23c2dd8f8acb6df82d04cf5a0d8ea42dc23a2d952a05ae:1',
-            'target_code' => 'AAB003',
-            'spent_on' => '2026-06-29',
-            'user_name' => 'Hayk Sargsyan',
-            'task_name' => 'Development',
-            'source_hours' => 7.0,
-            'source_amount' => 700.0,
-            'existing_rows' => 4,
-            'existing_hours' => 7.0,
-            'existing_amount' => 700.0,
-        ],
-        [
-            'source_id' => 'historical-time:v1:3b89388219ac026137a1f2306eb540126813ea4b5f880b127a4ca05ed5aaee5f:1',
-            'target_code' => 'AAB003',
-            'spent_on' => '2026-06-30',
-            'user_name' => 'Hayk Sargsyan',
-            'task_name' => 'Development',
-            'source_hours' => 7.75,
-            'source_amount' => 775.0,
-            'existing_rows' => 2,
-            'existing_hours' => 7.0,
-            'existing_amount' => 700.0,
-        ],
-    ]);
+    ])->and($manifest->expectedSourceSha256())->toBe('787ea385c7fc83aadf815df1a979082bcd878f5bd4fa1a6c404dd8a594ac96b5')
+        ->and($manifest->approvedAmountExceptions())->toBe([
+            ['target_code' => 'DEN004', 'csv_amount' => 24743.0],
+            ['target_code' => 'EAA001', 'csv_amount' => 10884.5],
+        ])->and($manifest->approvedSkips())->toBe([
+            [
+                'source_id' => 'historical-time:v1:2711fc10ba973071d9914fb40d3f97a9e4e0b895dff7d51a6d35ff1eafdd9cb6:1',
+                'target_code' => 'MED001',
+                'spent_on' => '2026-06-29',
+                'user_name' => 'Chris Parsons',
+                'task_name' => 'Development',
+                'source_hours' => 6.0,
+                'source_amount' => 600.0,
+                'existing_rows' => 1,
+                'existing_hours' => 7.5,
+                'existing_amount' => 750.0,
+            ],
+            [
+                'source_id' => 'historical-time:v1:fe2bf1b23a1557692d23c2dd8f8acb6df82d04cf5a0d8ea42dc23a2d952a05ae:1',
+                'target_code' => 'AAB003',
+                'spent_on' => '2026-06-29',
+                'user_name' => 'Hayk Sargsyan',
+                'task_name' => 'Development',
+                'source_hours' => 7.0,
+                'source_amount' => 700.0,
+                'existing_rows' => 4,
+                'existing_hours' => 7.0,
+                'existing_amount' => 700.0,
+            ],
+            [
+                'source_id' => 'historical-time:v1:3b89388219ac026137a1f2306eb540126813ea4b5f880b127a4ca05ed5aaee5f:1',
+                'target_code' => 'AAB003',
+                'spent_on' => '2026-06-30',
+                'user_name' => 'Hayk Sargsyan',
+                'task_name' => 'Development',
+                'source_hours' => 7.75,
+                'source_amount' => 775.0,
+                'existing_rows' => 2,
+                'existing_hours' => 7.0,
+                'existing_amount' => 700.0,
+            ],
+        ]);
 });

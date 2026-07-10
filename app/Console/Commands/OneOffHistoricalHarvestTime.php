@@ -84,8 +84,16 @@ class OneOffHistoricalHarvestTime extends Command
 
         try {
             [$source, $actualHash] = $this->sourceSnapshot($path);
+            $approvedHash = $this->approvedSourceSha256();
         } catch (RuntimeException $exception) {
             $this->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
+
+        if ($approvedHash !== null && ! hash_equals($approvedHash, $actualHash)) {
+            fclose($source);
+            $this->error("Source SHA-256 {$actualHash} does not match the approved source SHA-256 {$approvedHash}.");
 
             return self::FAILURE;
         }
@@ -177,6 +185,16 @@ class OneOffHistoricalHarvestTime extends Command
         $this->info('Approved skips: '.number_format(count($approvedSkips)));
 
         return self::SUCCESS;
+    }
+
+    private function approvedSourceSha256(): ?string
+    {
+        $hash = $this->manifest->expectedSourceSha256();
+        if ($hash !== null && ! preg_match('/^[a-f0-9]{64}$/', $hash)) {
+            throw new RuntimeException('Historical Harvest approved source SHA-256 is invalid.');
+        }
+
+        return $hash;
     }
 
     /** @return array{0: resource, 1: string} */
@@ -705,8 +723,10 @@ class OneOffHistoricalHarvestTime extends Command
             $hours = array_sum(array_map(fn (array $row): float => (float) $row['hours'], $matching));
             $countMatches = count($matching) === $mapping['expected_rows'];
             $amountMatches = (int) round($amount, 0, PHP_ROUND_HALF_UP) === $mapping['table_amount'];
-            $amountApproved = isset($amountExceptions[$mapping['target_code']])
+            $hasAmountException = isset($amountExceptions[$mapping['target_code']]);
+            $amountApproved = $hasAmountException
                 && abs(round($amount, 2) - $amountExceptions[$mapping['target_code']]) < 0.005;
+            $amountAccepted = $hasAmountException ? $amountApproved : $amountMatches;
             $alreadyImported = count(array_filter(
                 $matching,
                 fn (array $row): bool => isset($ledgerTargets[$row['source_id']])
@@ -732,11 +752,11 @@ class OneOffHistoricalHarvestTime extends Command
                 'skipped' => $skipped,
                 'to_insert' => count($matching) - $alreadyImported - $skipped,
                 'conflicts' => $conflictCount,
-                'status' => ! $countMatches || (! $amountMatches && ! $amountApproved)
+                'status' => ! $countMatches || ! $amountAccepted
                     ? 'BLOCKED'
                     : ($conflictCount > 0
                         ? 'CONFLICT'
-                        : ($amountApproved || $skipped > 0 ? 'APPROVED' : 'OK')),
+                        : ($hasAmountException || $skipped > 0 ? 'APPROVED' : 'OK')),
             ];
         }
 
