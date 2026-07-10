@@ -98,8 +98,8 @@ class OneOffHistoricalHarvestTime extends Command
         }
 
         try {
-            $this->assertLedgerSourceHash($actualHash);
             $rows = $this->selectedRows($source);
+            $this->assertLedgerMatchesSource($rows, $actualHash);
             $this->resolveReferences($rows);
         } catch (RuntimeException $exception) {
             $this->error($exception->getMessage());
@@ -144,7 +144,7 @@ class OneOffHistoricalHarvestTime extends Command
         }
 
         try {
-            $inserted = $this->insertRows($unimportedRows, $actualHash, array_values($ledgerTargets));
+            $inserted = $this->insertRows($unimportedRows, $actualHash, array_values($ledgerTargets), $rows);
         } catch (RuntimeException $exception) {
             $this->error($exception->getMessage());
 
@@ -572,9 +572,19 @@ class OneOffHistoricalHarvestTime extends Command
         );
     }
 
-    private function assertLedgerSourceHash(string $sourceHash): void
+    /** @param list<array<string, mixed>> $sourceRows */
+    private function assertLedgerMatchesSource(array $sourceRows, string $sourceHash): void
     {
         $ledgerHash = null;
+        $expectedRows = [];
+        foreach ($sourceRows as $row) {
+            $expectedRows[(string) $row['source_id']] = [
+                'source_row' => (int) $row['source_row'],
+                'target_code' => (string) $row['target_code'],
+            ];
+        }
+
+        $seen = [];
         $entries = DB::table('harvest_import_log')
             ->where('entity_type', self::IMPORT_ENTITY_TYPE)
             ->orderBy('id')
@@ -598,10 +608,28 @@ class OneOffHistoricalHarvestTime extends Command
             }
 
             $ledgerHash = $metadata['source_sha256'];
-        }
 
-        if ($ledgerHash !== null && ! hash_equals($ledgerHash, $sourceHash)) {
-            throw new RuntimeException("Historical Harvest import ledger belongs to source SHA-256 {$ledgerHash}; current source is {$sourceHash}.");
+            if (! hash_equals($sourceHash, $metadata['source_sha256'])) {
+                throw new RuntimeException("Historical Harvest import ledger belongs to source SHA-256 {$metadata['source_sha256']}; current source is {$sourceHash}.");
+            }
+
+            $sourceId = (string) $entry->source_harvest_id;
+            $expected = $expectedRows[$sourceId] ?? null;
+            if ($expected === null
+                || $metadata['source_row'] !== $expected['source_row']
+                || $metadata['target_code'] !== $expected['target_code']) {
+                throw new RuntimeException("Import ledger record {$sourceId} does not match the current source.");
+            }
+
+            if (isset($seen[$sourceId])) {
+                throw new RuntimeException("Import ledger contains duplicate records for {$sourceId}.");
+            }
+
+            if ($entry->target_id === null) {
+                throw new RuntimeException("Import ledger record {$sourceId} has no target time entry.");
+            }
+
+            $seen[$sourceId] = true;
         }
     }
 
@@ -726,13 +754,14 @@ class OneOffHistoricalHarvestTime extends Command
         }
 
         $projectIds = array_values(array_unique(array_map(fn (array $row): int => (int) $row['project_id'], $rows)));
-        $firstSourceDate = min(array_column($rows, 'spent_on'));
-        $query = TimeEntry::query()
-            ->whereIn('project_id', $projectIds)
-            ->where('spent_on', '>=', $firstSourceDate)
-            ->where('spent_on', '<=', self::CUTOFF);
+        $query = TimeEntry::query()->whereIn('project_id', $projectIds);
 
-        if ($loggedTargetIds !== []) {
+        if (! $lockForUpdate) {
+            $query->where('spent_on', '>=', min(array_column($rows, 'spent_on')))
+                ->where('spent_on', '<=', self::CUTOFF);
+        }
+
+        if ($loggedTargetIds !== [] && ! $lockForUpdate) {
             $query->whereNotIn('id', $loggedTargetIds);
         }
 
@@ -740,7 +769,12 @@ class OneOffHistoricalHarvestTime extends Command
             $query->lockForUpdate();
         }
 
+        $loggedTargetLookup = array_fill_keys($loggedTargetIds, true);
         foreach ($query->get() as $entry) {
+            if (isset($loggedTargetLookup[$entry->id])) {
+                continue;
+            }
+
             $key = implode('|', [$entry->project_id, $entry->spent_on->toDateString(), $entry->user_id, $entry->task_id]);
             if (! isset($sourceGroups[$key])) {
                 continue;
@@ -793,19 +827,23 @@ class OneOffHistoricalHarvestTime extends Command
     /**
      * @param  list<array<string, mixed>>  $rows
      * @param  list<int>  $loggedTargetIds
+     * @param  list<array<string, mixed>>  $sourceRows
      */
-    private function insertRows(array $rows, string $sourceHash, array $loggedTargetIds): int
+    private function insertRows(array $rows, string $sourceHash, array $loggedTargetIds, array $sourceRows): int
     {
         if ($rows === []) {
             return 0;
         }
 
-        return DB::transaction(function () use ($rows, $sourceHash, $loggedTargetIds): int {
+        $this->assertLockingIsolation();
+
+        return DB::transaction(function () use ($rows, $sourceHash, $loggedTargetIds, $sourceRows): int {
             Project::query()
                 ->whereIn('id', array_values(array_unique(array_map(fn (array $row): int => (int) $row['project_id'], $rows))))
                 ->lockForUpdate()
                 ->get();
 
+            $this->assertLedgerMatchesSource($sourceRows, $sourceHash);
             $concurrentLedgerTargets = $this->ledgerTargets(array_column($rows, 'source_id'));
             if ($concurrentLedgerTargets !== []) {
                 throw new RuntimeException('Import ledger changed while waiting for the transaction lock; rerun the dry run.');
@@ -814,6 +852,9 @@ class OneOffHistoricalHarvestTime extends Command
             if ($this->conflicts($rows, $loggedTargetIds, true) !== []) {
                 throw new RuntimeException('Existing time entries changed after preflight; rerun the dry run.');
             }
+
+            $lockedLedgerTargets = $this->ledgerTargets(array_column($sourceRows, 'source_id'));
+            $this->assertLedgerEntriesAreUnchanged($sourceRows, $lockedLedgerTargets);
 
             $importedAt = now();
             foreach ($rows as $row) {
@@ -852,5 +893,19 @@ class OneOffHistoricalHarvestTime extends Command
 
             return count($rows);
         });
+    }
+
+    private function assertLockingIsolation(): void
+    {
+        $connection = DB::connection();
+        if ($connection->getDriverName() !== 'mysql') {
+            return;
+        }
+
+        $state = $connection->selectOne('SELECT @@transaction_isolation AS isolation_level');
+        $isolation = strtoupper(str_replace(' ', '-', (string) ($state->isolation_level ?? '')));
+        if (! in_array($isolation, ['REPEATABLE-READ', 'SERIALIZABLE'], true)) {
+            throw new RuntimeException("Historical Harvest commit requires REPEATABLE-READ or SERIALIZABLE isolation; current level is {$isolation}.");
+        }
     }
 }

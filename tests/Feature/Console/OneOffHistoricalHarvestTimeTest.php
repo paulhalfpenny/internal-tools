@@ -484,6 +484,19 @@ test('historical Harvest import validates ledger metadata and its imported time 
         ->expectsOutputToContain('has invalid metadata');
 
     DB::table('harvest_import_log')->where('id', $ledger->id)->update(['notes' => $ledger->notes]);
+    $extraLedgerId = DB::table('harvest_import_log')->insertGetId([
+        'source_harvest_id' => 'historical-time:v1:untracked:1',
+        'imported_at' => now(),
+        'entity_type' => 'historical_harvest_time_entry',
+        'target_id' => $ledger->target_id,
+        'notes' => $ledger->notes,
+    ]);
+
+    $this->artisan('app:one-off-historical-harvest-time', ['path' => $path])
+        ->assertFailed()
+        ->expectsOutputToContain('does not match the current source');
+
+    DB::table('harvest_import_log')->where('id', $extraLedgerId)->delete();
 
     TimeEntry::query()->orderBy('id')->firstOrFail()->update(['notes' => 'Changed after import']);
 
