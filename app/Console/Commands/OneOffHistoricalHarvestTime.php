@@ -668,7 +668,7 @@ class OneOffHistoricalHarvestTime extends Command
      * @param  list<array<string, mixed>>  $rows
      * @param  array<string, int>  $ledgerTargets
      */
-    private function assertLedgerEntriesAreUnchanged(array $rows, array $ledgerTargets): void
+    private function assertLedgerEntriesAreUnchanged(array $rows, array $ledgerTargets, bool $lockForUpdate = false): void
     {
         if ($ledgerTargets === []) {
             return;
@@ -676,7 +676,12 @@ class OneOffHistoricalHarvestTime extends Command
 
         $entries = [];
         foreach (array_chunk(array_values($ledgerTargets), 500) as $chunk) {
-            foreach (TimeEntry::query()->whereIn('id', $chunk)->get() as $entry) {
+            $query = TimeEntry::query()->whereIn('id', $chunk);
+            if ($lockForUpdate) {
+                $query->lockForUpdate();
+            }
+
+            foreach ($query->get() as $entry) {
                 $entries[$entry->id] = $entry;
             }
         }
@@ -721,9 +726,10 @@ class OneOffHistoricalHarvestTime extends Command
     /**
      * @param  list<array<string, mixed>>  $rows
      * @param  list<int>  $loggedTargetIds
+     * @param  list<array<string, mixed>>|null  $lockScopeRows
      * @return list<array{target_code: string, spent_on: string, user_name: string, task_name: string, source_ids: list<string>, source_rows: int, source_hours: float, source_amount: float, existing_rows: int, existing_hours: float, existing_amount: float}>
      */
-    private function conflicts(array $rows, array $loggedTargetIds, bool $lockForUpdate = false): array
+    private function conflicts(array $rows, array $loggedTargetIds, bool $lockForUpdate = false, ?array $lockScopeRows = null): array
     {
         if ($rows === []) {
             return [];
@@ -753,7 +759,8 @@ class OneOffHistoricalHarvestTime extends Command
             $sourceGroups[$key]['source_amount'] += (float) $row['billable_amount'];
         }
 
-        $projectIds = array_values(array_unique(array_map(fn (array $row): int => (int) $row['project_id'], $rows)));
+        $scopeRows = $lockScopeRows ?? $rows;
+        $projectIds = array_values(array_unique(array_map(fn (array $row): int => (int) $row['project_id'], $scopeRows)));
         $query = TimeEntry::query()->whereIn('project_id', $projectIds);
 
         if (! $lockForUpdate) {
@@ -839,7 +846,7 @@ class OneOffHistoricalHarvestTime extends Command
 
         return DB::transaction(function () use ($rows, $sourceHash, $loggedTargetIds, $sourceRows): int {
             Project::query()
-                ->whereIn('id', array_values(array_unique(array_map(fn (array $row): int => (int) $row['project_id'], $rows))))
+                ->whereIn('id', array_values(array_unique(array_map(fn (array $row): int => (int) $row['project_id'], $sourceRows))))
                 ->lockForUpdate()
                 ->get();
 
@@ -849,12 +856,12 @@ class OneOffHistoricalHarvestTime extends Command
                 throw new RuntimeException('Import ledger changed while waiting for the transaction lock; rerun the dry run.');
             }
 
-            if ($this->conflicts($rows, $loggedTargetIds, true) !== []) {
+            if ($this->conflicts($rows, $loggedTargetIds, true, $sourceRows) !== []) {
                 throw new RuntimeException('Existing time entries changed after preflight; rerun the dry run.');
             }
 
             $lockedLedgerTargets = $this->ledgerTargets(array_column($sourceRows, 'source_id'));
-            $this->assertLedgerEntriesAreUnchanged($sourceRows, $lockedLedgerTargets);
+            $this->assertLedgerEntriesAreUnchanged($sourceRows, $lockedLedgerTargets, true);
 
             $importedAt = now();
             foreach ($rows as $row) {
