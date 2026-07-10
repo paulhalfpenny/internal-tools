@@ -185,10 +185,22 @@ test('historical Harvest import dry-runs the reconciled target set without writi
 
 test('historical Harvest import commits mapped fields and only adds time entries and ledger rows', function () {
     Queue::fake();
+    $manifest = historicalHarvestTestManifest();
+    $manifest[0]['table_amount'] = 1300;
+    app()->instance(
+        HistoricalHarvestTimeImportManifest::class,
+        new HistoricalHarvestTimeImportManifest($manifest)
+    );
     createHistoricalHarvestReferences();
     $rows = reconciledHistoricalHarvestRows();
 
-    $firstAmount = (float) $rows[0]['Billable Amount'];
+    $rows[0]['Hours'] = '11.02';
+    $rows[0]['Billable Amount'] = '1,102.00';
+    $rows[1]['Hours'] = '0.99';
+    $rows[1]['Billable Amount'] = '99.00';
+    $rows[2]['Hours'] = '0.99';
+    $rows[2]['Billable Amount'] = '99.00';
+    $firstAmount = 1102.0;
     $rows[0]['First Name'] = 'David';
     $rows[0]['Last Name'] = 'Page';
     $rows[0]['Task'] = 'Design';
@@ -200,6 +212,7 @@ test('historical Harvest import commits mapped fields and only adds time entries
     $rows[1]['Billable?'] = 'No';
     $rows[1]['Billable Rate'] = '0.00';
     $rows[1]['Billable Amount'] = '0.00';
+    $rows[2]['Hours'] = '1.98';
     $rows[2]['Billable Amount'] = number_format((float) $rows[2]['Billable Amount'] + $nonBillableAmount, 2, '.', '');
 
     $excluded = $rows[0];
@@ -221,6 +234,16 @@ test('historical Harvest import commits mapped fields and only adds time entries
     $path = storage_path('framework/testing/historical-harvest-commit.csv');
     $hash = writeHistoricalHarvestCsv($path, $rows);
     unset($rows);
+    $existingProject = Project::query()->where('code', 'HOP005')->firstOrFail();
+    $existing = TimeEntry::factory()->create([
+        'project_id' => $existingProject->id,
+        'user_id' => User::query()->where('name', 'Import User')->firstOrFail()->id,
+        'task_id' => Task::query()->where('name', 'Development')->firstOrFail()->id,
+        'spent_on' => '2025-01-01',
+        'hours' => 1.0,
+        'notes' => 'Unrelated existing entry',
+    ]);
+    $existingBefore = (array) DB::table('time_entries')->where('id', $existing->id)->first();
     $beforeProjects = Project::query()->orderBy('id')->get()->map->getAttributes()->all();
     $beforeCounts = [
         'clients' => Client::count(),
@@ -236,7 +259,7 @@ test('historical Harvest import commits mapped fields and only adds time entries
         '--commit' => true,
     ])->assertSuccessful();
 
-    expect(TimeEntry::count())->toBe(7)
+    expect(TimeEntry::count())->toBe(8)
         ->and(DB::table('harvest_import_log')->count())->toBe(7)
         ->and(Client::count())->toBe($beforeCounts['clients'])
         ->and(Project::count())->toBe($beforeCounts['projects'])
@@ -244,6 +267,7 @@ test('historical Harvest import commits mapped fields and only adds time entries
         ->and(Task::count())->toBe($beforeCounts['tasks'])
         ->and(DB::table('project_task')->count())->toBe($beforeCounts['project_tasks'])
         ->and(Project::query()->orderBy('id')->get()->map->getAttributes()->all())->toBe($beforeProjects)
+        ->and((array) DB::table('time_entries')->where('id', $existing->id)->first())->toBe($existingBefore)
         ->and(TimeEntry::query()->whereIn('notes', ['Excluded before start', 'Excluded after cutoff'])->count())->toBe(0);
 
     $imported = TimeEntry::query()->where('notes', 'Imported note, with punctuation')->firstOrFail();
@@ -289,6 +313,19 @@ test('historical Harvest import is idempotent and preserves identical source eve
         ->assertSuccessful()
         ->expectsOutputToContain('Already imported: 7');
 
+    $changedRows = reconciledHistoricalHarvestRows();
+    $changedRows[1] = $changedRows[0];
+    $changedRows[0]['Date'] = '2025-09-02';
+    $changedPath = storage_path('framework/testing/historical-harvest-changed-source.csv');
+    $changedHash = writeHistoricalHarvestCsv($changedPath, $changedRows);
+    unset($changedRows);
+
+    $this->artisan('app:one-off-historical-harvest-time', [
+        'path' => $changedPath,
+        '--expected-sha256' => $changedHash,
+        '--commit' => true,
+    ])->assertFailed()->expectsOutputToContain('belongs to source SHA-256');
+
     expect(TimeEntry::count())->toBe(7)
         ->and(DB::table('harvest_import_log')->count())->toBe(7)
         ->and(DB::table('harvest_import_log')->distinct()->count('source_harvest_id'))->toBe(7)
@@ -329,8 +366,19 @@ test('historical Harvest import aborts on an untracked existing-entry overlap wi
         ->and(DB::table('harvest_import_log')->count())->toBe(0);
 });
 
-test('historical Harvest import blocks mismatched approved totals', function () {
+test('historical Harvest import blocks mismatched approved row counts or totals', function () {
     createHistoricalHarvestReferences();
+    $rows = reconciledHistoricalHarvestRows();
+    array_pop($rows);
+    $path = storage_path('framework/testing/historical-harvest-row-count-mismatch.csv');
+    writeHistoricalHarvestCsv($path, $rows);
+    unset($rows);
+
+    $this->artisan('app:one-off-historical-harvest-time', ['path' => $path])
+        ->assertFailed()
+        ->expectsOutputToContain('HOP005')
+        ->expectsOutputToContain('Import is blocked');
+
     $rows = reconciledHistoricalHarvestRows();
     $rows[0]['Billable Amount'] = number_format((float) $rows[0]['Billable Amount'] + 638, 2, '.', '');
     $path = storage_path('framework/testing/historical-harvest-mismatch.csv');
@@ -416,7 +464,7 @@ test('historical Harvest import rejects unsafe commit and source conditions befo
         ->and(DB::table('harvest_import_log')->count())->toBe(0);
 });
 
-test('historical Harvest import refuses to treat an edited ledger entry as already imported', function () {
+test('historical Harvest import validates ledger metadata and its imported time entries', function () {
     createHistoricalHarvestReferences();
     $path = storage_path('framework/testing/historical-harvest-edited-ledger.csv');
     $hash = writeHistoricalHarvestCsv($path, reconciledHistoricalHarvestRows());
@@ -426,6 +474,16 @@ test('historical Harvest import refuses to treat an edited ledger entry as alrea
         '--expected-sha256' => $hash,
         '--commit' => true,
     ])->assertSuccessful();
+
+    $ledger = DB::table('harvest_import_log')->orderBy('id')->first();
+    expect($ledger)->not->toBeNull();
+    DB::table('harvest_import_log')->where('id', $ledger->id)->update(['notes' => '{"source_sha256":"invalid"}']);
+
+    $this->artisan('app:one-off-historical-harvest-time', ['path' => $path])
+        ->assertFailed()
+        ->expectsOutputToContain('has invalid metadata');
+
+    DB::table('harvest_import_log')->where('id', $ledger->id)->update(['notes' => $ledger->notes]);
 
     TimeEntry::query()->orderBy('id')->firstOrFail()->update(['notes' => 'Changed after import']);
 

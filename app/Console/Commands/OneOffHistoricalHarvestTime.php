@@ -82,26 +82,31 @@ class OneOffHistoricalHarvestTime extends Command
             return self::FAILURE;
         }
 
-        $actualHash = hash_file('sha256', $path);
-        if ($actualHash === false) {
-            $this->error("Unable to hash source file: {$path}");
+        try {
+            [$source, $actualHash] = $this->sourceSnapshot($path);
+        } catch (RuntimeException $exception) {
+            $this->error($exception->getMessage());
 
             return self::FAILURE;
         }
 
         if ($expectedHash !== '' && (! preg_match('/^[a-f0-9]{64}$/', $expectedHash) || ! hash_equals($expectedHash, $actualHash))) {
+            fclose($source);
             $this->error("Source SHA-256 mismatch. Expected {$expectedHash}; got {$actualHash}.");
 
             return self::FAILURE;
         }
 
         try {
-            $rows = $this->selectedRows($path);
+            $this->assertLedgerSourceHash($actualHash);
+            $rows = $this->selectedRows($source);
             $this->resolveReferences($rows);
         } catch (RuntimeException $exception) {
             $this->error($exception->getMessage());
 
             return self::FAILURE;
+        } finally {
+            fclose($source);
         }
 
         try {
@@ -139,7 +144,7 @@ class OneOffHistoricalHarvestTime extends Command
         }
 
         try {
-            $inserted = $this->insertRows($unimportedRows, $actualHash);
+            $inserted = $this->insertRows($unimportedRows, $actualHash, array_values($ledgerTargets));
         } catch (RuntimeException $exception) {
             $this->error($exception->getMessage());
 
@@ -152,7 +157,40 @@ class OneOffHistoricalHarvestTime extends Command
         return self::SUCCESS;
     }
 
+    /** @return array{0: resource, 1: string} */
+    private function sourceSnapshot(string $path): array
+    {
+        $source = fopen($path, 'rb');
+        if ($source === false) {
+            throw new RuntimeException("Unable to open source file: {$path}");
+        }
+
+        $snapshot = tmpfile();
+        if ($snapshot === false) {
+            fclose($source);
+            throw new RuntimeException('Unable to create a temporary snapshot of the source file.');
+        }
+
+        $copied = stream_copy_to_stream($source, $snapshot);
+        fclose($source);
+        if ($copied === false || ! rewind($snapshot)) {
+            fclose($snapshot);
+            throw new RuntimeException('Unable to snapshot the source file.');
+        }
+
+        $hash = hash_init('sha256');
+        hash_update_stream($hash, $snapshot);
+        $actualHash = hash_final($hash);
+        if (! rewind($snapshot)) {
+            fclose($snapshot);
+            throw new RuntimeException('Unable to read the source file snapshot.');
+        }
+
+        return [$snapshot, $actualHash];
+    }
+
     /**
+     * @param  resource  $handle
      * @return list<array{
      *     source_id: string,
      *     source_row: int,
@@ -173,16 +211,10 @@ class OneOffHistoricalHarvestTime extends Command
      *     task_id?: int
      * }>
      */
-    private function selectedRows(string $path): array
+    private function selectedRows($handle): array
     {
-        $handle = fopen($path, 'r');
-        if ($handle === false) {
-            throw new RuntimeException("Unable to open source file: {$path}");
-        }
-
         $header = fgetcsv($handle, 0, ',', '"', '');
         if ($header === false) {
-            fclose($handle);
             throw new RuntimeException('The source CSV is empty.');
         }
 
@@ -199,7 +231,6 @@ class OneOffHistoricalHarvestTime extends Command
             $sourceRow++;
 
             if (count($csvRow) !== count($header)) {
-                fclose($handle);
                 throw new RuntimeException("CSV row {$sourceRow} has ".count($csvRow).' columns; expected '.count($header).'.');
             }
 
@@ -219,7 +250,7 @@ class OneOffHistoricalHarvestTime extends Command
                 continue;
             }
 
-            $this->validateSelectedRow($values, $sourceRow);
+            $numbers = $this->validateSelectedRow($values, $sourceRow);
 
             $fingerprintPayload = [
                 'target_code' => $mapping['target_code'],
@@ -240,16 +271,14 @@ class OneOffHistoricalHarvestTime extends Command
                 'user_name' => $this->userName($values['First Name'], $values['Last Name']),
                 'task_name' => $this->taskName($values['Task']),
                 'spent_on' => $date,
-                'hours' => (float) $values['Hours'],
+                'hours' => $numbers['hours'],
                 'notes' => $values['Notes'] !== '' ? $values['Notes'] : null,
                 'is_billable' => $billable,
-                'billable_rate' => $billable ? (float) $values['Billable Rate'] : 0.0,
-                'billable_amount' => $billable ? (float) $values['Billable Amount'] : 0.0,
+                'billable_rate' => $billable ? $numbers['billable_rate'] : 0.0,
+                'billable_amount' => $billable ? $numbers['billable_amount'] : 0.0,
                 'external_reference' => $values['External Reference URL'] !== '' ? $values['External Reference URL'] : null,
             ];
         }
-
-        fclose($handle);
 
         return $selected;
     }
@@ -340,10 +369,14 @@ class OneOffHistoricalHarvestTime extends Command
         return $mappings;
     }
 
-    /** @param array<string, string> $values */
-    private function validateSelectedRow(array $values, int $sourceRow): void
+    /**
+     * @param  array<string, string>  $values
+     * @return array{hours: float, billable_rate: float, billable_amount: float}
+     */
+    private function validateSelectedRow(array $values, int $sourceRow): array
     {
-        if (! is_numeric($values['Hours']) || (float) $values['Hours'] <= 0 || (float) $values['Hours'] > 24) {
+        $hours = $this->numericValue($values['Hours'], 'Hours', $sourceRow);
+        if ($hours <= 0 || $hours > 24) {
             throw new RuntimeException("CSV row {$sourceRow} has invalid Hours; expected a number greater than 0 and no more than 24.");
         }
 
@@ -355,29 +388,38 @@ class OneOffHistoricalHarvestTime extends Command
             throw new RuntimeException("CSV row {$sourceRow} is invoiced or approved; this one-off import only accepts No/No rows.");
         }
 
-        if (! is_numeric($values['Billable Rate']) || (float) $values['Billable Rate'] < 0) {
-            throw new RuntimeException("CSV row {$sourceRow} has an invalid Billable Rate.");
-        }
+        $billableRate = $this->numericValue($values['Billable Rate'], 'Billable Rate', $sourceRow);
+        $billableAmount = $this->numericValue($values['Billable Amount'], 'Billable Amount', $sourceRow);
+        $this->numericValue($values['Cost Rate'], 'Cost Rate', $sourceRow);
+        $this->numericValue($values['Cost Amount'], 'Cost Amount', $sourceRow);
 
-        if (! is_numeric($values['Billable Amount']) || (float) $values['Billable Amount'] < 0) {
-            throw new RuntimeException("CSV row {$sourceRow} has an invalid Billable Amount.");
-        }
-
-        if (! is_numeric($values['Cost Rate']) || (float) $values['Cost Rate'] < 0) {
-            throw new RuntimeException("CSV row {$sourceRow} has an invalid Cost Rate.");
-        }
-
-        if (! is_numeric($values['Cost Amount']) || (float) $values['Cost Amount'] < 0) {
-            throw new RuntimeException("CSV row {$sourceRow} has an invalid Cost Amount.");
-        }
-
-        if ($values['Billable?'] === 'No' && abs((float) $values['Billable Amount']) > 0.005) {
+        if ($values['Billable?'] === 'No' && abs($billableAmount) > 0.005) {
             throw new RuntimeException("CSV row {$sourceRow} is non-billable but has a non-zero Billable Amount.");
         }
 
         if ($this->userName($values['First Name'], $values['Last Name']) === '' || trim($values['Task']) === '') {
             throw new RuntimeException("CSV row {$sourceRow} is missing its user or task name.");
         }
+
+        return [
+            'hours' => $hours,
+            'billable_rate' => $billableRate,
+            'billable_amount' => $billableAmount,
+        ];
+    }
+
+    private function numericValue(string $value, string $field, int $sourceRow): float
+    {
+        if (! preg_match('/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/', $value)) {
+            throw new RuntimeException("CSV row {$sourceRow} has an invalid {$field}.");
+        }
+
+        $number = (float) str_replace(',', '', $value);
+        if (! is_finite($number) || $number < 0) {
+            throw new RuntimeException("CSV row {$sourceRow} has an invalid {$field}.");
+        }
+
+        return $number;
     }
 
     private function assertValidDate(string $value, int $sourceRow): void
@@ -530,6 +572,39 @@ class OneOffHistoricalHarvestTime extends Command
         );
     }
 
+    private function assertLedgerSourceHash(string $sourceHash): void
+    {
+        $ledgerHash = null;
+        $entries = DB::table('harvest_import_log')
+            ->where('entity_type', self::IMPORT_ENTITY_TYPE)
+            ->orderBy('id')
+            ->cursor();
+
+        foreach ($entries as $entry) {
+            $metadata = json_decode((string) $entry->notes, true);
+            if (! is_array($metadata)
+                || ! isset($metadata['source_sha256'], $metadata['source_row'], $metadata['target_code'])
+                || ! is_string($metadata['source_sha256'])
+                || ! preg_match('/^[a-f0-9]{64}$/', $metadata['source_sha256'])
+                || ! is_int($metadata['source_row'])
+                || $metadata['source_row'] < 2
+                || ! is_string($metadata['target_code'])
+                || $metadata['target_code'] === '') {
+                throw new RuntimeException("Import ledger record {$entry->source_harvest_id} has invalid metadata.");
+            }
+
+            if ($ledgerHash !== null && ! hash_equals($ledgerHash, $metadata['source_sha256'])) {
+                throw new RuntimeException('Historical Harvest import ledger contains more than one source SHA-256.');
+            }
+
+            $ledgerHash = $metadata['source_sha256'];
+        }
+
+        if ($ledgerHash !== null && ! hash_equals($ledgerHash, $sourceHash)) {
+            throw new RuntimeException("Historical Harvest import ledger belongs to source SHA-256 {$ledgerHash}; current source is {$sourceHash}.");
+        }
+    }
+
     /**
      * @param  list<string>  $sourceIds
      * @return array<string, int>
@@ -620,7 +695,7 @@ class OneOffHistoricalHarvestTime extends Command
      * @param  list<int>  $loggedTargetIds
      * @return list<array{target_code: string, spent_on: string, user_name: string, task_name: string, source_ids: list<string>, source_rows: int, source_hours: float, source_amount: float, existing_rows: int, existing_hours: float, existing_amount: float}>
      */
-    private function conflicts(array $rows, array $loggedTargetIds): array
+    private function conflicts(array $rows, array $loggedTargetIds, bool $lockForUpdate = false): array
     {
         if ($rows === []) {
             return [];
@@ -651,12 +726,18 @@ class OneOffHistoricalHarvestTime extends Command
         }
 
         $projectIds = array_values(array_unique(array_map(fn (array $row): int => (int) $row['project_id'], $rows)));
+        $firstSourceDate = min(array_column($rows, 'spent_on'));
         $query = TimeEntry::query()
             ->whereIn('project_id', $projectIds)
+            ->where('spent_on', '>=', $firstSourceDate)
             ->where('spent_on', '<=', self::CUTOFF);
 
         if ($loggedTargetIds !== []) {
             $query->whereNotIn('id', $loggedTargetIds);
+        }
+
+        if ($lockForUpdate) {
+            $query->lockForUpdate();
         }
 
         foreach ($query->get() as $entry) {
@@ -709,14 +790,17 @@ class OneOffHistoricalHarvestTime extends Command
         }
     }
 
-    /** @param list<array<string, mixed>> $rows */
-    private function insertRows(array $rows, string $sourceHash): int
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @param  list<int>  $loggedTargetIds
+     */
+    private function insertRows(array $rows, string $sourceHash, array $loggedTargetIds): int
     {
         if ($rows === []) {
             return 0;
         }
 
-        return DB::transaction(function () use ($rows, $sourceHash): int {
+        return DB::transaction(function () use ($rows, $sourceHash, $loggedTargetIds): int {
             Project::query()
                 ->whereIn('id', array_values(array_unique(array_map(fn (array $row): int => (int) $row['project_id'], $rows))))
                 ->lockForUpdate()
@@ -725,6 +809,10 @@ class OneOffHistoricalHarvestTime extends Command
             $concurrentLedgerTargets = $this->ledgerTargets(array_column($rows, 'source_id'));
             if ($concurrentLedgerTargets !== []) {
                 throw new RuntimeException('Import ledger changed while waiting for the transaction lock; rerun the dry run.');
+            }
+
+            if ($this->conflicts($rows, $loggedTargetIds, true) !== []) {
+                throw new RuntimeException('Existing time entries changed after preflight; rerun the dry run.');
             }
 
             $importedAt = now();
