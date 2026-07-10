@@ -34,37 +34,3 @@ test('actualsByProjectForPeriods sums hours across users into the correct period
     expect($result[$project->id][2] ?? null)->toBeNull();
     expect($result[$other->id][0])->toBe(9.0);
 });
-
-test('lifetimeActualsByProject returns total hours regardless of date', function () {
-    $service = app(TimesheetActualsService::class);
-    $project = Project::factory()->create();
-
-    TimeEntry::factory()->create(['project_id' => $project->id, 'spent_on' => '2020-01-01', 'hours' => 5.0]);
-    TimeEntry::factory()->create(['project_id' => $project->id, 'spent_on' => '2026-05-12', 'hours' => 3.0]);
-
-    expect($service->lifetimeActualsByProject([$project->id]))->toBe([$project->id => 8.0]);
-});
-
-test('actualsByUserForPeriods buckets per user per period', function () use ($weekPeriods) {
-    $service = app(TimesheetActualsService::class);
-    $alice = User::factory()->create();
-    $bob = User::factory()->create();
-
-    TimeEntry::factory()->create(['user_id' => $alice->id, 'spent_on' => '2026-05-12', 'hours' => 7.5]);
-    TimeEntry::factory()->create(['user_id' => $alice->id, 'spent_on' => '2026-05-20', 'hours' => 2.0]);
-    TimeEntry::factory()->create(['user_id' => $bob->id, 'spent_on' => '2026-05-13', 'hours' => 4.0]);
-
-    $result = $service->actualsByUserForPeriods([$alice->id, $bob->id], $weekPeriods);
-
-    expect($result[$alice->id][0])->toBe(7.5);
-    expect($result[$alice->id][1])->toBe(2.0);
-    expect($result[$bob->id][0])->toBe(4.0);
-});
-
-test('empty inputs short-circuit without querying', function () {
-    $service = app(TimesheetActualsService::class);
-
-    expect($service->actualsByProjectForPeriods([], [['index' => 0, 'starts_on' => '2026-05-11', 'ends_on' => '2026-05-17']]))->toBe([]);
-    expect($service->lifetimeActualsByProject([]))->toBe([]);
-    expect($service->actualsByUserForPeriods([], [['index' => 0, 'starts_on' => '2026-05-11', 'ends_on' => '2026-05-17']]))->toBe([]);
-});

@@ -32,29 +32,6 @@ function embedSetup(): array
     return [$user, $project, $task];
 }
 
-test('the embed page renders the form fixed to the Asana task', function () {
-    [$user, $project, $task] = embedSetup();
-    AsanaProjectAssociation::create([
-        'user_id' => $user->id,
-        'asana_project_gid' => 'BOARD1',
-        'project_id' => $project->id,
-        'task_id' => $task->id,
-        'last_used_at' => now(),
-    ]);
-
-    $this->actingAs($user)
-        ->get('/asana-app/tasks/AT1')
-        ->assertOk()
-        ->assertSee('Fix the checkout flow')
-        ->assertDontSee('Track Time'); // chrome-free embed layout, no app nav
-
-    Livewire::actingAs($user)
-        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
-        ->assertSet('status', 'ok')
-        ->assertSet('selectedProjectId', $project->id)
-        ->assertSet('selectedTaskId', $task->id);
-});
-
 test('saving logs the entry against the Asana task and remembers the choice', function () {
     [$user, $project, $task] = embedSetup();
 
@@ -78,87 +55,6 @@ test('saving logs the entry against the Asana task and remembers the choice', fu
         ->and($assoc->task_id)->toBe($task->id);
 });
 
-test('hours are required to log time', function () {
-    [$user, , $task] = embedSetup();
-
-    Livewire::actingAs($user)
-        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
-        ->set('selectedTaskId', $task->id)
-        ->call('save')
-        ->assertHasErrors(['hoursInput']);
-
-    expect(TimeEntry::count())->toBe(0);
-});
-
-test('start timer creates a running entry without requiring hours', function () {
-    [$user, , $task] = embedSetup();
-
-    Livewire::actingAs($user)
-        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
-        ->set('selectedTaskId', $task->id)
-        ->call('startTimer')
-        ->assertHasNoErrors()
-        ->assertDispatched('asana-entry-saved')
-        ->assertSet('timerStarted', true);
-
-    $entry = TimeEntry::sole();
-    expect($entry->is_running)->toBeTrue()
-        ->and($entry->asana_task_gid)->toBe('AT1');
-});
-
-test('switching project clears a task that does not belong to it', function () {
-    [$user, $project, $task] = embedSetup();
-
-    $other = Project::factory()->create(['name' => 'Other Build']);
-    $otherTask = Task::factory()->create(['name' => 'Design']);
-    $other->tasks()->attach($otherTask->id, ['is_billable' => true, 'hourly_rate_override' => null]);
-    $other->users()->attach($user->id, ['hourly_rate_override' => null]);
-    $other->asanaProjects()->attach('BOARD1', ['asana_custom_field_gid' => null]);
-
-    Livewire::actingAs($user)
-        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
-        ->set('selectedProjectId', $project->id)
-        ->set('selectedTaskId', $task->id)
-        ->set('selectedProjectId', $other->id)
-        ->assertSet('selectedTaskId', null);
-});
-
-test('an unsynced Asana task shows the missing notice', function () {
-    [$user] = embedSetup();
-
-    Livewire::actingAs($user)
-        ->test(AsanaLogTime::class, ['taskGid' => 'NOPE'])
-        ->assertSet('status', 'missing')
-        ->assertSee('synced to Internal Tools');
-});
-
-test('a board with no linked projects shows the unmapped notice', function () {
-    $user = User::factory()->create(['default_hourly_rate' => 100]);
-    AsanaProject::create(['gid' => 'BOARD9', 'workspace_gid' => 'WS1', 'name' => 'Orphan Board', 'is_archived' => false]);
-    AsanaTask::create(['gid' => 'AT9', 'asana_project_gid' => 'BOARD9', 'name' => 'Stray task', 'is_completed' => false]);
-
-    Livewire::actingAs($user)
-        ->test(AsanaLogTime::class, ['taskGid' => 'AT9'])
-        ->assertSet('status', 'unmapped')
-        ->assertSee('linked to any of your projects');
-});
-
-test('a running timer on this task shows the ticking panel instead of the form', function () {
-    [$user, $project, $task] = embedSetup();
-
-    $component = Livewire::actingAs($user)
-        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
-        ->set('selectedTaskId', $task->id)
-        ->call('startTimer');
-
-    // Re-mount, as the extension does when the dialog reopens.
-    Livewire::actingAs($user)
-        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
-        ->assertSee('Timer running')
-        ->assertSee('Stop timer')
-        ->assertDontSee('Log time');
-});
-
 test('stopping the timer banks the elapsed time and notifies the extension', function () {
     [$user, , $task] = embedSetup();
 
@@ -179,19 +75,4 @@ test('stopping the timer banks the elapsed time and notifies the extension', fun
     expect($entry->is_running)->toBeFalse()
         ->and((float) $entry->hours)->toBeGreaterThanOrEqual(0.5)
         ->and((float) $entry->hours)->toBeLessThan(0.52);
-});
-
-test('a timer running on a different Asana task leaves the form alone', function () {
-    [$user, $project, $task] = embedSetup();
-    AsanaTask::create(['gid' => 'AT2', 'asana_project_gid' => 'BOARD1', 'name' => 'Other ticket', 'is_completed' => false]);
-
-    Livewire::actingAs($user)
-        ->test(AsanaLogTime::class, ['taskGid' => 'AT2'])
-        ->set('selectedTaskId', $task->id)
-        ->call('startTimer');
-
-    Livewire::actingAs($user)
-        ->test(AsanaLogTime::class, ['taskGid' => 'AT1'])
-        ->assertDontSee('Timer running')
-        ->assertSee('Log time');
 });

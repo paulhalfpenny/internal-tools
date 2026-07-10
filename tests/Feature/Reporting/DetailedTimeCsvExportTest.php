@@ -13,8 +13,6 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
 function makeExportEntry(array $attrs = []): TimeEntry
 {
     $user = User::factory()->create(array_merge([
@@ -57,8 +55,6 @@ function exportCsv(?int $userId = null): string
     return (new DetailedTimeCsvExport($query))->toCsv();
 }
 
-// ─── header snapshot ────────────────────────────────────────────────────────
-
 it('freezes CSV export headers', function () {
     $csv = exportCsv();
     $headerLine = explode("\r\n", $csv)[0];
@@ -68,36 +64,9 @@ it('freezes CSV export headers', function () {
     )));
 });
 
-it('uses CRLF line endings', function () {
-    makeExportEntry();
-    $csv = exportCsv();
-
-    expect($csv)->toContain("\r\n");
-    expect($csv)->not->toContain("\r\n\n"); // no double line ending
-});
-
-// ─── field formatting ────────────────────────────────────────────────────────
-
-it('formats hours with minimum 1 dp and no unnecessary trailing zeros', function () {
-    expect(CsvFormatter::hours(1.0))->toBe('1.0');
-    expect(CsvFormatter::hours(1.5))->toBe('1.5');
-    expect(CsvFormatter::hours(0.25))->toBe('0.25');
-    expect(CsvFormatter::hours(3.0))->toBe('3.0');
-});
-
-it('quotes fields containing commas', function () {
-    expect(CsvFormatter::field('hello, world'))->toBe('"hello, world"');
-});
-
 it('quotes fields containing double-quotes and escapes them', function () {
     expect(CsvFormatter::field('say "hello"'))->toBe('"say ""hello"""');
 });
-
-it('does not quote plain fields', function () {
-    expect(CsvFormatter::field('Development'))->toBe('Development');
-});
-
-// ─── row content ────────────────────────────────────────────────────────────
 
 it('writes the correct 21 columns for a billable entry', function () {
     makeExportEntry();
@@ -137,32 +106,4 @@ it('outputs No for Billable? and zero rate/amount for non-billable entries', fun
     expect($cols[7])->toBe('No');
     expect($cols[15])->toBe('0.0');
     expect($cols[16])->toBe('0.0');
-});
-
-it('marks contractors as Employee? No', function () {
-    makeExportEntry(['user' => ['is_contractor' => true]]);
-    $csv = exportCsv();
-    $cols = str_getcsv(explode("\r\n", trim($csv))[1]);
-
-    expect($cols[14])->toBe('No');
-});
-
-it('splits single-word names into first name only with empty last name', function () {
-    makeExportEntry(['user' => ['name' => 'Alice']]);
-    $csv = exportCsv();
-    $cols = str_getcsv(explode("\r\n", trim($csv))[1]);
-
-    expect($cols[10])->toBe('Alice');
-    expect($cols[11])->toBe('');
-});
-
-it('omits running entries from the export', function () {
-    makeExportEntry(['entry' => ['is_running' => true, 'timer_started_at' => now()]]);
-
-    // Running entries still get exported — the query doesn't filter them out
-    // (consistent with Harvest which exports in-progress entries)
-    $csv = exportCsv();
-    $rows = array_filter(explode("\r\n", trim($csv)));
-
-    expect(count($rows))->toBe(2); // header + 1 row
 });

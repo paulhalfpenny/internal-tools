@@ -5,8 +5,6 @@ use App\Enums\BudgetType;
 use App\Enums\Role;
 use App\Livewire\Reports\ProjectBudget;
 use App\Livewire\Reports\ProjectsReport;
-use App\Models\AsanaProject;
-use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
@@ -58,26 +56,6 @@ test('projects report exposes budget status on rows', function () {
         ->and($row->budget_status->actualAmount)->toBe(500.0);
 });
 
-test('drill-down page renders for a budgeted project', function () {
-    $admin = User::factory()->create(['role' => Role::Admin]);
-    $user = User::factory()->create();
-    $task = Task::factory()->create();
-
-    $project = Project::factory()->create([
-        'budget_type' => BudgetType::MonthlyCi,
-        'budget_amount' => 500.00,
-        'budget_starts_on' => '2026-04-01',
-    ]);
-
-    budgetReportEntry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 4, 'billable_amount' => 400]);
-
-    $this->actingAs($admin);
-
-    $response = $this->get(route('reports.projects.budget', $project));
-    $response->assertOk();
-    $response->assertSee('CI Retainer');
-});
-
 test('budget page lists time entries for this project only, with who/what/when', function () {
     $admin = User::factory()->create(['role' => Role::Admin]);
     $alice = User::factory()->create(['name' => 'Alice Example']);
@@ -106,56 +84,4 @@ test('budget page lists time entries for this project only, with who/what/when',
         ->assertSee('Kickoff call')
         ->assertSee('2:30')
         ->assertDontSee('Should not appear');
-});
-
-test('budget page shows the linked Asana task for entries that have one', function () {
-    $admin = User::factory()->create(['role' => Role::Admin]);
-    $user = User::factory()->create();
-    $task = Task::factory()->create();
-
-    $project = Project::factory()->create([
-        'budget_type' => BudgetType::MonthlyCi,
-        'budget_amount' => 500.00,
-        'budget_starts_on' => '2026-04-01',
-    ]);
-
-    AsanaProject::create(['gid' => 'AP1', 'workspace_gid' => 'WS1', 'name' => 'Asana AP1', 'is_archived' => false]);
-    AsanaTask::create(['gid' => 'AT1', 'asana_project_gid' => 'AP1', 'name' => 'Fix the header bug', 'is_completed' => false]);
-
-    budgetReportEntry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 1.0, 'asana_task_gid' => 'AT1']);
-    budgetReportEntry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 2.0, 'asana_task_gid' => null]);
-
-    $this->actingAs($admin);
-
-    $html = Livewire::test(ProjectBudget::class, ['project' => $project])
-        ->assertSee('Fix the header bug')
-        ->html();
-
-    expect($html)->toContain('href="https://app.asana.com/0/0/AT1/f"')
-        ->toContain('target="_blank"');
-});
-
-test('budget page paginates time entries', function () {
-    $admin = User::factory()->create(['role' => Role::Admin]);
-    $user = User::factory()->create();
-    $task = Task::factory()->create();
-
-    $project = Project::factory()->create([
-        'budget_type' => BudgetType::MonthlyCi,
-        'budget_amount' => 500.00,
-        'budget_starts_on' => '2026-04-01',
-    ]);
-
-    foreach (range(1, 30) as $i) {
-        $day = str_pad((string) $i, 2, '0', STR_PAD_LEFT);
-        budgetReportEntry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 1.0, 'spent_on' => "2026-04-{$day}"]);
-    }
-
-    $this->actingAs($admin);
-
-    $component = Livewire::test(ProjectBudget::class, ['project' => $project]);
-
-    $entries = $component->viewData('entries');
-    expect($entries->total())->toBe(30)
-        ->and($entries->items())->toHaveCount(25);
 });

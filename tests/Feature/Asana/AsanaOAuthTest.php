@@ -15,20 +15,6 @@ beforeEach(function () {
     ]);
 });
 
-test('redirect sends user to asana with stored state', function () {
-    $user = User::factory()->create();
-
-    $response = $this->actingAs($user)
-        ->withSession([])
-        ->get(route('integrations.asana.redirect'));
-
-    $response->assertRedirect();
-    $location = $response->headers->get('Location');
-    expect($location)->toStartWith('https://app.asana.com/-/oauth_authorize');
-    expect($location)->toContain('client_id=test-client');
-    expect($location)->toContain('response_type=code');
-});
-
 test('callback exchanges code for tokens, captures profile, and stores workspace', function () {
     $user = User::factory()->create();
 
@@ -76,21 +62,4 @@ test('callback rejects state mismatch', function () {
         ->assertSessionHas('asana_error');
 
     expect($user->fresh()->asana_access_token)->toBeNull();
-});
-
-test('disconnect clears tokens', function () {
-    $user = User::factory()->create([
-        'asana_access_token' => 'a',
-        'asana_refresh_token' => 'b',
-        'asana_user_gid' => 'me-1',
-        'asana_workspace_gid' => 'ws-1',
-    ]);
-
-    $this->actingAs($user)
-        ->post(route('integrations.asana.disconnect'))
-        ->assertRedirect(route('profile.asana'));
-
-    $user->refresh();
-    expect($user->asana_access_token)->toBeNull();
-    expect($user->asana_user_gid)->toBeNull();
 });

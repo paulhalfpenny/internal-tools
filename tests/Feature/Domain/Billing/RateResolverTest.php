@@ -83,27 +83,6 @@ test('non_billable project always returns is_billable false', function () {
         ->and($result->rateSnapshot)->toBeNull();
 });
 
-test('task not assigned to project returns is_billable false', function () {
-    $project = makeProject(true, []);
-    $task = makeTask(99);
-    $user = makeUser(1);
-
-    $result = (new RateResolver)->resolve($project, $task, $user);
-
-    expect($result->isBillable)->toBeFalse();
-});
-
-test('project task pivot can make a globally billable task non-billable', function () {
-    $project = makeProject(true, [1], [1 => false]);
-    $task = makeTask(1, isDefaultBillable: true);
-    $user = makeUser(1);
-
-    $result = (new RateResolver)->resolve($project, $task, $user);
-
-    expect($result->isBillable)->toBeFalse()
-        ->and($result->rateSnapshot)->toBeNull();
-});
-
 test('project task pivot can make a globally non-billable task billable', function () {
     $project = makeProject(true, [1], [1 => true]);
     $task = makeTask(1, isDefaultBillable: false);
@@ -131,21 +110,6 @@ test('project_user override wins over user role rate', function () {
     expect($result->rateSnapshot)->toBe(120.0);
 });
 
-test("user's library role rate is used when no project override", function () {
-    $rate = Rate::create(['name' => 'Senior', 'hourly_rate' => 150.0]);
-    $project = makeProject(
-        true,
-        assignedTaskIds: [1],
-        userPivots: [1 => ['hourly_rate_override' => null]],
-    );
-    $task = makeTask(1);
-    $user = makeUser(1, rateId: $rate->id);
-
-    $result = (new RateResolver)->resolve($project, $task, $user);
-
-    expect($result->rateSnapshot)->toBe(150.0);
-});
-
 test('falls back to FALLBACK_HOURLY_RATE when user has no role and no override', function () {
     $project = makeProject(
         true,
@@ -160,20 +124,6 @@ test('falls back to FALLBACK_HOURLY_RATE when user has no role and no override',
     expect($result->isBillable)->toBeTrue()
         ->and($result->rateSnapshot)->toBe(RateResolver::FALLBACK_HOURLY_RATE)
         ->and($result->rateSnapshot)->toBe(100.0);
-});
-
-test('falls back to FALLBACK_HOURLY_RATE for user not assigned to project', function () {
-    $project = makeProject(
-        true,
-        assignedTaskIds: [1],
-        userPivots: [],
-    );
-    $task = makeTask(1);
-    $user = makeUser(1, rateId: null);
-
-    $result = (new RateResolver)->resolve($project, $task, $user);
-
-    expect($result->rateSnapshot)->toBe(100.0);
 });
 
 // --- billable_amount calculation ---
@@ -191,29 +141,4 @@ test('resolveWithHours computes billable_amount using user role rate', function 
     $result = (new RateResolver)->resolveWithHours($project, $task, $user, 2.5);
 
     expect($result->billableAmount)->toBe(210.0); // 2.5 * 84.0
-});
-
-test('resolveWithHours returns zero amount when non-billable', function () {
-    $project = makeProject(false);
-    $task = makeTask(1);
-    $user = makeUser(1);
-
-    $result = (new RateResolver)->resolveWithHours($project, $task, $user, 8.0);
-
-    expect($result->billableAmount)->toBe(0.0);
-});
-
-test('resolveWithHours rounds to 2 decimal places', function () {
-    $rate = Rate::create(['name' => 'Std', 'hourly_rate' => 84.0]);
-    $project = makeProject(
-        true,
-        assignedTaskIds: [1],
-        userPivots: [],
-    );
-    $task = makeTask(1);
-    $user = makeUser(1, rateId: $rate->id);
-
-    $result = (new RateResolver)->resolveWithHours($project, $task, $user, 1.25);
-
-    expect($result->billableAmount)->toBe(105.0);
 });

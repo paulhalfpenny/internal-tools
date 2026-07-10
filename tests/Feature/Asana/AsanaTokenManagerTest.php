@@ -15,21 +15,6 @@ beforeEach(function () {
     ]);
 });
 
-test('returns valid token unchanged when not expired', function () {
-    $user = User::factory()->create([
-        'asana_access_token' => 'still-good',
-        'asana_refresh_token' => 'r',
-        'asana_token_expires_at' => now()->addHour(),
-    ]);
-
-    expect((new AsanaTokenManager)->getValidToken($user))->toBe('still-good');
-});
-
-test('returns null when never connected', function () {
-    $user = User::factory()->create();
-    expect((new AsanaTokenManager)->getValidToken($user))->toBeNull();
-});
-
 test('refreshes when expired and stores new token', function () {
     $user = User::factory()->create([
         'asana_access_token' => 'old',

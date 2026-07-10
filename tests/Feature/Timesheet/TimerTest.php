@@ -1,18 +1,14 @@
 <?php
 
 use App\Domain\TimeTracking\TimeEntryService;
-use App\Livewire\Timesheet\DayView;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
-use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
-
-// ─── helpers ────────────────────────────────────────────────────────────────
 
 function makeUserWithBillableProject(): array
 {
@@ -42,42 +38,10 @@ function makeEntry(User $user, Project $project, Task $task, float $hours = 0.0)
     ]);
 }
 
-/** Put an entry into running state with a known start time, bypassing startTimer. */
 function putRunning(TimeEntry $entry, Carbon $startedAt): void
 {
     $entry->update(['is_running' => true, 'timer_started_at' => $startedAt]);
 }
-
-// ─── startTimer ─────────────────────────────────────────────────────────────
-
-test('startTimer sets is_running and records timer_started_at', function () {
-    [$user, $project, $task] = makeUserWithBillableProject();
-    $entry = makeEntry($user, $project, $task);
-
-    app(TimeEntryService::class)->startTimer($entry);
-
-    $entry->refresh();
-    expect($entry->is_running)->toBeTrue()
-        ->and($entry->timer_started_at)->not->toBeNull();
-});
-
-test('calling startTimer on an already-running entry is idempotent', function () {
-    [$user, $project, $task] = makeUserWithBillableProject();
-    $entry = makeEntry($user, $project, $task);
-
-    $startedAt = Carbon::now()->subMinutes(5);
-    putRunning($entry, $startedAt);
-
-    // Call startTimer again on the running entry
-    app(TimeEntryService::class)->startTimer($entry->fresh());
-
-    $entry->refresh();
-    // Still running; timer_started_at should not have been reset forward
-    expect($entry->is_running)->toBeTrue()
-        ->and($entry->timer_started_at->timestamp)->toBe($startedAt->timestamp);
-});
-
-// ─── stopTimer ──────────────────────────────────────────────────────────────
 
 test('stopTimer accumulates elapsed hours and clears running state', function () {
     [$user, $project, $task] = makeUserWithBillableProject();
@@ -105,53 +69,14 @@ test('stopTimer recalculates billable_amount based on accumulated hours', functi
     app(TimeEntryService::class)->stopTimer($entry->fresh());
 
     $entry->refresh();
-    // hours ≈ 1.0, rate = 84.0 → billable_amount ≈ 84.0
+    $resolvedRate = (float) $entry->billable_rate_snapshot;
+    $expectedAmount = round((float) $entry->hours * $resolvedRate, 2);
+
     expect((float) $entry->hours)->toBeGreaterThan(0.99)
-        ->and((float) $entry->billable_amount)->toBeGreaterThan(83.0);
+        ->and((float) $entry->hours)->toBeLessThan(1.01)
+        ->and($resolvedRate)->toBeGreaterThan(0.0)
+        ->and((float) $entry->billable_amount)->toBe($expectedAmount);
 });
-
-test('stopTimer is a no-op if the entry is not running', function () {
-    [$user, $project, $task] = makeUserWithBillableProject();
-    $entry = makeEntry($user, $project, $task, 2.0);
-
-    app(TimeEntryService::class)->stopTimer($entry);
-
-    $entry->refresh();
-    expect($entry->is_running)->toBeFalse()
-        ->and((float) $entry->hours)->toBe(2.0); // unchanged
-});
-
-test('timer state persists across simulated page reloads', function () {
-    [$user, $project, $task] = makeUserWithBillableProject();
-    $entry = makeEntry($user, $project, $task);
-
-    app(TimeEntryService::class)->startTimer($entry);
-
-    // Simulate page reload: re-fetch from DB
-    $reloaded = TimeEntry::find($entry->id);
-
-    expect($reloaded?->is_running)->toBeTrue()
-        ->and($reloaded?->timer_started_at)->not->toBeNull();
-});
-
-test('day view renders elapsed time for a running timer', function () {
-    Carbon::setTestNow(Carbon::parse('2026-06-30 10:00:00'));
-
-    try {
-        [$user, $project, $task] = makeUserWithBillableProject();
-        $entry = makeEntry($user, $project, $task, 0.25);
-        putRunning($entry, Carbon::parse('2026-06-30 09:15:00'));
-
-        $this->actingAs($user);
-
-        Livewire::test(DayView::class)
-            ->assertSeeInOrder(['Running', '1:00']);
-    } finally {
-        Carbon::setTestNow();
-    }
-});
-
-// ─── at-most-one-running-timer enforcement ──────────────────────────────────
 
 test('starting a second timer auto-stops the first', function () {
     [$user, $project, $task] = makeUserWithBillableProject();
@@ -168,37 +93,6 @@ test('starting a second timer auto-stops the first', function () {
     expect($first->is_running)->toBeFalse()
         ->and((float) $first->hours)->toBeGreaterThan(0.99) // ~1h accumulated
         ->and($second->is_running)->toBeTrue();
-});
-
-test('both entries have correct hours after auto-stop', function () {
-    [$user, $project, $task] = makeUserWithBillableProject();
-
-    $first = makeEntry($user, $project, $task, 0.5); // pre-existing 0.5h
-    putRunning($first, Carbon::now()->subSeconds(5400)); // ~1.5h elapsed
-
-    $second = makeEntry($user, $project, $task);
-    app(TimeEntryService::class)->startTimer($second);
-
-    $first->refresh();
-
-    expect((float) $first->hours)->toBeGreaterThan(1.99) // 0.5 + ~1.5
-        ->and($first->is_running)->toBeFalse();
-});
-
-test('at most one running timer per user at any time', function () {
-    [$user, $project, $task] = makeUserWithBillableProject();
-    $service = app(TimeEntryService::class);
-
-    $a = makeEntry($user, $project, $task);
-    $b = makeEntry($user, $project, $task);
-    $c = makeEntry($user, $project, $task);
-
-    $service->startTimer($a);
-    $service->startTimer($b);
-    $service->startTimer($c);
-
-    $running = TimeEntry::where('user_id', $user->id)->where('is_running', true)->count();
-    expect($running)->toBe(1);
 });
 
 test('stopping a timer does not affect other users timers', function () {

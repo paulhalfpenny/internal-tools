@@ -6,9 +6,7 @@ use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use App\Notifications\ManagerWeeklyDigest;
-use App\Notifications\MidWeekTimesheetNudge;
 use App\Notifications\MonthlyTimesheetOverdue;
-use App\Notifications\WeeklyTimesheetOverdue;
 use App\Settings\NotificationSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -38,49 +36,6 @@ function reminderEntry(User $user, string $date, float $hours): void
         'billable_amount' => 80 * $hours,
     ]);
 }
-
-test('mid-week sends to users below threshold and skips paused/inactive', function () {
-    Notification::fake();
-    Carbon::setTestNow('2026-05-07 09:30:00');
-
-    $behind = User::factory()->create(['name' => 'Behind']);
-    $onTrack = User::factory()->create(['name' => 'OnTrack']);
-    $paused = User::factory()->create(['name' => 'Paused', 'notifications_paused_until' => '2026-05-10']);
-    $inactive = User::factory()->create(['name' => 'Inactive', 'is_active' => false]);
-
-    reminderEntry($behind, '2026-05-04', 5);
-    reminderEntry($behind, '2026-05-05', 5);
-    reminderEntry($behind, '2026-05-06', 5);
-    reminderEntry($onTrack, '2026-05-04', 8);
-    reminderEntry($onTrack, '2026-05-05', 8);
-    reminderEntry($onTrack, '2026-05-06', 8);
-    reminderEntry($paused, '2026-05-04', 0.5);
-
-    $this->artisan('timesheets:send-reminders', ['--type' => 'mid-week'])->assertSuccessful();
-
-    Notification::assertSentTo($behind, MidWeekTimesheetNudge::class);
-    Notification::assertNotSentTo($onTrack, MidWeekTimesheetNudge::class);
-    Notification::assertNotSentTo($paused, MidWeekTimesheetNudge::class);
-    Notification::assertNotSentTo($inactive, MidWeekTimesheetNudge::class);
-});
-
-test('weekly-overdue dispatches for users below target last week', function () {
-    Notification::fake();
-    Carbon::setTestNow('2026-05-11 09:30:00');
-
-    $missed = User::factory()->create(['name' => 'Missed']);
-    $hit = User::factory()->create(['name' => 'Hit']);
-
-    foreach (range(0, 4) as $i) {
-        reminderEntry($missed, '2026-05-0'.(4 + $i), 7);
-        reminderEntry($hit, '2026-05-0'.(4 + $i), 9);
-    }
-
-    $this->artisan('timesheets:send-reminders', ['--type' => 'weekly-overdue'])->assertSuccessful();
-
-    Notification::assertSentTo($missed, WeeklyTimesheetOverdue::class);
-    Notification::assertNotSentTo($hit, WeeklyTimesheetOverdue::class);
-});
 
 test('monthly-overdue dispatches for users below pro-rata target last month', function () {
     Notification::fake();

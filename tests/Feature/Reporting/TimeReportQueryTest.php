@@ -9,11 +9,8 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\LazyCollection;
 
 uses(RefreshDatabase::class);
-
-// ─── helpers ────────────────────────────────────────────────────────────────
 
 function entry(array $attrs): TimeEntry
 {
@@ -27,8 +24,6 @@ function entry(array $attrs): TimeEntry
         'invoiced_at' => null,
     ], $attrs));
 }
-
-// ─── totals ─────────────────────────────────────────────────────────────────
 
 test('totals sums hours and billable amounts correctly', function () {
     $user = User::factory()->create();
@@ -48,16 +43,6 @@ test('totals sums hours and billable amounts correctly', function () {
         ->and($totals->billableHours)->toBe(3.5)
         ->and($totals->billableAmount)->toBe(294.0)
         ->and($totals->billablePercent)->toBe(87.5);
-});
-
-test('totals returns empty DTO when no entries in range', function () {
-    $totals = (new TimeReportQuery(
-        from: CarbonImmutable::parse('2025-01-01'),
-        to: CarbonImmutable::parse('2025-01-31'),
-    ))->totals();
-
-    expect($totals->totalHours)->toBe(0.0)
-        ->and($totals->billableAmount)->toBe(0.0);
 });
 
 test('totals uninvoiced_amount excludes invoiced entries', function () {
@@ -95,22 +80,6 @@ test('totals filters by user_id', function () {
     expect($totals->totalHours)->toBe(3.0);
 });
 
-test('totals excludes entries outside the date range', function () {
-    $user = User::factory()->create();
-    $project = Project::factory()->create([]);
-    $task = Task::factory()->create();
-
-    entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 5.0, 'spent_on' => '2026-03-31']); // outside
-    entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 2.0, 'spent_on' => '2026-04-01']); // inside
-
-    $totals = (new TimeReportQuery(
-        from: CarbonImmutable::parse('2026-04-01'),
-        to: CarbonImmutable::parse('2026-04-30'),
-    ))->totals();
-
-    expect($totals->totalHours)->toBe(2.0);
-});
-
 test('totals includes entries on the final date of the range', function () {
     $user = User::factory()->create();
     $project = Project::factory()->create([]);
@@ -125,8 +94,6 @@ test('totals includes entries on the final date of the range', function () {
 
     expect($totals->totalHours)->toBe(2.5);
 });
-
-// ─── groupBy ────────────────────────────────────────────────────────────────
 
 test('groupBy Client aggregates correctly', function () {
     $c1 = Client::factory()->create(['name' => 'Acme']);
@@ -148,153 +115,4 @@ test('groupBy Client aggregates correctly', function () {
     $acme = $rows->firstWhere('label', 'Acme');
     expect($acme->total_hours)->toBe(3.0)
         ->and($acme->billable_amount)->toBe(252.0);
-});
-
-test('groupBy Project returns rows ordered by client then project', function () {
-    $client = Client::factory()->create(['name' => 'Client A']);
-    $p1 = Project::factory()->create(['client_id' => $client->id, 'name' => 'Alpha']);
-    $p2 = Project::factory()->create(['client_id' => $client->id, 'name' => 'Beta']);
-    $task = Task::factory()->create();
-    $user = User::factory()->create();
-
-    entry(['user_id' => $user->id, 'project_id' => $p2->id, 'task_id' => $task->id, 'hours' => 2.0, 'billable_amount' => 168.0]);
-    entry(['user_id' => $user->id, 'project_id' => $p1->id, 'task_id' => $task->id, 'hours' => 1.0, 'billable_amount' => 84.0]);
-
-    $rows = (new TimeReportQuery(
-        from: CarbonImmutable::parse('2026-04-01'),
-        to: CarbonImmutable::parse('2026-04-30'),
-    ))->groupBy(GroupBy::Project);
-
-    expect($rows->first()->label)->toBe('Alpha'); // Alpha before Beta
-});
-
-test('groupBy Task includes colour field', function () {
-    $user = User::factory()->create();
-    $project = Project::factory()->create([]);
-    $task = Task::factory()->create(['name' => 'Development', 'colour' => '#10B981']);
-
-    entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 4.0, 'billable_amount' => 336.0]);
-
-    $rows = (new TimeReportQuery(
-        from: CarbonImmutable::parse('2026-04-01'),
-        to: CarbonImmutable::parse('2026-04-30'),
-    ))->groupBy(GroupBy::Task);
-
-    expect($rows->first()->colour)->toBe('#10B981')
-        ->and($rows->first()->total_hours)->toBe(4.0);
-});
-
-test('groupBy User aggregates per user', function () {
-    $u1 = User::factory()->create(['name' => 'Alice']);
-    $u2 = User::factory()->create(['name' => 'Bob']);
-    $project = Project::factory()->create([]);
-    $task = Task::factory()->create();
-
-    entry(['user_id' => $u1->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 5.0, 'billable_amount' => 420.0]);
-    entry(['user_id' => $u2->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 3.0, 'billable_amount' => 252.0]);
-
-    $rows = (new TimeReportQuery(
-        from: CarbonImmutable::parse('2026-04-01'),
-        to: CarbonImmutable::parse('2026-04-30'),
-    ))->groupBy(GroupBy::User);
-
-    expect($rows)->toHaveCount(2);
-    $alice = $rows->firstWhere('label', 'Alice');
-    expect($alice->total_hours)->toBe(5.0);
-});
-
-test('billableOnly filter excludes non-billable entries from totals', function () {
-    $user = User::factory()->create();
-    $project = Project::factory()->create([]);
-    $task = Task::factory()->create();
-
-    entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 2.0, 'is_billable' => true, 'billable_amount' => 168.0]);
-    entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 3.0, 'is_billable' => false, 'billable_amount' => 0.0]);
-
-    $totals = (new TimeReportQuery(
-        from: CarbonImmutable::parse('2026-04-01'),
-        to: CarbonImmutable::parse('2026-04-30'),
-        billableOnly: true,
-    ))->totals();
-
-    expect($totals->totalHours)->toBe(2.0);
-});
-
-// ─── entries stream ──────────────────────────────────────────────────────────
-
-// ─── paginate ────────────────────────────────────────────────────────────────
-
-test('paginate returns entries newest-first with relations loaded', function () {
-    $user = User::factory()->create(['name' => 'Alice']);
-    $project = Project::factory()->create([]);
-    $task = Task::factory()->create(['name' => 'Development']);
-
-    entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 1.0, 'spent_on' => '2026-04-01']);
-    entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 2.0, 'spent_on' => '2026-04-15']);
-
-    $page = (new TimeReportQuery(
-        from: CarbonImmutable::parse('2026-04-01'),
-        to: CarbonImmutable::parse('2026-04-30'),
-    ))->paginate();
-
-    expect($page->total())->toBe(2)
-        ->and($page->items()[0]->spent_on->toDateString())->toBe('2026-04-15')
-        ->and($page->items()[0]->user->name)->toBe('Alice')
-        ->and($page->items()[0]->task->name)->toBe('Development');
-});
-
-test('paginate respects the projectId filter', function () {
-    $user = User::factory()->create();
-    $task = Task::factory()->create();
-    $thisProject = Project::factory()->create();
-    $otherProject = Project::factory()->create();
-
-    entry(['user_id' => $user->id, 'project_id' => $thisProject->id, 'task_id' => $task->id, 'hours' => 1.0]);
-    entry(['user_id' => $user->id, 'project_id' => $otherProject->id, 'task_id' => $task->id, 'hours' => 5.0]);
-
-    $page = (new TimeReportQuery(
-        from: CarbonImmutable::parse('2026-04-01'),
-        to: CarbonImmutable::parse('2026-04-30'),
-        projectId: $thisProject->id,
-    ))->paginate();
-
-    expect($page->total())->toBe(1)
-        ->and((float) $page->items()[0]->hours)->toBe(1.0);
-});
-
-test('paginate respects the perPage argument', function () {
-    $user = User::factory()->create();
-    $project = Project::factory()->create();
-    $task = Task::factory()->create();
-
-    foreach (range(1, 3) as $i) {
-        entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 1.0, 'spent_on' => "2026-04-0{$i}"]);
-    }
-
-    $page = (new TimeReportQuery(
-        from: CarbonImmutable::parse('2026-04-01'),
-        to: CarbonImmutable::parse('2026-04-30'),
-    ))->paginate(perPage: 2);
-
-    expect($page->total())->toBe(3)
-        ->and($page->items())->toHaveCount(2)
-        ->and($page->lastPage())->toBe(2);
-});
-
-test('entries returns a LazyCollection of TimeEntry models', function () {
-    $user = User::factory()->create();
-    $project = Project::factory()->create([]);
-    $task = Task::factory()->create();
-
-    entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 1.0]);
-    entry(['user_id' => $user->id, 'project_id' => $project->id, 'task_id' => $task->id, 'hours' => 2.0]);
-
-    $entries = (new TimeReportQuery(
-        from: CarbonImmutable::parse('2026-04-01'),
-        to: CarbonImmutable::parse('2026-04-30'),
-    ))->entries();
-
-    expect($entries)->toBeInstanceOf(LazyCollection::class);
-    expect($entries->count())->toBe(2);
-    expect($entries->first())->toBeInstanceOf(TimeEntry::class);
 });

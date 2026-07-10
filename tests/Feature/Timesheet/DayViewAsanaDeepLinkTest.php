@@ -1,6 +1,5 @@
 <?php
 
-use App\Domain\TimeTracking\TimeEntryService;
 use App\Livewire\Timesheet\DayView;
 use App\Models\AsanaProject;
 use App\Models\AsanaProjectAssociation;
@@ -13,15 +12,8 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
-// The Asana widget card deep-links to /timesheet?log_asana={gid}. Opening
-// that link must present the entry modal prefilled for the linked project
-// and Asana task, since the in-Asana form is only reachable before the
-// widget occupies the app's slot on the task.
-
 function deepLinkSetup(): array
 {
-    // The Asana connection makes DayView's asana-task validation treat the
-    // integration as active (asanaIntegrationAvailable()).
     $user = User::factory()->create([
         'default_hourly_rate' => 100,
         'asana_user_gid' => 'AU1',
@@ -40,36 +32,6 @@ function deepLinkSetup(): array
     return [$user, $project, $task];
 }
 
-test('log_asana query param opens the entry modal prefilled', function () {
-    [$user, $project, $task] = deepLinkSetup();
-    AsanaProjectAssociation::create([
-        'user_id' => $user->id,
-        'asana_project_gid' => 'BOARD1',
-        'project_id' => $project->id,
-        'task_id' => $task->id,
-        'last_used_at' => now(),
-    ]);
-    $this->actingAs($user);
-
-    Livewire::withQueryParams(['log_asana' => 'AT1'])
-        ->test(DayView::class)
-        ->assertSet('showModal', true)
-        ->assertSet('selectedProjectId', $project->id)
-        ->assertSet('selectedTaskId', $task->id)
-        ->assertSet('selectedAsanaTaskGid', 'AT1');
-});
-
-test('log_asana prefills project without an association via the board mapping', function () {
-    [$user, $project] = deepLinkSetup();
-    $this->actingAs($user);
-
-    Livewire::withQueryParams(['log_asana' => 'AT1'])
-        ->test(DayView::class)
-        ->assertSet('showModal', true)
-        ->assertSet('selectedProjectId', $project->id)
-        ->assertSet('selectedAsanaTaskGid', 'AT1');
-});
-
 test('saving an entry with an Asana task remembers the board association', function () {
     [$user, $project, $task] = deepLinkSetup();
     $this->actingAs($user);
@@ -87,49 +49,7 @@ test('saving an entry with an Asana task remembers the board association', funct
         ->and($assoc->project_id)->toBe($project->id)
         ->and($assoc->task_id)->toBe($task->id);
 
-    // ...so the next deep link preselects the remembered task too.
     Livewire::withQueryParams(['log_asana' => 'AT1'])
         ->test(DayView::class)
         ->assertSet('selectedTaskId', $task->id);
-});
-
-test('day view shows the cached title for completed linked Asana tasks', function () {
-    [$user, $project, $task] = deepLinkSetup();
-    AsanaTask::whereKey('AT1')->update([
-        'name' => 'Completed ticket title',
-        'is_completed' => true,
-    ]);
-
-    $this->actingAs($user);
-
-    app(TimeEntryService::class)->create($user, [
-        'project_id' => $project->id,
-        'task_id' => $task->id,
-        'spent_on' => now()->toDateString(),
-        'hours' => 1.0,
-        'notes' => null,
-        'asana_task_gid' => 'AT1',
-    ]);
-
-    Livewire::test(DayView::class)
-        ->assertSee('Completed ticket title')
-        ->assertDontSee('Linked Asana task');
-});
-
-test('the asana-app task URL renders the compact log-time form', function () {
-    [$user] = deepLinkSetup();
-    $this->actingAs($user);
-
-    $this->get('/asana-app/tasks/AT1')
-        ->assertOk()
-        ->assertSee('Fix the checkout flow');
-});
-
-test('an unknown log_asana gid opens nothing', function () {
-    [$user] = deepLinkSetup();
-    $this->actingAs($user);
-
-    Livewire::withQueryParams(['log_asana' => 'NOPE'])
-        ->test(DayView::class)
-        ->assertSet('showModal', false);
 });

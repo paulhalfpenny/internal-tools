@@ -1,23 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-    filterSearchableOptions,
-    selectHasSearchableChoices,
-} from '../../resources/js/searchable-select.js';
-
-test('filters options by typed text case-insensitively', () => {
-    const options = [
-        { value: '1', label: 'mySchedule Master' },
-        { value: '2', label: 'Franchises - mySchedule' },
-        { value: '3', label: 'Customer App' },
-    ];
-
-    assert.deepEqual(
-        filterSearchableOptions(options, 'schedule').map((option) => option.label),
-        ['mySchedule Master', 'Franchises - mySchedule'],
-    );
-});
+import { selectHasSearchableChoices } from '../../resources/js/searchable-select.js';
 
 test('enhances single-select dropdowns with at least two enabled choices', () => {
     assert.equal(

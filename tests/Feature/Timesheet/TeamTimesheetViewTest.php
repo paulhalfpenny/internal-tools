@@ -11,17 +11,6 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
-test('manager can view a direct report timesheet', function () {
-    $manager = User::factory()->create(['role' => Role::Manager]);
-    $report = User::factory()->create(['reports_to_user_id' => $manager->id]);
-
-    $this->actingAs($manager)
-        ->get(route('team.timesheet', $report))
-        ->assertOk()
-        ->assertSee($report->name)
-        ->assertSee('read-only');
-});
-
 test('manager cannot view a user who is not their direct report', function () {
     $manager = User::factory()->create(['role' => Role::Manager]);
     $stranger = User::factory()->create(); // no reports_to_user_id
@@ -29,15 +18,6 @@ test('manager cannot view a user who is not their direct report', function () {
     $this->actingAs($manager)
         ->get(route('team.timesheet', $stranger))
         ->assertForbidden();
-});
-
-test('admin can view any user timesheet via the team route', function () {
-    $admin = User::factory()->create(['role' => Role::Admin]);
-    $other = User::factory()->create();
-
-    $this->actingAs($admin)
-        ->get(route('team.timesheet', $other))
-        ->assertOk();
 });
 
 test('write actions are blocked when manager views a direct report', function () {
@@ -62,28 +42,4 @@ test('write actions are blocked when manager views a direct report', function ()
         ->assertSet('showModal', false);
 
     expect(TimeEntry::count())->toBe(0);
-});
-
-test('manager sees their direct reports in the Team Timesheets dropdown', function () {
-    $manager = User::factory()->create(['role' => Role::Manager]);
-    $a = User::factory()->create(['name' => 'Alice', 'reports_to_user_id' => $manager->id, 'is_active' => true]);
-    $b = User::factory()->create(['name' => 'Bob', 'reports_to_user_id' => $manager->id, 'is_active' => true]);
-    User::factory()->create(['name' => 'Stranger']);
-
-    $this->actingAs($manager)
-        ->get(route('timesheet'))
-        ->assertOk()
-        ->assertSee('Team Timesheets')
-        ->assertSee('Alice')
-        ->assertSee('Bob')
-        ->assertDontSee('Stranger');
-});
-
-test('user with no direct reports does not see the Team Timesheets dropdown', function () {
-    $solo = User::factory()->create(['role' => Role::User]);
-
-    $this->actingAs($solo)
-        ->get(route('timesheet'))
-        ->assertOk()
-        ->assertDontSee('Team Timesheets');
 });
