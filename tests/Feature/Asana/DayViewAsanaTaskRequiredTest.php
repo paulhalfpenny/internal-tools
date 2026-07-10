@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\TimeTracking\TimeEntryService;
 use App\Enums\Role;
 use App\Jobs\Asana\PullAsanaTasksJob;
 use App\Jobs\Asana\SyncAsanaTaskHoursJob;
@@ -155,19 +156,43 @@ test('save still works on unlinked projects with no Asana task', function () {
     expect(TimeEntry::count())->toBe(1);
 });
 
-test('save rejects an Asana task gid that belongs to a different project', function () {
+test('editing an entry shows when its Asana task moved to a different project', function () {
     [$user, $project, $task] = asanaTestDayViewSetup();
-    AsanaTask::create(['gid' => 'OTHER', 'asana_project_gid' => 'OTHER_PROJ', 'name' => 'Foreign', 'is_completed' => false]);
     $this->actingAs($user);
 
-    Livewire::test(DayView::class)
-        ->set('selectedProjectId', $project->id)
-        ->set('selectedTaskId', $task->id)
-        ->set('hoursInput', '1.0')
-        ->set('entryDate', now()->toDateString())
-        ->set('selectedAsanaTaskGid', 'OTHER')
+    $entry = app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => now()->toDateString(),
+        'hours' => 1.0,
+        'notes' => null,
+        'asana_task_gid' => 'AT1',
+    ]);
+
+    AsanaProject::create(['gid' => 'AP2', 'workspace_gid' => 'WS1', 'name' => 'Asana AP2', 'is_archived' => false]);
+    AsanaTask::findOrFail('AT1')->update(['asana_project_gid' => 'AP2']);
+
+    $component = Livewire::test(DayView::class)
+        ->call('openEditModal', $entry->id)
+        ->set('hoursInput', '2.0')
         ->call('save')
-        ->assertHasErrors(['selectedAsanaTaskGid']);
+        ->assertHasErrors(['selectedAsanaTaskGid'])
+        ->assertSet('showModal', true);
+
+    expect($entry->fresh()->hours)->toBe('1.00');
+
+    $document = new DOMDocument;
+    $previousLibxmlErrorHandling = libxml_use_internal_errors(true);
+    $document->loadHTML($component->html());
+    libxml_clear_errors();
+    libxml_use_internal_errors($previousLibxmlErrorHandling);
+
+    $ignoredErrorAncestors = (new DOMXPath($document))->query(
+        "//p[contains(normalize-space(.), 'That Asana task is no longer in this project.')]/ancestor::*[@*[name()='wire:ignore']]"
+    );
+
+    expect($ignoredErrorAncestors)->not->toBeFalse()
+        ->and($ignoredErrorAncestors->length)->toBe(0);
 });
 
 test('save succeeds without an Asana task when the project marks Asana tasks as optional', function () {
