@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\Asana\AsanaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
 
@@ -174,6 +175,27 @@ test('pulling tasks upserts and removes stale rows', function () {
 
     expect(AsanaTask::find('t-old'))->toBeNull();
     expect(AsanaTask::find('t1')->name)->toBe('New');
+});
+
+test('pulling tasks preserves names longer than 255 characters', function () {
+    $user = asanaTestConnectedUser();
+    $longName = str_repeat('Long Asana task name ', 16);
+
+    expect(mb_strlen($longName))->toBeGreaterThan(255);
+    expect(Schema::getColumnType('asana_tasks', 'name'))->toBe('text');
+
+    Http::fake([
+        'app.asana.com/api/1.0/projects/P1/tasks*' => Http::response([
+            'data' => [
+                ['gid' => 't-long', 'name' => $longName, 'completed' => false, 'parent' => null],
+            ],
+            'next_page' => null,
+        ]),
+    ]);
+
+    (new PullAsanaTasksJob('P1', $user->id))->handle(app(AsanaService::class));
+
+    expect(AsanaTask::find('t-long')->name)->toBe($longName);
 });
 
 test('pulling tasks caches completed task names for historical entries', function () {
