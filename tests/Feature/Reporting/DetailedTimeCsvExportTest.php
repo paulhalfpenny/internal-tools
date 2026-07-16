@@ -107,3 +107,33 @@ it('outputs No for Billable? and zero rate/amount for non-billable entries', fun
     expect($cols[15])->toBe('0.0');
     expect($cols[16])->toBe('0.0');
 });
+
+it('streams every row when the export spans more than one lazyById chunk', function () {
+    // lazyById chunks in blocks of 200. Exports that fit in a single chunk
+    // never page a second time, so the bug only surfaces past that boundary.
+    $user = User::factory()->create(['name' => 'Bulk User']);
+    $client = Client::factory()->create();
+    $project = Project::factory()->create(['client_id' => $client->id]);
+    $task = Task::factory()->create();
+
+    $count = 250;
+    for ($i = 0; $i < $count; $i++) {
+        TimeEntry::create([
+            'user_id' => $user->id,
+            'project_id' => $project->id,
+            'task_id' => $task->id,
+            'spent_on' => '2026-04-01',
+            'hours' => 1.0,
+            'is_running' => false,
+            'is_billable' => true,
+            'billable_rate_snapshot' => 84.0,
+            'billable_amount' => 84.0,
+        ]);
+    }
+
+    $csv = exportCsv($user->id);
+    $dataRows = array_filter(explode("\r\n", trim($csv)));
+
+    // header + every entry, with no RuntimeException from the second page.
+    expect($dataRows)->toHaveCount($count + 1);
+});

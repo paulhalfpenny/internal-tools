@@ -146,7 +146,11 @@ final class TimeReportQuery
             ->with(['project.client', 'task', 'user'])
             ->orderBy('time_entries.spent_on')
             ->orderBy('time_entries.created_at')
-            ->lazyById(200, 'time_entries.id');
+            // Qualified column for the SQL cursor (safe under joins), but the
+            // hydrated model exposes the key as `id`, so lazyById must read the
+            // page cursor back via that alias — otherwise the second chunk
+            // aborts with "[time_entries.id] column is not present".
+            ->lazyById(200, 'time_entries.id', 'id');
     }
 
     /**
