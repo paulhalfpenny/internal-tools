@@ -208,6 +208,43 @@ test('the filtered-totals summary appears only when a filter is active', functio
         ->assertSee('£200.00');
 });
 
+test('resetting a dropdown to the empty option restores all entries', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    ['project' => $project, 'dev' => $dev] = budgetFilterFixture();
+
+    $this->actingAs($admin);
+
+    // Setting a select back to its "" option is the real per-keystroke user
+    // path (distinct from clearFilters()); Livewire resets the ?int prop to null.
+    Livewire::test(ProjectBudget::class, ['project' => $project])
+        ->set('filterTaskId', $dev->id)
+        ->assertDontSee('April PM Alice')
+        ->set('filterTaskId', '')
+        ->assertSet('filterTaskId', null)
+        ->assertSee('April PM Alice')
+        ->assertSee('May PM Bob');
+});
+
+test('an open-ended custom range uses the lifetime bound for the missing end', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    ['project' => $project] = budgetFilterFixture();
+
+    $this->actingAs($admin);
+
+    // Only a "from" bound: "to" falls back to the lifetime window (today),
+    // so every entry on/after the from date is included.
+    Livewire::test(ProjectBudget::class, ['project' => $project])
+        ->set('filterFrom', '2026-05-01')
+        ->assertSee('May dev Bob')
+        ->assertDontSee('April dev Alice');
+
+    // Only a "to" bound: "from" falls back to the lifetime start.
+    Livewire::test(ProjectBudget::class, ['project' => $project])
+        ->set('filterTo', '2026-04-30')
+        ->assertSee('April dev Alice')
+        ->assertDontSee('May dev Bob');
+});
+
 test('the empty-entries message is filter-aware', function () {
     $admin = User::factory()->create(['role' => Role::Admin]);
     ['project' => $project] = budgetFilterFixture();
