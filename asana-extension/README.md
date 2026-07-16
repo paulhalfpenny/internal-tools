@@ -1,12 +1,10 @@
 # Filter Internal Tools — Asana extension
 
 Adds a **Log time** button to Asana's task toolbar. Clicking it opens a
-native `<dialog>` (Harvest-style) hosting the compact log-time form,
-prefilled for the task (mapped project, remembered task, Asana link set).
-The dialog sizes itself to the form (the embed page reports its height
-over postMessage), closes on save/Cancel/Esc/backdrop click, and the
-form's "My timesheet" link is the fallback if login-in-iframe is ever
-blocked.
+small popup window containing the timesheet's prefilled entry form for the
+task (mapped project, remembered task, Asana link set). The popup keeps the
+Asana task visible behind it and avoids Asana's Content Security Policy,
+which blocks unlisted third-party iframe sources.
 
 Spec: [docs/superpowers/specs/2026-07-03-asana-browser-extension-design.md](../docs/superpowers/specs/2026-07-03-asana-browser-extension-design.md)
 
@@ -69,9 +67,12 @@ Fix by inspecting the task pane in devtools and updating those anchors.
   `/asana-app/timer-status` (session cookie included) so the toolbar icon
   can show a running-timer cue — green stopwatch for a timer on the open
   task, green corner dot for a timer on another task.
-- Auth is the user's normal Internal Tools session inside the dialog
-  iframe — this depends on the app sending `SameSite=None` session cookies
-  and a `frame-ancestors` policy that allows `app.asana.com` (see
-  `RestrictFrameAncestors` middleware).
-- Task id detection handles current (`/task/{gid}`) and legacy
-  (`/0/{project}/{gid}`) URL shapes plus the `?task=` query param.
+- The toolbar icon inherits Asana's current theme color so it remains
+  visible in both light and dark mode, including while hovered.
+- Auth uses the user's normal Internal Tools session in a top-level popup;
+  the entry form is opened through `/timesheet?log_asana={gid}` and does
+  not depend on cross-origin iframe access.
+- Task id detection prefers the visible task pane's `data-task-id`, which
+  works in project lists, My Tasks and Inbox, then falls back to current
+  (`/task/{gid}`) and legacy (`/0/{project}/{gid}`) URL shapes plus the
+  `?task=` query param.

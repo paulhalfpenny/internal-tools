@@ -1,12 +1,9 @@
 // Filter Internal Tools — "Log time" button for Asana tasks.
 //
-// Injects a button into the task-details toolbar. Clicking it opens a
-// native <dialog> (Harvest-style) hosting the compact log-time form for
-// the current task (/asana-app/tasks/{gid}) in an iframe. The embed page
-// drives the dialog over postMessage: it reports its content height,
-// asks to close on Cancel, and announces saves so the dialog dismisses
-// itself. Requires the app to send SameSite=None session cookies and a
-// frame-ancestors policy allowing app.asana.com.
+// Injects a button into the task-details toolbar. Clicking it opens the
+// timesheet's prefilled Asana entry form in a small popup window. A top-level
+// popup is required because Asana's frame-src policy blocks third-party
+// iframes that are not on its allowlist.
 //
 // Asana is a SPA whose DOM changes without warning; everything here is
 // defensive. If injection fails, the extension does nothing visible and
@@ -17,33 +14,40 @@
 
   const BASE_URL = 'https://internal.filter.agency';
   const BUTTON_ID = 'filter-log-time-button';
-  const DIALOG_ID = 'filter-log-time-dialog';
   const DOT_ID = 'filter-log-time-dot';
 
-  const COLOR_IDLE = '#6d6e6f';   // Asana toolbar grey
-  const COLOR_HOVER = '#1e1f21';
   const COLOR_RUNNING = '#16a34a'; // green-600, matches the app's timer UI
 
   // Latest known timer status for the logged-in Internal Tools user.
   let timerRunning = false;
   let timerGid = null;
 
-  // ::backdrop can't be styled inline; one stylesheet for the dialog shell.
-  const style = document.createElement('style');
-  style.textContent =
-    '#' + DIALOG_ID + '::backdrop{background:rgba(0,0,0,0.4);}' +
-    '#' + DIALOG_ID + '{width:520px;max-width:calc(100vw - 32px);' +
-    'height:560px;max-height:calc(100vh - 64px);padding:0;border:none;' +
-    'border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.28);overflow:hidden;}';
-  document.head.appendChild(style);
+  // The visible task pane is the most reliable task identity across project
+  // lists, My Tasks and Inbox. Inbox URLs identify both a task and a story,
+  // while the pane consistently exposes the task as data-task-id.
+  function currentTaskPane() {
+    for (const pane of document.querySelectorAll('[role="dialog"][data-task-id]')) {
+      const gid = pane.getAttribute('data-task-id');
+      const rect = pane.getBoundingClientRect();
+      if (/^\d{6,}$/.test(gid || '') && rect.width > 0 && rect.height > 0) {
+        return pane;
+      }
+    }
 
-  // The current task gid, from the URL. Asana URL shapes seen in the wild:
+    return null;
+  }
+
+  // The current task gid, preferring the visible pane and falling back to the
+  // URL. Asana URL shapes seen in the wild:
   //   /1/{workspace}/project/{project}/task/{task}
   //   /1/{workspace}/task/{task}
   //   /0/{project}/{task}            (legacy)
   //   /0/{project}/{task}/f          (legacy, full-screen)
   //   ...?task={task}                (some inbox/search views)
   function currentTaskGid() {
+    const pane = currentTaskPane();
+    if (pane) return pane.getAttribute('data-task-id');
+
     const href = window.location.href;
 
     let m = href.match(/\/task\/(\d{6,})/);
@@ -63,8 +67,9 @@
   // Both located by aria-label/text — Asana ships no stable toolbar test id.
   function findAnchor() {
     let fallback = null;
+    const root = currentTaskPane() || document;
 
-    for (const el of document.querySelectorAll('button, [role="button"]')) {
+    for (const el of root.querySelectorAll('button, [role="button"]')) {
       const label = ((el.getAttribute('aria-label') || '') + ' ' + (el.textContent || ''))
         .trim().toLowerCase();
       if (label.includes('like this task')) {
@@ -89,11 +94,10 @@
       'display:inline-flex', 'align-items:center', 'justify-content:center',
       'width:28px', 'height:28px', 'margin:5px 2px 0', 'padding:0',
       'border:none', 'border-radius:6px', 'background:transparent',
-      'cursor:pointer', 'color:' + COLOR_IDLE, 'position:relative',
+      'cursor:pointer', 'color:inherit', 'position:relative',
     ].join(';');
     button.addEventListener('mouseenter', () => {
-      button.style.background = 'rgba(55,23,23,0.06)';
-      if (!runningOnCurrentTask()) button.style.color = COLOR_HOVER;
+      button.style.background = 'rgba(127,127,127,0.15)';
     });
     button.addEventListener('mouseleave', () => {
       button.style.background = 'transparent';
@@ -108,13 +112,8 @@
       event.preventDefault();
       event.stopPropagation();
 
-      if (document.getElementById(DIALOG_ID)) {
-        closeDialog();
-        return;
-      }
-
       const gid = currentTaskGid() || taskGid;
-      if (gid) openDialog(gid);
+      if (gid) openPopup(gid);
     });
 
     return button;
@@ -131,7 +130,7 @@
     if (!button) return;
 
     const onThisTask = runningOnCurrentTask();
-    button.style.color = onThisTask ? COLOR_RUNNING : COLOR_IDLE;
+    button.style.color = onThisTask ? COLOR_RUNNING : 'inherit';
     button.title = onThisTask
       ? 'Timer running on this task — click to view or stop'
       : (timerRunning
@@ -169,59 +168,14 @@
     }
   }
 
-  function closeDialog() {
-    const dialog = document.getElementById(DIALOG_ID);
-    if (dialog) dialog.close();
+  function openPopup(gid) {
+    const popup = window.open(
+      BASE_URL + '/timesheet?log_asana=' + encodeURIComponent(gid),
+      'filter-internal-tools-log-time',
+      'popup=yes,width=520,height=680,resizable=yes,scrollbars=yes'
+    );
+    if (popup) popup.focus();
   }
-
-  // Native <dialog> gives us the centered top-layer panel, dimmed backdrop,
-  // Esc-to-close and focus containment for free. The embed page inside the
-  // iframe reports its height so the panel hugs the form like Harvest's.
-  function openDialog(gid) {
-    closeDialog();
-
-    const dialog = document.createElement('dialog');
-    dialog.id = DIALOG_ID;
-
-    const frame = document.createElement('iframe');
-    frame.src = BASE_URL + '/asana-app/tasks/' + encodeURIComponent(gid);
-    frame.style.cssText = 'display:block;width:100%;height:100%;border:none;';
-    dialog.appendChild(frame);
-
-    // A click on the backdrop lands on the dialog element itself.
-    dialog.addEventListener('click', function (event) {
-      if (event.target === dialog) dialog.close();
-    });
-    dialog.addEventListener('close', function () {
-      dialog.remove();
-    });
-
-    document.body.appendChild(dialog);
-    dialog.showModal();
-  }
-
-  // Messages from the embed page (see asana-log-time.blade.php).
-  window.addEventListener('message', function (event) {
-    if (event.origin !== BASE_URL) return;
-
-    const type = typeof event.data === 'string' ? event.data : event.data && event.data.type;
-
-    if (type === 'filter-log-time:saved') {
-      // Leave the success state visible for a beat before dismissing.
-      setTimeout(closeDialog, 900);
-      // A save can start or stop a timer — re-check once the dust settles.
-      setTimeout(refreshTimerStatus, 1200);
-    } else if (type === 'filter-log-time:close') {
-      closeDialog();
-      setTimeout(refreshTimerStatus, 400);
-    } else if (type === 'filter-log-time:height' && typeof event.data.height === 'number') {
-      const dialog = document.getElementById(DIALOG_ID);
-      if (dialog) {
-        const height = Math.max(180, Math.min(event.data.height, window.innerHeight - 64));
-        dialog.style.height = height + 'px';
-      }
-    }
-  });
 
   function inject() {
     const gid = currentTaskGid();
