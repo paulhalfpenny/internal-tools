@@ -9,6 +9,7 @@ use App\Models\AsanaProject;
 use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\TimeEntry;
+use App\Models\TimesheetExtraRow;
 use App\Models\User;
 use App\Services\Asana\AsanaTaskRefreshDispatcher;
 use Carbon\CarbonImmutable;
@@ -494,11 +495,6 @@ class WeekView extends Component
         return 'p'.$projectId.'_t'.$taskId.'_a'.($asanaGid ?? 'none');
     }
 
-    private function extraRowsSessionKey(CarbonImmutable $weekStart): string
-    {
-        return 'timesheet_week_extra_rows_'.$this->viewedUser()->id.'_'.$weekStart->toDateString();
-    }
-
     private function loadPersistedExtraRowsForWeek(CarbonImmutable $weekStart): void
     {
         if ($this->extraRows !== []) {
@@ -507,23 +503,41 @@ class WeekView extends Component
             return;
         }
 
-        $storedRows = session()->get($this->extraRowsSessionKey($weekStart), []);
-        $this->extraRows = is_array($storedRows)
-            ? $this->normalizeExtraRowKeys($storedRows)
-            : [];
+        $storedRows = TimesheetExtraRow::where('user_id', $this->viewedUser()->id)
+            ->whereDate('week_start', $weekStart->toDateString())
+            ->pluck('row_key')
+            ->all();
+
+        $this->extraRows = $this->normalizeExtraRowKeys($storedRows);
     }
 
     private function persistExtraRowsForWeek(CarbonImmutable $weekStart): void
     {
         $this->extraRows = $this->normalizeExtraRowKeys($this->extraRows);
 
+        $userId = $this->viewedUser()->id;
+        $weekStartDate = $weekStart->toDateString();
+
+        $scope = TimesheetExtraRow::where('user_id', $userId)
+            ->whereDate('week_start', $weekStartDate);
+
+        // Drop any stored rows the user no longer wants (removed, or now backed
+        // by real time entries), then persist the current set.
         if ($this->extraRows === []) {
-            session()->forget($this->extraRowsSessionKey($weekStart));
+            (clone $scope)->delete();
 
             return;
         }
 
-        session()->put($this->extraRowsSessionKey($weekStart), $this->extraRows);
+        (clone $scope)->whereNotIn('row_key', $this->extraRows)->delete();
+
+        foreach ($this->extraRows as $rowKey) {
+            TimesheetExtraRow::firstOrCreate([
+                'user_id' => $userId,
+                'week_start' => $weekStartDate,
+                'row_key' => $rowKey,
+            ]);
+        }
     }
 
     /**

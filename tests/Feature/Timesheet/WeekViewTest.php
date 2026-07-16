@@ -122,3 +122,25 @@ test('save deletes entries when their cell is cleared', function () {
 
     expect(TimeEntry::count())->toBe(0);
 });
+
+test('empty rows persist after the session is gone (returning the next day)', function () {
+    [$user, $project, $task] = weekViewSetup();
+    $this->actingAs($user);
+
+    $rowKey = weekViewRowKey($project, $task);
+
+    // Add a row with no time logged against it, and confirm it shows up.
+    Livewire::test(WeekView::class)
+        ->set('newRowProjectId', $project->id)
+        ->set('newRowTaskId', $task->id)
+        ->call('addRow')
+        ->assertSet("cellValues.{$rowKey}", ['', '', '', '', '', '', '']);
+
+    // Simulate returning the next day: the previous session has expired, so
+    // any state that only lived in the session is gone.
+    session()->flush();
+
+    // The empty row must still be present on a fresh mount.
+    Livewire::test(WeekView::class)
+        ->assertSet("cellValues.{$rowKey}", ['', '', '', '', '', '', '']);
+});
