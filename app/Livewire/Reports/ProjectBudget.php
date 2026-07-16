@@ -11,6 +11,7 @@ use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
@@ -74,27 +75,56 @@ class ProjectBudget extends Component
     /**
      * The date window the entries list & totals should cover, honouring the
      * active filters. Month wins over custom range; custom range wins over the
-     * default lifetime window; each custom bound is optional.
+     * default lifetime window; each custom bound is optional. Invalid/garbage
+     * filter values (public props can be set to anything by the client) are
+     * ignored rather than allowed to crash render().
      *
      * @return array{0: CarbonImmutable, 1: CarbonImmutable}
      */
     private function filteredWindow(): array
     {
-        if (filled($this->filterMonth)) {
-            $month = CarbonImmutable::parse($this->filterMonth.'-01');
-
+        $month = $this->parseMonth($this->filterMonth);
+        if ($month !== null) {
             return [$month->startOfMonth(), $month->endOfMonth()];
         }
 
-        if (filled($this->filterFrom) || filled($this->filterTo)) {
+        $from = $this->parseDate($this->filterFrom);
+        $to = $this->parseDate($this->filterTo);
+        if ($from !== null || $to !== null) {
             [$lifeFrom, $lifeTo] = $this->lifetimeWindow();
-            $from = filled($this->filterFrom) ? CarbonImmutable::parse($this->filterFrom) : $lifeFrom;
-            $to = filled($this->filterTo) ? CarbonImmutable::parse($this->filterTo)->endOfDay() : $lifeTo;
 
-            return [$from, $to];
+            // baseQuery() compares spent_on at date granularity, so the bounds
+            // need no time component.
+            return [$from ?? $lifeFrom, $to ?? $lifeTo];
         }
 
         return $this->lifetimeWindow();
+    }
+
+    private function parseMonth(?string $value): ?CarbonImmutable
+    {
+        if (! is_string($value) || preg_match('/^\d{4}-\d{2}$/', $value) !== 1) {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::parse($value.'-01');
+        } catch (\Exception) {
+            return null;
+        }
+    }
+
+    private function parseDate(?string $value): ?CarbonImmutable
+    {
+        if (! filled($value)) {
+            return null;
+        }
+
+        try {
+            return CarbonImmutable::parse($value);
+        } catch (\Exception) {
+            return null;
+        }
     }
 
     #[Renderless]
@@ -140,30 +170,6 @@ class ProjectBudget extends Component
             || $this->filterUserId !== null
             || $this->filterTaskId !== null;
 
-        $projectId = $this->project->id;
-
-        $monthOptions = TimeEntry::query()
-            ->where('project_id', $projectId)
-            ->orderByDesc('spent_on')
-            ->pluck('spent_on')
-            ->map(fn ($date) => $date->format('Y-m'))
-            ->unique()
-            ->values()
-            ->map(fn (string $ym) => [
-                'value' => $ym,
-                'label' => CarbonImmutable::parse($ym.'-01')->format('F Y'),
-            ]);
-
-        $taskOptions = Task::query()
-            ->whereIn('id', TimeEntry::query()->where('project_id', $projectId)->select('task_id'))
-            ->orderBy('name')
-            ->get(['id', 'name']);
-
-        $userOptions = User::query()
-            ->whereIn('id', TimeEntry::query()->where('project_id', $projectId)->select('user_id'))
-            ->orderBy('name')
-            ->get(['id', 'name']);
-
         /** @var User|null $user */
         $user = auth()->user();
 
@@ -173,11 +179,58 @@ class ProjectBudget extends Component
             'entries' => $entries,
             'filteredTotals' => $filteredTotals,
             'hasFilters' => $hasFilters,
-            'monthOptions' => $monthOptions,
-            'taskOptions' => $taskOptions,
-            'userOptions' => $userOptions,
+            'monthOptions' => $this->monthOptions(),
+            'taskOptions' => $this->taskOptions(),
+            'userOptions' => $this->userOptions(),
             'hoursFormat' => $user?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_HHMM,
         ]);
+    }
+
+    /**
+     * Distinct months (newest first) that this project has time entries in,
+     * as ['value' => 'Y-m', 'label' => 'F Y'] for the month dropdown.
+     *
+     * @return Collection<int, array{value: string, label: string}>
+     */
+    private function monthOptions(): Collection
+    {
+        return TimeEntry::query()
+            ->where('project_id', $this->project->id)
+            ->orderByDesc('spent_on')
+            ->pluck('spent_on')
+            ->map(fn ($date) => $date->format('Y-m'))
+            ->unique()
+            ->values()
+            ->map(fn (string $ym) => [
+                'value' => $ym,
+                'label' => CarbonImmutable::parse($ym.'-01')->format('F Y'),
+            ]);
+    }
+
+    /**
+     * Tasks that appear on this project's time entries, for the task dropdown.
+     *
+     * @return Collection<int, Task>
+     */
+    private function taskOptions(): Collection
+    {
+        return Task::query()
+            ->whereIn('id', TimeEntry::query()->where('project_id', $this->project->id)->select('task_id'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
+
+    /**
+     * Users that appear on this project's time entries, for the user dropdown.
+     *
+     * @return Collection<int, User>
+     */
+    private function userOptions(): Collection
+    {
+        return User::query()
+            ->whereIn('id', TimeEntry::query()->where('project_id', $this->project->id)->select('user_id'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     /**

@@ -160,3 +160,21 @@ test('filters do not change the whole-project budget cards', function () {
         ->set('filterUserId', $alice->id)
         ->assertSee('£400.00'); // Cumulative spent card is unaffected by the user filter.
 });
+
+test('invalid filter values fall back to the full window instead of crashing', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    ['project' => $project] = budgetFilterFixture();
+
+    $this->actingAs($admin);
+
+    Livewire::test(ProjectBudget::class, ['project' => $project])
+        ->set('filterMonth', 'not-a-month')
+        ->assertOk()
+        ->assertSee('April dev Alice')
+        ->assertSee('May dev Bob')
+        ->set('filterMonth', null)
+        ->set('filterFrom', 'garbage')
+        ->assertOk()
+        ->assertSee('April dev Alice')
+        ->assertSee('May dev Bob');
+});
