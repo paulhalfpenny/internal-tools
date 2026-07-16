@@ -178,3 +178,32 @@ test('invalid filter values fall back to the full window instead of crashing', f
         ->assertSee('April dev Alice')
         ->assertSee('May dev Bob');
 });
+
+test('the entries filter bar renders its controls', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    ['project' => $project] = budgetFilterFixture();
+
+    $this->actingAs($admin);
+
+    Livewire::test(ProjectBudget::class, ['project' => $project])
+        ->assertSeeHtml('wire:model.live="filterMonth"')
+        ->assertSeeHtml('wire:model.live="filterTaskId"')
+        ->assertSeeHtml('wire:model.live="filterUserId"')
+        ->assertSeeHtml('wire:model.live="filterFrom"')
+        ->assertSeeHtml('wire:model.live="filterTo"')
+        ->assertSee('May 2026');
+});
+
+test('the filtered-totals summary appears only when a filter is active', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    ['project' => $project, 'alice' => $alice] = budgetFilterFixture();
+
+    $this->actingAs($admin);
+
+    Livewire::test(ProjectBudget::class, ['project' => $project])
+        ->assertDontSeeHtml('wire:click="clearFilters"')
+        ->set('filterUserId', $alice->id)
+        // Alice has 2 entries * 2h = 4h, 2 * £100 = £200.
+        ->assertSeeHtml('wire:click="clearFilters"')
+        ->assertSee('£200.00');
+});

@@ -129,6 +129,56 @@
         </div>
 
         <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 mt-6">Time entries</h2>
+        {{-- Entries filters --}}
+        <div class="bg-white rounded-lg border border-gray-200 p-4 mb-3">
+            <div class="grid grid-cols-5 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Month</label>
+                    <select wire:model.live="filterMonth" class="w-full border border-gray-300 rounded text-sm px-2 py-1.5">
+                        <option value="">All months</option>
+                        @foreach($monthOptions as $opt)
+                            <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">From</label>
+                    <input wire:model.live="filterFrom" type="date" class="w-full border border-gray-300 rounded text-sm px-2 py-1.5">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">To</label>
+                    <input wire:model.live="filterTo" type="date" class="w-full border border-gray-300 rounded text-sm px-2 py-1.5">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">Task</label>
+                    <select wire:model.live="filterTaskId" class="w-full border border-gray-300 rounded text-sm px-2 py-1.5">
+                        <option value="">All tasks</option>
+                        @foreach($taskOptions as $task)
+                            <option value="{{ $task->id }}">{{ $task->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600 mb-1">User</label>
+                    <select wire:model.live="filterUserId" class="w-full border border-gray-300 rounded text-sm px-2 py-1.5">
+                        <option value="">All users</option>
+                        @foreach($userOptions as $u)
+                            <option value="{{ $u->id }}">{{ $u->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+            @if($hasFilters)
+                <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                    <div class="text-sm text-gray-600">
+                        <span class="font-medium text-gray-900">{{ $entries->total() }}</span> entries
+                        · <span class="font-medium text-gray-900">{{ HoursFormatter::format((float) $filteredTotals->totalHours, $hoursFormat) }}</span> hrs
+                        · <span class="font-medium text-gray-900">£{{ number_format($filteredTotals->billableAmount, 2) }}</span>
+                    </div>
+                    <button wire:click="clearFilters" class="text-sm text-gray-500 hover:text-gray-700">Clear filters</button>
+                </div>
+            @endif
+        </div>
         <div class="bg-white rounded-lg border border-gray-200 overflow-x-auto">
             @if($entries->isEmpty())
                 <div class="py-12 text-center text-sm text-gray-400">No time entries in this window yet.</div>
