@@ -207,3 +207,16 @@ test('the filtered-totals summary appears only when a filter is active', functio
         ->assertSeeHtml('wire:click="clearFilters"')
         ->assertSee('£200.00');
 });
+
+test('the empty-entries message is filter-aware', function () {
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    ['project' => $project] = budgetFilterFixture();
+
+    $this->actingAs($admin);
+
+    // A month with no entries yields an empty, filtered result.
+    Livewire::test(ProjectBudget::class, ['project' => $project])
+        ->set('filterMonth', '2026-07')
+        ->assertSee('No time entries match the current filters.')
+        ->assertDontSee('No time entries in this window yet.');
+});

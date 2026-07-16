@@ -181,7 +181,7 @@
         </div>
         <div class="bg-white rounded-lg border border-gray-200 overflow-x-auto">
             @if($entries->isEmpty())
-                <div class="py-12 text-center text-sm text-gray-400">No time entries in this window yet.</div>
+                <div class="py-12 text-center text-sm text-gray-400">{{ $hasFilters ? 'No time entries match the current filters.' : 'No time entries in this window yet.' }}</div>
             @else
                 <table class="w-full text-sm">
                     <thead>
