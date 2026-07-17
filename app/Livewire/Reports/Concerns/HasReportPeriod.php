@@ -8,14 +8,18 @@ use App\Models\Client;
 use App\Models\Project;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Url;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 trait HasReportPeriod
 {
+    #[Url(except: 'this_month')]
     public string $preset = 'this_month';
 
+    #[Url(except: '')]
     public string $from = '';
 
+    #[Url(except: '')]
     public string $to = '';
 
     public bool $showArchived = false;

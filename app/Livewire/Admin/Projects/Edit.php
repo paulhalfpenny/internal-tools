@@ -192,6 +192,7 @@ class Edit extends Component
             $this->userAssignments[$userId] = ['hourly_rate_override' => ''];
         }
 
+        $this->forgetProjectPickerCaches($this->pendingNewUserIds);
         $this->closeAddUserModal();
     }
 

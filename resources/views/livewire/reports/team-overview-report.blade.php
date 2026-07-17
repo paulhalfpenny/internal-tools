@@ -30,7 +30,12 @@
                     <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ $billablePercent }}%</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->billable_amount, 2) }}</td>
                     <td class="px-4 py-3 text-right">
-                        <a href="{{ route('reports.team.member', $row->id) }}"
+                        <a href="{{ route('reports.team.member', [
+                            'user' => $row->id,
+                            'preset' => $preset,
+                            'from' => $from,
+                            'to' => $to,
+                        ]) }}"
                            class="text-xs text-blue-600 hover:underline">View →</a>
                     </td>
                 </tr>
