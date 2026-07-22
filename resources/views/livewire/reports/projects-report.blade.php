@@ -10,7 +10,7 @@
             <thead>
                 <tr class="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
                     <th class="px-4 py-2" colspan="2"></th>
-                    <th class="px-4 py-2 text-center font-semibold text-gray-600 border-l border-gray-100" colspan="2">This period</th>
+                    <th class="px-4 py-2 text-center font-semibold text-gray-600 border-l border-gray-100" colspan="3">This period</th>
                     <th class="px-4 py-2 text-center font-semibold text-gray-600 border-l border-gray-100" colspan="5">Lifetime / cumulative</th>
                 </tr>
                 <tr class="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
@@ -18,6 +18,7 @@
                     <th class="text-left px-4 py-3 font-medium">Project</th>
                     <th class="text-right px-4 py-3 font-medium border-l border-gray-100">Hours</th>
                     <th class="text-right px-4 py-3 font-medium">Spent (£)</th>
+                    <th class="text-right px-4 py-3 font-medium">% used</th>
                     <th class="text-right px-4 py-3 font-medium border-l border-gray-100">Budget (£)</th>
                     <th class="text-right px-4 py-3 font-medium">Spent (£)</th>
                     <th class="text-right px-4 py-3 font-medium">Budget (hrs)</th>
@@ -33,6 +34,10 @@
                     $pctClass = $pct === null ? 'text-gray-300'
                         : ($pct > 100 ? 'text-red-700 font-semibold'
                         : ($pct >= 80 ? 'text-amber-700 font-semibold' : 'text-gray-700'));
+                    $periodPct = $row->period_percent_used;
+                    $periodPctClass = $periodPct === null ? 'text-gray-300'
+                        : ($periodPct > 100 ? 'text-red-700 font-semibold'
+                        : ($periodPct >= 80 ? 'text-amber-700 font-semibold' : 'text-gray-700'));
                     $tooltip = $b
                         ? ($b->budgetType->value === 'fixed_fee'
                             ? 'Lifetime fixed-fee budget'
@@ -50,6 +55,7 @@
                     </td>
                     <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ HoursFormatter::format((float) $row->total_hours, $hoursFormat) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->billable_amount, 0) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums {{ $periodPctClass }}">{{ $periodPct === null ? '—' : number_format($periodPct, 1).'%' }}</td>
                     <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100" title="{{ $tooltip }}">{{ $b ? '£'.number_format($b->budgetAmount, 0) : '—' }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">{{ $b ? '£'.number_format($b->actualAmount, 0) : '—' }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">{{ $b && $b->budgetHours !== null ? HoursFormatter::format((float) $b->budgetHours, $hoursFormat) : '—' }}</td>
@@ -63,6 +69,7 @@
                     <td class="px-4 py-3" colspan="2">Total</td>
                     <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ HoursFormatter::format((float) $totals->totalHours, $hoursFormat) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($totals->billableAmount, 0) }}</td>
+                    <td class="px-4 py-3"></td>
                     <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100" colspan="5"></td>
                 </tr>
             </tfoot>

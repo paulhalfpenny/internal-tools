@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
@@ -54,6 +55,65 @@ test('projects report exposes budget status on rows', function () {
     expect($row->budget_status)->not->toBeNull()
         ->and($row->budget_status->budgetAmount)->toBe(1000.0)
         ->and($row->budget_status->actualAmount)->toBe(500.0);
+});
+
+test('projects report exposes monthly CI budget usage for the selected period', function () {
+    CarbonImmutable::setTestNow('2026-07-22');
+
+    $admin = User::factory()->create(['role' => Role::Admin]);
+    $user = User::factory()->create();
+    $task = Task::factory()->create();
+
+    $ciProject = Project::factory()->create([
+        'budget_type' => BudgetType::MonthlyCi,
+        'budget_amount' => 500.00,
+        'budget_starts_on' => '2026-04-01',
+    ]);
+    $fixedFeeProject = Project::factory()->create([
+        'budget_type' => BudgetType::FixedFee,
+        'budget_amount' => 1000.00,
+        'starts_on' => '2026-04-01',
+    ]);
+
+    budgetReportEntry([
+        'user_id' => $user->id,
+        'project_id' => $ciProject->id,
+        'task_id' => $task->id,
+        'spent_on' => '2026-04-15',
+        'billable_amount' => 400,
+    ]);
+    budgetReportEntry([
+        'user_id' => $user->id,
+        'project_id' => $ciProject->id,
+        'task_id' => $task->id,
+        'spent_on' => '2026-05-15',
+        'billable_amount' => 350,
+    ]);
+    budgetReportEntry([
+        'user_id' => $user->id,
+        'project_id' => $fixedFeeProject->id,
+        'task_id' => $task->id,
+        'spent_on' => '2026-04-15',
+        'billable_amount' => 500,
+    ]);
+
+    $this->actingAs($admin);
+
+    $component = Livewire::test(ProjectsReport::class)
+        ->set('preset', 'custom')
+        ->set('from', '2026-04-01')
+        ->set('to', '2026-05-31');
+
+    $rows = $component->instance()->rows(app(ProjectBudgetCalculator::class))->keyBy('id');
+
+    expect((array) $rows[$ciProject->id])
+        ->toHaveKey('period_percent_used', 75.0)
+        ->and((array) $rows[$fixedFeeProject->id])
+        ->toHaveKey('period_percent_used', null);
+
+    $component
+        ->assertSeeHtml('colspan="3">This period</th>')
+        ->assertSee('75.0%');
 });
 
 test('budget page lists time entries for this project only, with who/what/when', function () {

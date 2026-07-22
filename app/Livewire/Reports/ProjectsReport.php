@@ -9,6 +9,7 @@ use App\Enums\GroupBy;
 use App\Livewire\Reports\Concerns\HasReportPeriod;
 use App\Models\Project;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
 use Livewire\Attributes\Layout;
@@ -41,11 +42,17 @@ class ProjectsReport extends Component
             return $rows;
         }
 
-        $projects = Project::query()->whereIn('id', $projectIds)->get();
-        $statuses = $calculator->forProjects($projects);
+        $projects = Project::query()->whereIn('id', $projectIds)->get()->keyBy('id');
+        $statuses = $calculator->forProjects($projects->values());
+        $from = CarbonImmutable::parse($this->from);
+        $to = CarbonImmutable::parse($this->to);
 
-        return $rows->map(function (\stdClass $row) use ($statuses): \stdClass {
+        return $rows->map(function (\stdClass $row) use ($calculator, $from, $projects, $statuses, $to): \stdClass {
+            $project = $projects->get($row->id);
             $row->budget_status = $statuses[$row->id] ?? null;
+            $row->period_percent_used = $project === null
+                ? null
+                : $calculator->percentUsedForPeriod($project, $row->billable_amount, $from, $to);
 
             return $row;
         });

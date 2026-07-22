@@ -118,6 +118,26 @@ final class ProjectBudgetCalculator
         return $result;
     }
 
+    public function percentUsedForPeriod(
+        Project $project,
+        float $actualAmount,
+        CarbonImmutable $from,
+        CarbonImmutable $to,
+    ): ?float {
+        if ($project->budget_type !== BudgetType::MonthlyCi || (float) $project->budget_amount <= 0) {
+            return null;
+        }
+
+        $months = $this->monthsElapsed($from, $to);
+        if ($months === 0) {
+            return null;
+        }
+
+        $periodBudget = (float) $project->budget_amount * $months;
+
+        return round($actualAmount / $periodBudget * 100, 1);
+    }
+
     /**
      * Per-month breakdown for the drill-down view.
      *
