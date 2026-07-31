@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\Decimal;
 use App\Enums\BudgetType;
 use App\Enums\JdwCategory;
 use Database\Factories\ProjectFactory;
@@ -95,9 +96,9 @@ class Project extends Model
             'is_billable' => 'boolean',
             'budget_type' => BudgetType::class,
             'jdw_category' => JdwCategory::class,
-            'default_hourly_rate' => 'decimal:2',
-            'budget_amount' => 'decimal:2',
-            'budget_hours' => 'decimal:2',
+            'default_hourly_rate' => Decimal::class.':2',
+            'budget_amount' => Decimal::class.':2',
+            'budget_hours' => Decimal::class.':2',
             'budget_starts_on' => 'date',
             'starts_on' => 'date',
             'ends_on' => 'date',

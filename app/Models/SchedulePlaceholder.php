@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\Decimal;
 use Database\Factories\SchedulePlaceholderFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -37,7 +38,7 @@ class SchedulePlaceholder extends Model
     protected function casts(): array
     {
         return [
-            'weekly_capacity_hours' => 'decimal:2',
+            'weekly_capacity_hours' => Decimal::class.':2',
             'schedule_work_days' => 'array',
             'archived_at' => 'datetime',
         ];

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\Decimal;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -17,7 +18,7 @@ class Rate extends Model
     protected function casts(): array
     {
         return [
-            'hourly_rate' => 'decimal:2',
+            'hourly_rate' => Decimal::class.':2',
             'is_archived' => 'boolean',
         ];
     }

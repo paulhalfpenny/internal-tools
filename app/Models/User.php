@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\Decimal;
 use App\Domain\TimeTracking\HoursFormatter;
 use App\Enums\Role;
 use Database\Factories\UserFactory;
@@ -102,8 +103,8 @@ class User extends Authenticatable implements OAuthenticatable
             'is_contractor' => 'boolean',
             'is_active' => 'boolean',
             'archived_at' => 'datetime',
-            'default_hourly_rate' => 'decimal:2',
-            'weekly_capacity_hours' => 'decimal:2',
+            'default_hourly_rate' => Decimal::class.':2',
+            'weekly_capacity_hours' => Decimal::class.':2',
             'schedule_work_days' => 'array',
             'schedule_preferences' => 'array',
             'last_login_at' => 'datetime',

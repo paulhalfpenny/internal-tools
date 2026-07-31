@@ -39,6 +39,44 @@ test('creates a time entry with correct denormalised billing fields', function (
         ->and((float) $entry->billable_amount)->toBe(168.0);
 });
 
+test('float inputs do not reach brick math when decimal attributes are cast', function () {
+    [$user, $project, $task] = setupProjectWithTaskAndUser(userRate: 84.0);
+
+    $deprecations = [];
+    $previousErrorHandler = set_error_handler(
+        function (int $level, string $message, string $file, int $line) use (&$deprecations, &$previousErrorHandler): bool {
+            if ($level === E_USER_DEPRECATED && str_contains($message, 'Passing floats to BigNumber::of()')) {
+                $deprecations[] = $message;
+
+                return true;
+            }
+
+            return $previousErrorHandler ? ($previousErrorHandler)($level, $message, $file, $line) : false;
+        },
+    );
+
+    try {
+        $service = app(TimeEntryService::class);
+        $entry = $service->create($user, [
+            'project_id' => $project->id,
+            'task_id' => $task->id,
+            'spent_on' => today()->toDateString(),
+            'hours' => 1.25,
+            'notes' => null,
+        ]);
+
+        $entry = $service->update($entry, ['hours' => 2.5]);
+        $entry->toArray();
+    } finally {
+        restore_error_handler();
+    }
+
+    expect($deprecations)->toBeEmpty()
+        ->and($entry->hours)->toBe('2.50')
+        ->and($entry->billable_rate_snapshot)->toBe('84.00')
+        ->and($entry->billable_amount)->toBe('210.00');
+});
+
 test('billable_amount is frozen after the user role rate changes', function () {
     [$user, $project, $task, $rate] = setupProjectWithTaskAndUser(userRate: 84.0);
 

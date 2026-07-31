@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\Decimal;
 use Database\Factories\ScheduleTimeOffFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -39,7 +40,7 @@ class ScheduleTimeOff extends Model
         return [
             'starts_on' => 'date',
             'ends_on' => 'date',
-            'hours_per_day' => 'decimal:2',
+            'hours_per_day' => Decimal::class.':2',
         ];
     }
 

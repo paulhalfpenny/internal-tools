@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\Decimal;
 use Database\Factories\TimeEntryFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -47,12 +48,12 @@ class TimeEntry extends Model
     {
         return [
             'spent_on' => 'date',
-            'hours' => 'decimal:2',
+            'hours' => Decimal::class.':2',
             'is_running' => 'boolean',
             'timer_started_at' => 'datetime',
             'is_billable' => 'boolean',
-            'billable_rate_snapshot' => 'decimal:2',
-            'billable_amount' => 'decimal:2',
+            'billable_rate_snapshot' => Decimal::class.':2',
+            'billable_amount' => Decimal::class.':2',
             'invoiced_at' => 'datetime',
             'asana_synced_at' => 'datetime',
         ];
