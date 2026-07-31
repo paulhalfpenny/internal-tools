@@ -61,6 +61,13 @@ return [
                 // PDO::MYSQL_ATTR_SSL_CA is deprecated in PHP 8.5; use the numeric value (1014) directly.
                 1014 => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
+            'dump' => [
+                // Dump inside a single transaction so the snapshot is a consistent
+                // point in time across every table. Without it mysqldump falls back
+                // to --lock-tables, which blocks writers for the whole dump; with it
+                // InnoDB serves a consistent MVCC view and nothing is locked.
+                'useSingleTransaction' => true,
+            ],
         ],
 
         'mariadb' => [

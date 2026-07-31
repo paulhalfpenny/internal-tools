@@ -235,8 +235,13 @@ return [
         'strategy' => DefaultStrategy::class,
 
         'default_strategy' => [
-            // Keep every backup for 30 days, then delete — no weekly/monthly tiers.
-            'keep_all_backups_for_days' => 30,
+            // Keep every backup for 90 days, then delete — no weekly/monthly tiers.
+            // Deliberately flat rather than tapered: at roughly one nightly backup
+            // plus a few per-deploy ones, 90 days is only a few hundred dumps of
+            // ~3MB, so there is no reason to thin the middle of the window and lose
+            // restore granularity. Revisit if deploy frequency climbs enough to
+            // approach the megabyte ceiling below.
+            'keep_all_backups_for_days' => 90,
             'keep_daily_backups_for_days' => 0,
             'keep_weekly_backups_for_weeks' => 0,
             'keep_monthly_backups_for_months' => 0,
