@@ -15,6 +15,9 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: deploy
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # Default is 10m, which the pre-deploy backup now eats into. Give the
+          # backup's own 600s timeout room to fire first with a clearer error.
+          command_timeout: 20m
           script: |
             set -e
             umask 0002
@@ -43,6 +46,22 @@ jobs:
             # recreating exactly the unwritable cache file this guards
             # against.
             php artisan down --render="errors::503" --retry=60 || true
+
+            # Full database backup before anything can mutate the database.
+            #
+            # Deliberately NOT `|| true`: if we cannot prove a restore point
+            # exists, the deploy must not go on to run `migrate --force`. With
+            # `set -e` a failure aborts here, and the EXIT trap above still runs
+            # `artisan up`, so a failed backup leaves the site serving the old
+            # release rather than stranded in maintenance mode.
+            #
+            # Placed after `down` so live traffic is not writing rows into the
+            # gap between the dump and the migration, and before `git pull` so
+            # the snapshot matches the schema we would actually roll back to.
+            #
+            # `timeout` bounds a hung dump so it fails with an obvious error
+            # instead of silently consuming the ssh-action command timeout.
+            timeout 600 php artisan backup:run --only-db
 
             git pull origin main
             composer install --no-dev --no-interaction --optimize-autoloader
