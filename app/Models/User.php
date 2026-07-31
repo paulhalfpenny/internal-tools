@@ -28,6 +28,8 @@ use Laravel\Passport\HasApiTokens;
  * @property Carbon|null $asana_token_expires_at
  * @property string|null $asana_user_gid
  * @property string|null $asana_workspace_gid
+ * @property Carbon|null $asana_connection_lost_at
+ * @property Carbon|null $asana_connection_alerted_at
  * @property bool $is_asana_sync_actor
  * @property string|null $slack_user_id
  * @property Carbon|null $notifications_paused_until
@@ -63,6 +65,8 @@ class User extends Authenticatable implements OAuthenticatable
         'asana_token_expires_at',
         'asana_user_gid',
         'asana_workspace_gid',
+        'asana_connection_lost_at',
+        'asana_connection_alerted_at',
         'is_asana_sync_actor',
         'slack_user_id',
         'email',
@@ -109,6 +113,8 @@ class User extends Authenticatable implements OAuthenticatable
             'asana_access_token' => 'encrypted',
             'asana_refresh_token' => 'encrypted',
             'asana_token_expires_at' => 'datetime',
+            'asana_connection_lost_at' => 'datetime',
+            'asana_connection_alerted_at' => 'datetime',
             'is_asana_sync_actor' => 'boolean',
             'notifications_paused_until' => 'date',
             'email_notifications_enabled' => 'boolean',

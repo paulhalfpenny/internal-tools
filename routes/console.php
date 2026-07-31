@@ -27,3 +27,9 @@ Schedule::command('app:check-budget-alerts')
     ->dailyAt('07:00')
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('asana:check-connections')
+    ->dailyAt('09:00')
+    ->weekdays()
+    ->withoutOverlapping()
+    ->onOneServer();

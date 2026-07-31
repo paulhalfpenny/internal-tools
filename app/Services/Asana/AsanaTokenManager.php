@@ -33,12 +33,34 @@ final class AsanaTokenManager
             'asana_token_expires_at' => null,
             'asana_user_gid' => null,
             'asana_workspace_gid' => null,
+            'asana_connection_lost_at' => null,
+            'asana_connection_alerted_at' => null,
         ])->save();
+    }
+
+    /**
+     * Record that a connection dropped without the user asking for it, so the daily
+     * health check can tell them to reconnect. Stamped after disconnect(), which
+     * clears the tokens and would otherwise leave no trace that a connection existed.
+     */
+    private function recordConnectionLost(User $user): void
+    {
+        // Idempotent: keep the first observed drop time, so repeated failed calls
+        // do not keep pushing the timestamp forward and re-trigger alerts.
+        if ($user->asana_connection_lost_at !== null) {
+            return;
+        }
+
+        $user->forceFill(['asana_connection_lost_at' => now()])->save();
     }
 
     private function refreshToken(User $user): ?string
     {
         if ($user->asana_refresh_token === null) {
+            // Access token has expired and there is nothing to refresh with: the
+            // connection is unusable and only a fresh OAuth round trip can fix it.
+            $this->recordConnectionLost($user);
+
             return null;
         }
 
@@ -67,6 +89,7 @@ final class AsanaTokenManager
             ], $user);
 
             $this->disconnect($user);
+            $this->recordConnectionLost($user);
 
             return null;
         }

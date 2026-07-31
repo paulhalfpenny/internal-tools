@@ -96,11 +96,19 @@ class AsanaOAuthController extends Controller
 
         /** @var User $user */
         $user = $request->user();
+
+        // Asana omits refresh_token when re-authorising an already-authorised app.
+        // Overwriting with null there strands the connection: the access token expires
+        // an hour later with nothing to refresh it. Keep whatever we already hold.
+        //
+        // Filled in memory only — getMe() below reads the token straight off the model,
+        // so nothing is persisted until we have the full picture. A request that dies
+        // mid-flow then leaves the stored connection untouched rather than half-written.
         $user->forceFill([
             'asana_access_token' => $accessToken,
-            'asana_refresh_token' => $refreshToken,
+            'asana_refresh_token' => $refreshToken ?? $user->asana_refresh_token,
             'asana_token_expires_at' => now()->addSeconds(max(0, ($data['expires_in'] ?? 3600) - 60)),
-        ])->save();
+        ]);
 
         try {
             $me = $this->service->forUser($user)->getMe();
@@ -118,6 +126,9 @@ class AsanaOAuthController extends Controller
         $user->forceFill([
             'asana_user_gid' => $me['gid'],
             'asana_workspace_gid' => $defaultWorkspace['gid'] ?? null,
+            // A successful reconnect clears the drop, so the health check stops chasing it.
+            'asana_connection_lost_at' => null,
+            'asana_connection_alerted_at' => null,
         ])->save();
 
         foreach ($workspaces as $workspace) {
