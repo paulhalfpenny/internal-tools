@@ -47,6 +47,20 @@ jobs:
             # against.
             php artisan down --render="errors::503" --retry=60 || true
 
+            # Wait for in-flight jobs before dumping, so the backup is a true
+            # point-in-time snapshot rather than one with worker writes landing
+            # just after it.
+            #
+            # `down` above already stops workers reserving new jobs — they pause
+            # themselves while the app is in maintenance mode — but a job that was
+            # already executing runs to completion and keeps writing. That is the
+            # only remaining gap between the dump and `migrate --force`.
+            #
+            # Also not `|| true`: if the queue will not drain we cannot claim the
+            # backup is authoritative, so the deploy must stop. The EXIT trap
+            # still brings the site back up on the previous release.
+            php artisan queue:await-idle --timeout=180
+
             # Full database backup before anything can mutate the database.
             #
             # Deliberately NOT `|| true`: if we cannot prove a restore point
