@@ -101,6 +101,17 @@ class PullAsanaTasksJob implements ShouldQueue
                     continue;
                 }
 
+                if ($e->response->serverError()) {
+                    AsanaSyncLog::warn('asana.pull_tasks.upstream_error', [
+                        'asana_project_gid' => $this->asanaProjectGid,
+                        'user_id' => $user->id,
+                        'status' => $e->response->status(),
+                        'error' => $e->getMessage(),
+                    ], $user);
+
+                    return null;
+                }
+
                 $this->logFailure($user, $e);
 
                 throw $e;

@@ -29,3 +29,19 @@ test('managers can access the admin projects area but not other admin areas', fu
         ->get(route('admin.projects'))
         ->assertForbidden();
 });
+
+test('project budget type dropdown labels monthly retainers generically', function () {
+    $manager = User::factory()->create(['role' => Role::Manager]);
+    $project = Project::factory()->create();
+
+    $this->actingAs($manager)
+        ->get(route('admin.projects'))
+        ->assertOk()
+        ->assertSee('<option value="monthly_ci">Retainer</option>', false)
+        ->assertDontSee('CI Retainer');
+
+    $this->get(route('admin.projects.edit', $project))
+        ->assertOk()
+        ->assertSee('<option value="monthly_ci">Retainer</option>', false)
+        ->assertDontSee('CI Retainer');
+});

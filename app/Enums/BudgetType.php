@@ -11,7 +11,7 @@ enum BudgetType: string
     {
         return match ($this) {
             self::FixedFee => 'Fixed-fee',
-            self::MonthlyCi => 'CI Retainer',
+            self::MonthlyCi => 'Retainer',
         };
     }
 }

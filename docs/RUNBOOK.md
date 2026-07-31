@@ -31,6 +31,12 @@ php artisan view:cache
 
 The app is put into maintenance mode for the duration of the deploy (`artisan down`/`up`). This isn't just for show — without it, a live request landing mid-deploy can make PHP-FPM (running as `www-data`) recompile a view itself, writing it with permissions the `deploy` user can't later overwrite, which fails `artisan view:cache` with a permission error. The `trap` guarantees `artisan up` runs even if a step fails, so a broken deploy can't leave the site stuck in maintenance mode.
 
+Queue restart signals and the worker's between-jobs liveness checks use the
+dedicated `QUEUE_WORKER_CACHE_STORE` (`file` on this single-server deployment).
+The normal application cache remains database-backed. This separation means a
+brief MySQL outage can pause database jobs without also crashing the worker's
+restart check; Supervisor can then keep the worker alive until MySQL recovers.
+
 To trigger a manual deploy, push any commit to `main` or run an empty commit:
 
 ```bash

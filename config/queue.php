@@ -17,6 +17,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Queue Worker Cache Store
+    |--------------------------------------------------------------------------
+    |
+    | Long-running workers poll this store for restart signals between jobs.
+    | Keep it independent from the database queue so a brief database outage
+    | cannot also take down the worker's liveness check.
+    |
+    */
+
+    'worker_cache' => env('QUEUE_WORKER_CACHE_STORE', 'file'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Queue Connections
     |--------------------------------------------------------------------------
     |

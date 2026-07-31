@@ -41,7 +41,7 @@
                     $tooltip = $b
                         ? ($b->budgetType->value === 'fixed_fee'
                             ? 'Lifetime fixed-fee budget'
-                            : 'CI Retainer monthly budget × elapsed months')
+                            : 'Retainer monthly budget × elapsed months')
                         : '';
                 @endphp
                 <tr class="hover:bg-gray-50">

@@ -8,6 +8,7 @@ use App\Models\AsanaTask;
 use App\Models\User;
 use App\Services\Asana\AsanaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 
@@ -131,4 +132,54 @@ test('pulling tasks falls back when the first actor cannot access the Asana proj
     expect(AsanaTask::find('t1')->name)->toBe('Visible task');
     expect(AsanaSyncLog::where('event', 'asana.pull_tasks.failed')->exists())->toBeFalse();
     expect(AsanaSyncLog::where('event', 'asana.pull_tasks.completed')->first()?->context['user_id'])->toBe($allowedUser->id);
+});
+
+test('pulling tasks preserves stale data when Asana exhausts its server error retries', function () {
+    $user = asanaTestConnectedUser();
+    $staleTask = AsanaTask::create([
+        'gid' => 't-stale',
+        'asana_project_gid' => 'P1',
+        'name' => 'Previously synced task',
+        'search_text' => null,
+        'is_completed' => false,
+        'parent_gid' => null,
+        'last_synced_at' => now()->subHour(),
+    ]);
+
+    Http::fake([
+        'app.asana.com/api/1.0/projects/P1/tasks*' => Http::response('<html>Upstream error</html>', 500),
+    ]);
+
+    $thrown = null;
+
+    try {
+        (new PullAsanaTasksJob('P1', $user->id))->handle(app(AsanaService::class));
+    } catch (Throwable $exception) {
+        $thrown = $exception;
+    }
+
+    $warning = AsanaSyncLog::where('event', 'asana.pull_tasks.upstream_error')->first();
+
+    expect($thrown)->toBeNull()
+        ->and($staleTask->fresh())->not->toBeNull()
+        ->and($warning?->level)->toBe('warn')
+        ->and($warning?->context['asana_project_gid'])->toBe('P1')
+        ->and($warning?->context['user_id'])->toBe($user->id)
+        ->and($warning?->context['status'])->toBe(500)
+        ->and(AsanaSyncLog::where('event', 'asana.pull_tasks.failed')->exists())->toBeFalse()
+        ->and(AsanaSyncLog::where('event', 'asana.pull_tasks.completed')->exists())->toBeFalse();
+});
+
+test('pulling tasks still fails for non-server HTTP errors', function () {
+    $user = asanaTestConnectedUser();
+
+    Http::fake([
+        'app.asana.com/api/1.0/projects/P1/tasks*' => Http::response(['errors' => [['message' => 'Rate limited']]], 429),
+    ]);
+
+    expect(fn () => (new PullAsanaTasksJob('P1', $user->id))->handle(app(AsanaService::class)))
+        ->toThrow(RequestException::class);
+
+    expect(AsanaSyncLog::where('event', 'asana.pull_tasks.failed')->exists())->toBeTrue()
+        ->and(AsanaSyncLog::where('event', 'asana.pull_tasks.upstream_error')->exists())->toBeFalse();
 });
