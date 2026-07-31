@@ -16,10 +16,61 @@
         </button>
     </div>
 
+    @php
+        $currentMonthKey = \Carbon\CarbonImmutable::now()->format('Y-m');
+        $currentMonthSpend = $monthlySpend->first(fn ($r) => $r->month->format('Y-m') === $currentMonthKey);
+        $thisMonthAmount = $currentMonthSpend?->month_amount ?? 0.0;
+        $thisMonthHours = $currentMonthSpend?->month_hours ?? 0.0;
+        $cumulativeSpend = $monthlySpend->last();
+    @endphp
+
     @if(! $status)
-        <div class="bg-white rounded-lg border border-gray-200 p-6 text-sm text-gray-500">
-            This project has no budget configured.
-            <a href="{{ route('admin.projects.edit', $project) }}" class="text-blue-700 hover:underline">Set a budget</a>.
+        <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Spend</h2>
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <div class="text-xs uppercase tracking-wide text-gray-500">This month spent</div>
+                <div class="text-base font-semibold text-gray-900 mt-1">£{{ number_format($thisMonthAmount, 2) }}</div>
+                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::format((float) $thisMonthHours, $hoursFormat) }} hrs</div>
+            </div>
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <div class="text-xs uppercase tracking-wide text-gray-500">Cumulative spent</div>
+                <div class="text-base font-semibold text-gray-900 mt-1">£{{ number_format($cumulativeSpend?->running_amount ?? 0, 2) }}</div>
+                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::format((float) ($cumulativeSpend?->running_hours ?? 0), $hoursFormat) }} hrs</div>
+            </div>
+        </div>
+
+        <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Spend by month</h2>
+        <div class="bg-white rounded-lg border border-gray-200 overflow-x-auto mb-6">
+            @if($monthlySpend->isEmpty())
+                <div class="py-12 text-center text-sm text-gray-400">No months to show yet.</div>
+            @else
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
+                            <th class="text-left px-4 py-3 font-medium">Month</th>
+                            <th class="text-right px-4 py-3 font-medium">Spent (£)</th>
+                            <th class="text-right px-4 py-3 font-medium">Spent (hrs)</th>
+                            <th class="text-right px-4 py-3 font-medium">Cumulative spent (£)</th>
+                            <th class="text-right px-4 py-3 font-medium">Cumulative hrs</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        @foreach($monthlySpend as $row)
+                            @php $isCurrentMonth = $row->month->format('Y-m') === $currentMonthKey; @endphp
+                            <tr class="hover:bg-gray-50 {{ $isCurrentMonth ? 'bg-blue-50/50' : '' }}">
+                                <td class="px-4 py-3 font-medium text-gray-900">
+                                    {{ $row->month_label }}
+                                    @if($isCurrentMonth)<span class="ml-2 text-xs text-blue-700">(current)</span>@endif
+                                </td>
+                                <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->month_amount, 2) }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::format((float) $row->month_hours, $hoursFormat) }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->running_amount, 2) }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::format((float) $row->running_hours, $hoursFormat) }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            @endif
         </div>
     @else
         @php
@@ -128,7 +179,9 @@
             @endif
         </div>
 
-        <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 mt-6">Time entries</h2>
+    @endif
+
+    <h2 class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2 mt-6">Time entries</h2>
         {{-- Entries filters --}}
         <div class="bg-white rounded-lg border border-gray-200 p-4 mb-3">
             <div class="grid grid-cols-5 gap-3">
@@ -221,5 +274,4 @@
                 </div>
             @endif
         </div>
-    @endif
 </div>

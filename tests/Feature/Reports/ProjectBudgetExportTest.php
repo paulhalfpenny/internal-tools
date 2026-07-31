@@ -2,7 +2,7 @@
 
 use App\Enums\BudgetType;
 use App\Enums\Role;
-use App\Livewire\Reports\ProjectBudget;
+use App\Livewire\Reports\ProjectDetail;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
@@ -43,7 +43,7 @@ test('project budget page exports a CSV scoped to that project only', function (
     projectBudgetEntry(['user_id' => $user->id, 'project_id' => $thisProject->id, 'task_id' => $task->id, 'notes' => 'In scope']);
     projectBudgetEntry(['user_id' => $user->id, 'project_id' => $otherProject->id, 'task_id' => $task->id, 'notes' => 'Out of scope']);
 
-    $component = Livewire::test(ProjectBudget::class, ['project' => $thisProject]);
+    $component = Livewire::test(ProjectDetail::class, ['project' => $thisProject]);
     $response = $component->instance()->export();
 
     ob_start();
