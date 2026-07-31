@@ -22,7 +22,7 @@ use App\Livewire\Profile\AsanaConnection as ProfileAsanaConnection;
 use App\Livewire\Profile\Preferences as ProfilePreferences;
 use App\Livewire\Reports\ClientDetail;
 use App\Livewire\Reports\ClientsReport;
-use App\Livewire\Reports\ProjectBudget;
+use App\Livewire\Reports\ProjectDetail;
 use App\Livewire\Reports\ProjectsReport;
 use App\Livewire\Reports\TasksReport;
 use App\Livewire\Reports\TeamOverviewReport;
@@ -109,7 +109,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/clients', ClientsReport::class)->name('clients');
         Route::get('/clients/{client}', ClientDetail::class)->name('client-detail');
         Route::get('/projects', ProjectsReport::class)->name('projects');
-        Route::get('/projects/{project}/budget', ProjectBudget::class)->name('projects.budget');
+        Route::get('/projects/{project}', ProjectDetail::class)->name('projects.detail');
+        Route::get('/projects/{project}/budget', fn (string $project) => redirect()->route('reports.projects.detail', $project))
+            ->name('projects.budget');
         Route::get('/tasks', TasksReport::class)->name('tasks');
         Route::get('/team', TeamOverviewReport::class)->name('team');
         Route::get('/team/{user}', TeamReport::class)->name('team.member');

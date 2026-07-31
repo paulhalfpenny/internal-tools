@@ -47,11 +47,7 @@
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3 text-gray-500">{{ $row->client_name }}</td>
                     <td class="px-4 py-3 font-medium text-gray-900">
-                        @if($b)
-                            <a href="{{ route('reports.projects.budget', $row->id) }}" class="text-blue-700 hover:underline">{{ $row->label }}</a>
-                        @else
-                            {{ $row->label }}
-                        @endif
+                        <a href="{{ route('reports.projects.detail', $row->id) }}" class="text-blue-700 hover:underline">{{ $row->label }}</a>
                     </td>
                     <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ HoursFormatter::format((float) $row->total_hours, $hoursFormat) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->billable_amount, 0) }}</td>

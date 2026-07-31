@@ -68,7 +68,7 @@ class BudgetThresholdReached extends Notification implements ShouldQueue
                 'percentUsed' => $this->percentUsed,
                 'budgetAmount' => $this->budgetAmount,
                 'actualAmount' => $this->actualAmount,
-                'projectBudgetUrl' => route('reports.projects.budget', $project),
+                'projectBudgetUrl' => route('reports.projects.detail', $project),
             ]);
     }
 }

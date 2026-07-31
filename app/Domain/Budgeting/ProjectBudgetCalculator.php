@@ -139,6 +139,74 @@ final class ProjectBudgetCalculator
     }
 
     /**
+     * Monthly billable spend and hours for any project, with cumulative totals.
+     *
+     * @return Collection<int, \stdClass>
+     */
+    public function monthlySpend(Project $project, ?CarbonImmutable $asOf = null): Collection
+    {
+        $asOf = $asOf ?? CarbonImmutable::now();
+        $start = $this->effectiveStart($project);
+
+        if ($start === null) {
+            $earliest = TimeEntry::query()
+                ->where('project_id', $project->id)
+                ->min('spent_on');
+
+            if ($earliest === null) {
+                return collect();
+            }
+
+            $start = CarbonImmutable::parse($earliest);
+        }
+
+        if ($asOf->startOfMonth()->lessThan($start->startOfMonth())) {
+            return collect();
+        }
+
+        $rawEntries = TimeEntry::query()
+            ->where('project_id', $project->id)
+            ->where('is_billable', true)
+            ->where('spent_on', '>=', $start->toDateString())
+            ->where('spent_on', '<=', $asOf->toDateString())
+            ->toBase()
+            ->selectRaw('spent_on, hours, billable_amount')
+            ->get();
+
+        $byMonth = [];
+        foreach ($rawEntries as $entry) {
+            $key = CarbonImmutable::parse($entry->spent_on)->format('Y-m');
+            $byMonth[$key]['h'] = ($byMonth[$key]['h'] ?? 0) + (float) $entry->hours;
+            $byMonth[$key]['a'] = ($byMonth[$key]['a'] ?? 0) + (float) $entry->billable_amount;
+        }
+
+        $rows = collect();
+        $runningAmount = 0.0;
+        $runningHours = 0.0;
+        $cursor = $start->startOfMonth();
+        while ($cursor->lessThanOrEqualTo($asOf->startOfMonth())) {
+            $key = $cursor->format('Y-m');
+            $monthAmount = (float) ($byMonth[$key]['a'] ?? 0);
+            $monthHours = (float) ($byMonth[$key]['h'] ?? 0);
+            $runningAmount += $monthAmount;
+            $runningHours += $monthHours;
+
+            $rows->push((object) [
+                'month' => $cursor,
+                'month_label' => $cursor->format('M Y'),
+                'month_amount' => round($monthAmount, 2),
+                'month_hours' => round($monthHours, 2),
+                'running_amount' => round($runningAmount, 2),
+                'running_hours' => round($runningHours, 2),
+            ]);
+
+            $cursor = $cursor->addMonth();
+        }
+
+        return $rows;
+    }
+
+    /**
      * Per-month breakdown for the drill-down view.
      *
      * @return Collection<int, \stdClass>

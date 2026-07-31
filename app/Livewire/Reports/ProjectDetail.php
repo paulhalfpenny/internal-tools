@@ -21,7 +21,7 @@ use Livewire\WithPagination;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 #[Layout('layouts.app')]
-class ProjectBudget extends Component
+class ProjectDetail extends Component
 {
     use WithPagination;
 
@@ -152,6 +152,7 @@ class ProjectBudget extends Component
     public function render(ProjectBudgetCalculator $calculator): View
     {
         [$from, $to] = $this->filteredWindow();
+        $status = $calculator->forProject($this->project);
 
         $query = new TimeReportQuery(
             from: $from,
@@ -173,9 +174,10 @@ class ProjectBudget extends Component
         /** @var User|null $user */
         $user = auth()->user();
 
-        return view('livewire.reports.project-budget', [
-            'status' => $calculator->forProject($this->project),
-            'monthlyRows' => $calculator->monthlyBreakdown($this->project),
+        return view('livewire.reports.project-detail', [
+            'status' => $status,
+            'monthlyRows' => $status === null ? collect() : $calculator->monthlyBreakdown($this->project),
+            'monthlySpend' => $calculator->monthlySpend($this->project),
             'entries' => $entries,
             'filteredTotals' => $filteredTotals,
             'hasFilters' => $hasFilters,

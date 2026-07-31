@@ -46,6 +46,49 @@ test('fixed-fee budget — actuals are sum of billable time', function () {
         ->and($status->isOver())->toBeFalse();
 });
 
+test('monthly spend reports billable per-month and cumulative totals without a budget', function () {
+    $user = User::factory()->create();
+    $task = Task::factory()->create();
+    $project = Project::factory()->create([
+        'budget_type' => null,
+        'starts_on' => null,
+    ]);
+
+    budgetTestEntry([
+        'user_id' => $user->id,
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => '2026-04-15',
+        'hours' => 4,
+        'billable_amount' => 400,
+    ]);
+    budgetTestEntry([
+        'user_id' => $user->id,
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => '2026-05-15',
+        'hours' => 6,
+        'billable_amount' => 600,
+    ]);
+    budgetTestEntry([
+        'user_id' => $user->id,
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => '2026-05-20',
+        'hours' => 2,
+        'is_billable' => false,
+        'billable_amount' => 0,
+    ]);
+
+    $rows = (new ProjectBudgetCalculator)->monthlySpend($project, CarbonImmutable::parse('2026-05-31'));
+
+    expect($rows)->toHaveCount(2)
+        ->and($rows->pluck('month_amount')->all())->toBe([400.0, 600.0])
+        ->and($rows->pluck('month_hours')->all())->toBe([4.0, 6.0])
+        ->and($rows->pluck('running_amount')->all())->toBe([400.0, 1000.0])
+        ->and($rows->pluck('running_hours')->all())->toBe([4.0, 10.0]);
+});
+
 test('monthly CI — cumulative budget rolls over (under then over)', function () {
     $user = User::factory()->create();
     $task = Task::factory()->create();
