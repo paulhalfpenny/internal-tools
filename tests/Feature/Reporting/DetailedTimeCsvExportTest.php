@@ -81,7 +81,7 @@ it('writes the correct 21 columns for a billable entry', function () {
     expect($cols[2])->toBe('Website Redesign');     // Project
     expect($cols[3])->toBe('ACM001');               // Project Code
     expect($cols[4])->toBe('Development');          // Task
-    expect($cols[6])->toBe('2.0');                  // Hours
+    expect($cols[6])->toBe('2.00');                 // Hours
     expect($cols[7])->toBe('Yes');                  // Billable?
     expect($cols[8])->toBe('No');                   // Invoiced?
     expect($cols[9])->toBe('No');                   // Approved?

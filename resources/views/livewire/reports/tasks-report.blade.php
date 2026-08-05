@@ -1,3 +1,4 @@
+@use('App\Domain\TimeTracking\HoursFormatter')
 <div>
     @include('livewire.reports.partials.header', ['title' => 'Tasks', 'totals' => $totals])
 
@@ -10,7 +11,7 @@
             @php $pct = $totals->totalHours > 0 ? $row->total_hours / $totals->totalHours * 100 : 0; @endphp
             <div class="h-full transition-all"
                  style="width: {{ $pct }}%; background: {{ $row->colour ?? '#3B82F6' }}"
-                 title="{{ $row->label }}: {{ number_format($row->total_hours, 1) }}h">
+                 title="{{ $row->label }}: {{ HoursFormatter::asReportDecimal((float) $row->total_hours) }}h">
             </div>
             @endforeach
         </div>
@@ -59,8 +60,8 @@
                             </div>
                         </div>
                     </td>
-                    <td class="px-4 py-3 text-right tabular-nums">{{ number_format($row->total_hours, 1) }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ number_format($row->billable_hours, 1) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums">{{ HoursFormatter::asReportDecimal((float) $row->total_hours) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::asReportDecimal((float) $row->billable_hours) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->billable_amount, 2) }}</td>
                 </tr>
                 @endforeach
@@ -68,8 +69,8 @@
             <tfoot class="border-t border-gray-200 bg-gray-50">
                 <tr class="text-sm font-semibold text-gray-900">
                     <td class="px-4 py-3" colspan="3">Total</td>
-                    <td class="px-4 py-3 text-right tabular-nums">{{ number_format($totals->totalHours, 1) }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums">{{ number_format($totals->billableHours, 1) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums">{{ HoursFormatter::asReportDecimal((float) $totals->totalHours) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums">{{ HoursFormatter::asReportDecimal((float) $totals->billableHours) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($totals->billableAmount, 2) }}</td>
                 </tr>
             </tfoot>

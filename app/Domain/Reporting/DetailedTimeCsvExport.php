@@ -2,6 +2,8 @@
 
 namespace App\Domain\Reporting;
 
+use App\Domain\TimeTracking\HoursFormatter;
+
 final class DetailedTimeCsvExport
 {
     public const HEADERS = [
@@ -44,7 +46,7 @@ final class DetailedTimeCsvExport
                 CsvFormatter::field($project->code ?? ''),
                 CsvFormatter::field($task->name),
                 CsvFormatter::field($entry->notes ?? ''),
-                CsvFormatter::hours((float) $entry->hours),
+                HoursFormatter::asReportDecimal((float) $entry->hours),
                 $isBillable ? 'Yes' : 'No',
                 'No',
                 'No',

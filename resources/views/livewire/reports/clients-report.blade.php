@@ -1,3 +1,4 @@
+@use('App\Domain\TimeTracking\HoursFormatter')
 <div>
     @include('livewire.reports.partials.header', ['title' => 'Clients', 'totals' => $totals])
 
@@ -29,8 +30,8 @@
                         <a href="{{ route('reports.client-detail', ['client' => $row->id]) }}"
                            class="hover:text-blue-600 hover:underline">{{ $row->label }}</a>
                     </td>
-                    <td class="px-4 py-3 text-right tabular-nums">{{ number_format($row->total_hours, 1) }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ number_format($row->billable_hours, 1) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums">{{ HoursFormatter::asReportDecimal((float) $row->total_hours) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::asReportDecimal((float) $row->billable_hours) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ $billablePercent }}%</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->billable_amount, 2) }}</td>
                     <td class="px-4 py-3 text-right">
@@ -45,8 +46,8 @@
             <tfoot class="border-t border-gray-200 bg-gray-50">
                 <tr class="text-sm font-semibold text-gray-900">
                     <td class="px-4 py-3">Total</td>
-                    <td class="px-4 py-3 text-right tabular-nums">{{ number_format($totals->totalHours, 1) }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums">{{ number_format($totals->billableHours, 1) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums">{{ HoursFormatter::asReportDecimal((float) $totals->totalHours) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums">{{ HoursFormatter::asReportDecimal((float) $totals->billableHours) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">{{ $totals->billablePercent }}%</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($totals->billableAmount, 2) }}</td>
                     <td class="px-4 py-3"></td>

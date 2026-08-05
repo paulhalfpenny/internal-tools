@@ -4,11 +4,9 @@ namespace App\Livewire\Reports;
 
 use App\Domain\Budgeting\ProjectBudgetCalculator;
 use App\Domain\Reporting\TotalsDto;
-use App\Domain\TimeTracking\HoursFormatter;
 use App\Enums\GroupBy;
 use App\Livewire\Reports\Concerns\HasReportPeriod;
 use App\Models\Project;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\View\View;
@@ -66,13 +64,9 @@ class ProjectsReport extends Component
 
     public function render(ProjectBudgetCalculator $calculator): View
     {
-        /** @var User|null $user */
-        $user = auth()->user();
-
         return view('livewire.reports.projects-report', [
             'totals' => $this->totals(),
             'rows' => $this->rows($calculator),
-            'hoursFormat' => $user?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_HHMM,
         ]);
     }
 }
