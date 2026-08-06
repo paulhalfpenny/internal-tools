@@ -315,7 +315,8 @@
     {{-- ============================================================
          Entry modal
     ============================================================ --}}
-    <div x-show="$wire.showModal" style="display:none">
+    <template x-if="$wire.showModal">
+    <div>
 
         {{-- ============================================================
              Calendar sidebar — slides in from the left over the page
@@ -957,7 +958,8 @@
             </div>
 
         </div>{{-- end modal backdrop --}}
-    </div>{{-- end x-show wrapper --}}
+    </div>{{-- end modal wrapper --}}
+    </template>
 
     {{-- 60-second poll for running timers. Suspended while the entry modal is
          open: a poll morph landing mid-interaction leaves orphaned Alpine

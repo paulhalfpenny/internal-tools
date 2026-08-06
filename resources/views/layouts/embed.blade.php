@@ -8,6 +8,9 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
+    @if ($livewireRuntimePreload = app(\App\Support\LivewireRuntimeAsset::class)->preloadUrl())
+        <link rel="preload" href="{{ $livewireRuntimePreload }}" as="script">
+    @endif
 </head>
 {{-- Chrome-free layout for pages embedded in an iframe (the Asana
      browser-extension overlay). No nav: the frame is ~520px wide and the
