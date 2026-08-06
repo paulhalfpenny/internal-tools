@@ -86,3 +86,19 @@ test('lifetime actuals are cached and invalidated by every schedule-relevant tim
         $secondProject->id => 3.5,
     ]);
 });
+
+test('lifetime actuals cache a large project list within the database key constraint', function () {
+    DB::statement('CREATE TABLE schedule_actuals_cache ("key" varchar(255) NOT NULL CHECK (length("key") <= 255), value TEXT NOT NULL, expiration INTEGER NOT NULL, PRIMARY KEY ("key"))');
+
+    config()->set('cache.stores.schedule_actuals', [
+        'driver' => 'database',
+        'connection' => null,
+        'table' => 'schedule_actuals_cache',
+        'lock_connection' => null,
+        'lock_table' => null,
+    ]);
+    Cache::setDefaultDriver('schedule_actuals');
+    Cache::forgetDriver('schedule_actuals');
+
+    expect(app(TimesheetActualsService::class)->lifetimeActualsByProject(range(1, 111)))->toBe([]);
+});

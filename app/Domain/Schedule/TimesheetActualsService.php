@@ -69,7 +69,7 @@ final class TimesheetActualsService
 
         Cache::add(self::LIFETIME_CACHE_VERSION_KEY, 1);
         $version = (int) Cache::get(self::LIFETIME_CACHE_VERSION_KEY, 1);
-        $cacheKey = 'schedule:lifetime-actuals:'.$version.':'.implode(',', $projectIds);
+        $cacheKey = 'schedule:lifetime-actuals:'.$version.':'.hash('sha256', implode(',', $projectIds));
 
         /** @var array<int, float> $actuals */
         $actuals = Cache::remember($cacheKey, now()->addMinutes(30), function () use ($projectIds): array {
