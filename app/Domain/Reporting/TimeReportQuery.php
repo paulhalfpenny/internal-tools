@@ -56,6 +56,44 @@ final class TimeReportQuery
      */
     public function groupBy(GroupBy $dim): Collection
     {
+        return $this->groupedReport($dim)->rows;
+    }
+
+    public function groupedReport(GroupBy $dim): GroupedReportDto
+    {
+        $rows = $this->groupedQuery($dim)
+            ->get()
+            ->map(function (object $row): \stdClass {
+                /** @var \stdClass */
+                return (object) [
+                    'id' => (int) $row->id,
+                    'label' => (string) $row->label,
+                    'client_name' => isset($row->client_name) ? (string) $row->client_name : null,
+                    'colour' => isset($row->colour) ? (string) $row->colour : null,
+                    'total_hours' => round((float) $row->total_hours, 2),
+                    'billable_hours' => round((float) $row->billable_hours, 2),
+                    'billable_amount' => round((float) $row->billable_amount, 2),
+                    'uninvoiced_amount' => round((float) $row->uninvoiced_amount, 2),
+                ];
+            });
+
+        $totalHours = round((float) $rows->sum('total_hours'), 2);
+        $billableHours = round((float) $rows->sum('billable_hours'), 2);
+
+        return new GroupedReportDto(
+            $rows,
+            new TotalsDto(
+                $totalHours,
+                $billableHours,
+                round((float) $rows->sum('billable_amount'), 2),
+                round((float) $rows->sum('uninvoiced_amount'), 2),
+                $totalHours > 0 ? round($billableHours / $totalHours * 100, 1) : 0.0,
+            ),
+        );
+    }
+
+    private function groupedQuery(GroupBy $dim): \Illuminate\Database\Query\Builder
+    {
         $query = $this->baseQuery()->toBase();
 
         switch ($dim) {
@@ -67,7 +105,8 @@ final class TimeReportQuery
                         clients.name as label,
                         COALESCE(SUM(time_entries.hours), 0) as total_hours,
                         COALESCE(SUM(CASE WHEN time_entries.is_billable THEN time_entries.hours ELSE 0 END), 0) as billable_hours,
-                        COALESCE(SUM(time_entries.billable_amount), 0) as billable_amount
+                        COALESCE(SUM(time_entries.billable_amount), 0) as billable_amount,
+                        COALESCE(SUM(CASE WHEN time_entries.is_billable AND time_entries.invoiced_at IS NULL THEN time_entries.billable_amount ELSE 0 END), 0) as uninvoiced_amount
                     ')
                     ->groupBy('clients.id', 'clients.name')
                     ->orderBy('clients.name');
@@ -82,7 +121,8 @@ final class TimeReportQuery
                         clients.name as client_name,
                         COALESCE(SUM(time_entries.hours), 0) as total_hours,
                         COALESCE(SUM(CASE WHEN time_entries.is_billable THEN time_entries.hours ELSE 0 END), 0) as billable_hours,
-                        COALESCE(SUM(time_entries.billable_amount), 0) as billable_amount
+                        COALESCE(SUM(time_entries.billable_amount), 0) as billable_amount,
+                        COALESCE(SUM(CASE WHEN time_entries.is_billable AND time_entries.invoiced_at IS NULL THEN time_entries.billable_amount ELSE 0 END), 0) as uninvoiced_amount
                     ')
                     ->groupBy('projects.id', 'projects.name', 'clients.name')
                     ->orderBy('clients.name')
@@ -97,7 +137,8 @@ final class TimeReportQuery
                         tasks.colour as colour,
                         COALESCE(SUM(time_entries.hours), 0) as total_hours,
                         COALESCE(SUM(CASE WHEN time_entries.is_billable THEN time_entries.hours ELSE 0 END), 0) as billable_hours,
-                        COALESCE(SUM(time_entries.billable_amount), 0) as billable_amount
+                        COALESCE(SUM(time_entries.billable_amount), 0) as billable_amount,
+                        COALESCE(SUM(CASE WHEN time_entries.is_billable AND time_entries.invoiced_at IS NULL THEN time_entries.billable_amount ELSE 0 END), 0) as uninvoiced_amount
                     ')
                     ->groupBy('tasks.id', 'tasks.name', 'tasks.colour')
                     ->orderByRaw('total_hours DESC');
@@ -110,28 +151,15 @@ final class TimeReportQuery
                         users.name as label,
                         COALESCE(SUM(time_entries.hours), 0) as total_hours,
                         COALESCE(SUM(CASE WHEN time_entries.is_billable THEN time_entries.hours ELSE 0 END), 0) as billable_hours,
-                        COALESCE(SUM(time_entries.billable_amount), 0) as billable_amount
+                        COALESCE(SUM(time_entries.billable_amount), 0) as billable_amount,
+                        COALESCE(SUM(CASE WHEN time_entries.is_billable AND time_entries.invoiced_at IS NULL THEN time_entries.billable_amount ELSE 0 END), 0) as uninvoiced_amount
                     ')
                     ->groupBy('users.id', 'users.name')
                     ->orderBy('users.name');
                 break;
         }
 
-        /** @var Collection<int, \stdClass> $result */
-        $result = $query->get()->map(function (object $row): \stdClass {
-            /** @var \stdClass */
-            return (object) [
-                'id' => (int) $row->id,
-                'label' => (string) $row->label,
-                'client_name' => isset($row->client_name) ? (string) $row->client_name : null,
-                'colour' => isset($row->colour) ? (string) $row->colour : null,
-                'total_hours' => round((float) $row->total_hours, 2),
-                'billable_hours' => round((float) $row->billable_hours, 2),
-                'billable_amount' => round((float) $row->billable_amount, 2),
-            ];
-        });
-
-        return $result;
+        return $query;
     }
 
     /**

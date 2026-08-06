@@ -631,7 +631,7 @@ class ScheduleBoard extends Component
 
         $project = Project::findOrFail($projectId);
         $firstFuture = $project->scheduleAssignments()
-            ->whereDate('starts_on', '>=', $this->selectedDate)
+            ->where('starts_on', '>=', $this->selectedDate)
             ->orderBy('starts_on')
             ->value('starts_on');
 
@@ -705,15 +705,15 @@ class ScheduleBoard extends Component
         $assignments = ScheduleAssignment::query()
             ->with(['project.client', 'project.users', 'user', 'placeholder'])
             ->whereHas('project', fn ($query) => $query->where('is_archived', false))
-            ->whereDate('ends_on', '>=', $rangeStart)
-            ->whereDate('starts_on', '<=', $rangeEnd)
+            ->where('ends_on', '>=', $rangeStart)
+            ->where('starts_on', '<=', $rangeEnd)
             ->orderBy('starts_on')
             ->get();
 
         $timeOff = ScheduleTimeOff::query()
             ->with('user')
-            ->whereDate('ends_on', '>=', $rangeStart)
-            ->whereDate('starts_on', '<=', $rangeEnd)
+            ->where('ends_on', '>=', $rangeStart)
+            ->where('starts_on', '<=', $rangeEnd)
             ->orderBy('starts_on')
             ->get();
 

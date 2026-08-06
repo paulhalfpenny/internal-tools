@@ -9,6 +9,7 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
@@ -115,4 +116,44 @@ test('groupBy Client aggregates correctly', function () {
     $acme = $rows->firstWhere('label', 'Acme');
     expect($acme->total_hours)->toBe(3.0)
         ->and($acme->billable_amount)->toBe(252.0);
+});
+
+test('grouped report derives exact totals from one aggregate query for every grouping', function () {
+    $acme = Client::factory()->create(['name' => 'Acme']);
+    $zeta = Client::factory()->create(['name' => 'Zeta']);
+    $firstProject = Project::factory()->create(['client_id' => $acme->id]);
+    $secondProject = Project::factory()->create(['client_id' => $zeta->id]);
+    $firstTask = Task::factory()->create();
+    $secondTask = Task::factory()->create();
+    $firstUser = User::factory()->create();
+    $secondUser = User::factory()->create();
+
+    entry(['user_id' => $firstUser->id, 'project_id' => $firstProject->id, 'task_id' => $firstTask->id, 'hours' => 2.5, 'billable_amount' => 210.0]);
+    entry(['user_id' => $secondUser->id, 'project_id' => $firstProject->id, 'task_id' => $secondTask->id, 'hours' => 2.0, 'billable_amount' => 168.0, 'invoiced_at' => now()]);
+    entry(['user_id' => $firstUser->id, 'project_id' => $secondProject->id, 'task_id' => $firstTask->id, 'hours' => 2.0, 'is_billable' => false, 'billable_amount' => 0.0]);
+
+    $query = new TimeReportQuery(
+        from: CarbonImmutable::parse('2026-04-01'),
+        to: CarbonImmutable::parse('2026-04-30'),
+    );
+
+    foreach (GroupBy::cases() as $groupBy) {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $result = $query->groupedReport($groupBy);
+
+        $aggregateQueries = collect(DB::getQueryLog())
+            ->pluck('query')
+            ->filter(fn (string $sql) => str_contains(strtolower($sql), 'sum(time_entries.hours)'));
+
+        expect($result->rows)->toHaveCount(2)
+            ->and($result->totals->totalHours)->toBe(6.5)
+            ->and($result->totals->billableHours)->toBe(4.5)
+            ->and($result->totals->billableAmount)->toBe(378.0)
+            ->and($result->totals->uninvoicedAmount)->toBe(210.0)
+            ->and($aggregateQueries)->toHaveCount(1);
+
+        DB::disableQueryLog();
+    }
 });
