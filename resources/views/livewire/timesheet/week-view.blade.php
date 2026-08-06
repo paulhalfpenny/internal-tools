@@ -281,7 +281,7 @@
                     selectedTaskId: $wire.newRowTaskId,
                     selectedAsanaTaskGid: $wire.newRowAsanaTaskGid ?? '',
                     projects: {{ Js::from($projectsForPicker) }},
-                    asanaTasksByProject: {{ Js::from($asanaTasksByProject) }},
+                    asanaTasksByProject: {},
                     asanaAvailable: {{ $asanaAvailable ? 'true' : 'false' }},
                     init() {
                         this.$watch('$wire.newRowProjectId', v => this.selectedProjectId = v);
@@ -337,12 +337,7 @@
                         return this.selectedProject?.asana_task_required ?? true;
                     },
                     get linkedAsanaTasks() {
-                        if (this.asanaBoardGids.length === 0) return [];
-                        const out = [];
-                        for (const gid of this.asanaBoardGids) {
-                            for (const t of (this.asanaTasksByProject[gid] ?? [])) out.push(t);
-                        }
-                        return out;
+                        return this.asanaTasksByProject[this.selectedProjectId] ?? [];
                     },
                     get asanaTasks() {
                         return this.filterAsanaTasks('');
@@ -413,6 +408,7 @@
                         this.projectOpen = false;
                         this.taskOpen = false;
                         if (!wasOpen) this.asanaTaskSearch = '';
+                        this.loadAsanaTasks();
                     },
                     closeAsanaTaskPicker() {
                         this.asanaTaskOpen = false;
@@ -426,6 +422,12 @@
                         this.asanaTaskOpen = true;
                         this.projectOpen = false;
                         this.taskOpen = false;
+                    },
+                    async loadAsanaTasks() {
+                        const projectId = this.selectedProjectId;
+                        if (!projectId || this.asanaBoardGids.length === 0 || projectId in this.asanaTasksByProject) return;
+
+                        this.asanaTasksByProject[projectId] = await $wire.loadAsanaTasksForProject(projectId);
                     },
                     openTaskPicker() {
                         if (!this.selectedProjectId) return;

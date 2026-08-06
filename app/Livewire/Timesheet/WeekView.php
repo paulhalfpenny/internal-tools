@@ -5,7 +5,6 @@ namespace App\Livewire\Timesheet;
 use App\Domain\TimeTracking\HoursFormatter;
 use App\Domain\TimeTracking\HoursParser;
 use App\Domain\TimeTracking\TimeEntryService;
-use App\Models\AsanaProject;
 use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\TimeEntry;
@@ -573,6 +572,36 @@ class WeekView extends Component
         return $authUser?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_HHMM;
     }
 
+    /**
+     * Load the compact task picker data only after the user has chosen a project.
+     *
+     * @return array<int, array{gid: string, name: string, search_text: string|null, board_name: string}>
+     */
+    public function loadAsanaTasksForProject(int $projectId): array
+    {
+        $project = Project::query()
+            ->whereKey($projectId)
+            ->where('is_archived', false)
+            ->whereHas('users', fn ($query) => $query->whereKey($this->viewedUser()->id))
+            ->with('asanaProjects')
+            ->firstOrFail();
+
+        $boardNames = $project->asanaProjects->pluck('name', 'gid');
+
+        return AsanaTask::query()
+            ->whereIn('asana_project_gid', $boardNames->keys())
+            ->where('is_completed', false)
+            ->orderBy('name')
+            ->get(['gid', 'asana_project_gid', 'name', 'search_text'])
+            ->map(fn (AsanaTask $task) => [
+                'gid' => $task->gid,
+                'name' => $task->name,
+                'search_text' => $task->search_text,
+                'board_name' => (string) $boardNames->get($task->asana_project_gid),
+            ])
+            ->all();
+    }
+
     public function render(): View
     {
         $user = $this->viewedUser();
@@ -612,10 +641,6 @@ class WeekView extends Component
             ->orderBy('name')
             ->get(['gid', 'asana_project_gid', 'name'])
             ->keyBy('gid');
-        $asanaProjectNames = AsanaProject::query()
-            ->whereIn('gid', $linkedAsanaProjectGids)
-            ->pluck('name', 'gid');
-
         // Group into rows by (project, task, asana_task_gid). Each row gets
         // project/task names for display + a 7-cell array of saved hours strings.
         $rowsFromEntries = [];
@@ -728,20 +753,6 @@ class WeekView extends Component
                 ->get(['id', 'name']);
         }
 
-        $asanaTasksByProject = AsanaTask::query()
-            ->whereIn('asana_project_gid', $linkedAsanaProjectGids)
-            ->where('is_completed', false)
-            ->orderBy('name')
-            ->get(['gid', 'asana_project_gid', 'name', 'search_text'])
-            ->groupBy('asana_project_gid')
-            ->map(fn ($group) => $group->map(fn (AsanaTask $t) => [
-                'gid' => $t->gid,
-                'name' => $t->name,
-                'search_text' => $t->search_text,
-                'board_name' => $asanaProjectNames[$t->asana_project_gid] ?? null,
-            ])->values()->all())
-            ->all();
-
         return view('livewire.timesheet.week-view', [
             'weekStart' => $weekStart,
             'weekDays' => $weekDays,
@@ -768,7 +779,6 @@ class WeekView extends Component
                     ->values()
                     ->all(),
             ])->values()->all(),
-            'asanaTasksByProject' => $asanaTasksByProject,
             'asanaAvailable' => $this->asanaIntegrationAvailable(),
             'teamMembers' => $teamMembers,
             'canCopyRowsFromPriorWeek' => $canCopyRowsFromPriorWeek,
