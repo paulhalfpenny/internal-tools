@@ -4,9 +4,12 @@ namespace App\Domain\Schedule;
 
 use App\Models\TimeEntry;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Cache;
 
 final class TimesheetActualsService
 {
+    private const LIFETIME_CACHE_VERSION_KEY = 'schedule:lifetime-actuals:version';
+
     /**
      * @param  array<int, int>  $projectIds
      * @param  array<int, array{index: int, starts_on: string, ends_on: string}>  $periods
@@ -57,17 +60,39 @@ final class TimesheetActualsService
      */
     public function lifetimeActualsByProject(array $projectIds): array
     {
+        $projectIds = array_values(array_unique(array_map('intval', $projectIds)));
+        sort($projectIds);
+
         if ($projectIds === []) {
             return [];
         }
 
-        return TimeEntry::query()
-            ->whereIn('project_id', $projectIds)
-            ->selectRaw('project_id, SUM(hours) as total_hours')
-            ->groupBy('project_id')
-            ->pluck('total_hours', 'project_id')
-            ->map(fn ($hours) => round((float) $hours, 2))
-            ->all();
+        Cache::add(self::LIFETIME_CACHE_VERSION_KEY, 1);
+        $version = (int) Cache::get(self::LIFETIME_CACHE_VERSION_KEY, 1);
+        $cacheKey = 'schedule:lifetime-actuals:'.$version.':'.implode(',', $projectIds);
+
+        /** @var array<int, float> $actuals */
+        $actuals = Cache::remember($cacheKey, now()->addMinutes(30), function () use ($projectIds): array {
+            $actuals = TimeEntry::query()
+                ->whereIn('project_id', $projectIds)
+                ->selectRaw('project_id, SUM(hours) as total_hours')
+                ->groupBy('project_id')
+                ->pluck('total_hours', 'project_id')
+                ->map(fn ($hours) => round((float) $hours, 2))
+                ->all();
+
+            ksort($actuals);
+
+            return $actuals;
+        });
+
+        return $actuals;
+    }
+
+    public function invalidateLifetimeActuals(): void
+    {
+        Cache::add(self::LIFETIME_CACHE_VERSION_KEY, 1);
+        Cache::increment(self::LIFETIME_CACHE_VERSION_KEY);
     }
 
     /**

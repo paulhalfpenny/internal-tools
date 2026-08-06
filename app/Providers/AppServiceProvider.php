@@ -6,6 +6,7 @@ use App\Models\TimeEntry;
 use App\Models\User;
 use App\Notifications\Channels\SlackChannel;
 use App\Observers\TimeEntryAsanaObserver;
+use App\Observers\TimeEntryScheduleActualsObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -49,6 +50,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('view-team-timesheet', fn (User $user, User $target) => $user->isAdmin() || $target->reports_to_user_id === $user->id);
 
         TimeEntry::observe(TimeEntryAsanaObserver::class);
+        TimeEntry::observe(TimeEntryScheduleActualsObserver::class);
 
         Notification::extend('slack', fn ($app) => $app->make(SlackChannel::class));
     }

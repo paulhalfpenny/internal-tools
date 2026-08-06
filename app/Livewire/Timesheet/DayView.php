@@ -542,7 +542,7 @@ class DayView extends Component
         $user = $this->viewedUser();
 
         $alreadyHasEntries = TimeEntry::where('user_id', $user->id)
-            ->whereDate('spent_on', $this->selectedDate)
+            ->where('spent_on', $this->selectedDate)
             ->exists();
         if ($alreadyHasEntries) {
             return;
@@ -559,7 +559,7 @@ class DayView extends Component
 
         $sourceEntries = TimeEntry::with(['project.tasks', 'project.users', 'project.asanaProjects'])
             ->where('user_id', $user->id)
-            ->whereDate('spent_on', $mostRecentPrior)
+            ->where('spent_on', CarbonImmutable::parse($mostRecentPrior)->toDateString())
             ->orderBy('created_at')
             ->get();
 
@@ -733,12 +733,11 @@ class DayView extends Component
 
         $weekTotal = $weekEntries->sum($currentHours);
 
-        // Entries for the selected day. whereDate() instead of where() to keep
-        // matching when spent_on is stored as a full datetime (MySQL DATE columns
-        // truncate to date-only, SQLite stores whatever string Eloquent writes).
+        // spent_on is a DATE column, so direct equality preserves the composite
+        // user/date index on both MySQL and SQLite.
         $dayEntries = TimeEntry::with(['project.client', 'task', 'asanaTask'])
             ->where('user_id', $user->id)
-            ->whereDate('spent_on', $this->selectedDate)
+            ->where('spent_on', $this->selectedDate)
             ->orderBy('created_at')
             ->get();
 
