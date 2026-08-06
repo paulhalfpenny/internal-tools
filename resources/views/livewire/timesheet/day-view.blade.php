@@ -1,9 +1,51 @@
 <div
-    x-data="{}"
+    x-data="{
+        showEntryModal: false,
+        showCalendarPanel: false,
+        calendarAvailable: {{ $calendarError === null && ! $isImpersonating ? 'true' : 'false' }},
+        init() {
+            this.$watch('$wire.showModal', (open) => {
+                if (open) this.showEntryModal = true;
+            });
+        },
+        openNewEntry() {
+            this.showEntryModal = true;
+            this.showCalendarPanel = this.calendarAvailable;
+            $wire.set('editingEntryId', null, false);
+            $wire.set('selectedProjectId', $wire.lastSavedProjectId ?? null, false);
+            $wire.set('selectedTaskId', $wire.lastSavedTaskId ?? null, false);
+            $wire.set('selectedAsanaTaskGid', '', false);
+            $wire.set('hoursInput', '', false);
+            $wire.set('notes', '', false);
+            $wire.set('entryDate', $wire.selectedDate, false);
+            $wire.set('lastCalendarPullTitle', null, false);
+        },
+        closeNewEntry() {
+            this.showEntryModal = false;
+            this.showCalendarPanel = false;
+            $wire.set('editingEntryId', null, false);
+            $wire.set('selectedProjectId', null, false);
+            $wire.set('selectedTaskId', null, false);
+            $wire.set('selectedAsanaTaskGid', '', false);
+            $wire.set('hoursInput', '', false);
+            $wire.set('notes', '', false);
+            $wire.set('entryDate', $wire.selectedDate, false);
+            $wire.set('lastCalendarPullTitle', null, false);
+        },
+        closeEntry() {
+            if ($wire.editingEntryId) {
+                $wire.closeModal();
+                return;
+            }
+
+            this.closeNewEntry();
+        },
+    }"
     {{-- Global 'n' shortcut opens a new time entry. Guard against firing while
          the user is typing into a form field — otherwise typing the letter 'n'
          in the notes textarea (etc.) re-opens the modal and resets the form. --}}
-    @keydown.n.window="if (!['INPUT','TEXTAREA','SELECT'].includes($event.target.tagName) && !$event.target.isContentEditable) $wire.openNewModal()"
+    @day-entry-timer-started.window="closeNewEntry()"
+    @keydown.n.window="if (!['INPUT','TEXTAREA','SELECT'].includes($event.target.tagName) && !$event.target.isContentEditable) openNewEntry()"
 >
     @if($isImpersonating)
         <div class="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
@@ -29,7 +71,7 @@
         <div class="flex items-center gap-3">
             @unless($isReadOnly)
                 <button
-                    @click="$wire.showModal = true; $wire.openNewModal()"
+                    @click="openNewEntry()"
                     class="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
                     title="New entry (N)"
                 >
@@ -315,15 +357,14 @@
     {{-- ============================================================
          Entry modal
     ============================================================ --}}
-    <template x-if="$wire.showModal">
+    <template x-if="showEntryModal">
     <div>
 
         {{-- ============================================================
              Calendar sidebar — slides in from the left over the page
         ============================================================ --}}
         <div
-            x-data="{ open: @entangle('showCalendarPanel') }"
-            x-show="open"
+            x-show="showCalendarPanel"
             x-transition:enter="transition-transform ease-out duration-300"
             x-transition:enter-start="-translate-x-full"
             x-transition:enter-end="translate-x-0"
@@ -338,7 +379,7 @@
                     <div class="text-xs text-gray-400 uppercase tracking-wide">Calendar events for</div>
                     <div class="font-semibold text-gray-900 text-sm mt-0.5">{{ \Carbon\Carbon::parse($selectedDate)->format('l, j M') }}</div>
                 </div>
-                <button wire:click="closeCalendarPanel" class="text-gray-400 hover:text-gray-600 p-1 rounded transition">
+                <button @click="showCalendarPanel = false" class="text-gray-400 hover:text-gray-600 p-1 rounded transition">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -398,8 +439,8 @@
         <div
             class="fixed inset-0 z-50 flex items-start justify-center bg-black/40"
             style="padding-top: 22vh"
-            @mousedown.self="$wire.closeModal()"
-            @keydown.escape.window="$wire.closeModal()"
+            @mousedown.self="closeEntry()"
+            @keydown.escape.window="closeEntry()"
         >
             <div
                 class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4"
@@ -415,7 +456,7 @@
                     selectedAsanaTaskGid: $wire.selectedAsanaTaskGid ?? '',
                     liveHoursInput: $wire.hoursInput ?? '',
                     projects: {{ Js::from($projectsForPicker) }},
-                    asanaTasksByProject: {{ Js::from($asanaTasksByProject) }},
+                    asanaTasksByProject: {},
                     asanaAvailable: {{ $asanaAvailable ? 'true' : 'false' }},
                     init() {
                         // $wire is the source of truth; mirror it into Alpine state on every Livewire-driven change
@@ -475,12 +516,7 @@
                         return this.selectedProject?.asana_task_required ?? true;
                     },
                     get linkedAsanaTasks() {
-                        if (this.asanaBoardGids.length === 0) return [];
-                        const out = [];
-                        for (const gid of this.asanaBoardGids) {
-                            for (const t of (this.asanaTasksByProject[gid] ?? [])) out.push(t);
-                        }
-                        return out;
+                        return this.asanaTasksByProject[this.selectedProjectId] ?? [];
                     },
                     get asanaTasks() {
                         return this.filterAsanaTasks('');
@@ -551,6 +587,7 @@
                         this.projectOpen = false;
                         this.taskOpen = false;
                         if (!wasOpen) this.asanaTaskSearch = '';
+                        this.loadAsanaTasks();
                     },
                     closeAsanaTaskPicker() {
                         this.asanaTaskOpen = false;
@@ -564,6 +601,12 @@
                         this.asanaTaskOpen = true;
                         this.projectOpen = false;
                         this.taskOpen = false;
+                    },
+                    async loadAsanaTasks() {
+                        const projectId = this.selectedProjectId;
+                        if (!projectId || this.asanaBoardGids.length === 0 || projectId in this.asanaTasksByProject) return;
+
+                        this.asanaTasksByProject[projectId] = await $wire.loadAsanaTasksForProject(projectId);
                     },
                     openTaskPicker() {
                         if (!this.selectedProjectId) return;
@@ -636,7 +679,7 @@
                     </h3>
                     <button
                         type="button"
-                        wire:click="closeModal"
+                        @click="closeEntry()"
                         aria-label="Close"
                         class="absolute top-3 right-3 p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition focus:outline-none focus:ring-2 focus:ring-green-500"
                     >
@@ -950,7 +993,7 @@
                         x-text="{{ $editingEntryId || $isImpersonating ? "'Save entry'" : "isTimerMode ? 'Start timer' : 'Save entry'" }}"
                     ></button>
                     <button
-                        wire:click="closeModal"
+                        @click="closeEntry()"
                         class="ml-3 px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-300 rounded-full transition"
                     >Cancel</button>
                 </div>
@@ -965,9 +1008,9 @@
          open: a poll morph landing mid-interaction leaves orphaned Alpine
          template clones in the pickers (ghost dropdowns, cleared-looking
          fields), and can reset liveHoursInput so Enter starts a timer. --}}
-    @unless($showModal)
+    <template x-if="!showEntryModal">
         <div wire:poll.60000ms="refreshForTimer" class="hidden"></div>
-    @endunless
+    </template>
 </div>
 
 @script

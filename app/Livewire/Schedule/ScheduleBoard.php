@@ -26,6 +26,8 @@ use Livewire\Component;
 #[Layout('layouts.app')]
 class ScheduleBoard extends Component
 {
+    public const ROWS_PER_PAGE = 25;
+
     #[Url(as: 'view', except: 'team')]
     public string $viewMode = 'team';
 
@@ -51,6 +53,9 @@ class ScheduleBoard extends Component
     public string $businessUnitFilter = '';
 
     public string $scheduleFilter = 'metric:availability';
+
+    #[Url(as: 'page', except: 1)]
+    public int $gridPage = 1;
 
     /** @var array<int|string, bool> */
     public array $expandedProjects = [];
@@ -131,6 +136,7 @@ class ScheduleBoard extends Component
     public function setViewMode(string $viewMode): void
     {
         $this->viewMode = in_array($viewMode, ['projects', 'team'], true) ? $viewMode : 'team';
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
@@ -144,6 +150,7 @@ class ScheduleBoard extends Component
     {
         $teamName = $this->normalisedBusinessUnitFilter($teamName);
         $this->businessUnitFilter = $this->businessUnitFilter === $teamName ? '' : $teamName;
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
@@ -151,36 +158,42 @@ class ScheduleBoard extends Component
     {
         $this->heatmapMetric = in_array($metric, ['availability', 'capacity'], true) ? $metric : 'availability';
         $this->syncScheduleFilterFromState();
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
     public function updatedScheduleFilter(string $value): void
     {
         $this->applyScheduleFilter($value);
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
     public function updatedViewMode(): void
     {
         $this->normaliseScheduleState();
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
     public function updatedScale(): void
     {
         $this->normaliseScheduleState();
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
     public function updatedSelectedDate(): void
     {
         $this->normaliseScheduleState();
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
     public function updatedBusinessUnitFilter(): void
     {
         $this->normaliseScheduleState();
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
@@ -190,6 +203,7 @@ class ScheduleBoard extends Component
         $this->teamFilter = '';
         $this->projectFilter = '';
         $this->syncScheduleFilterFromState();
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
@@ -201,6 +215,7 @@ class ScheduleBoard extends Component
             'week' => $date->subWeeks(4)->toDateString(),
             default => $date->subWeek()->toDateString(),
         };
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
@@ -212,12 +227,14 @@ class ScheduleBoard extends Component
             'week' => $date->addWeeks(4)->toDateString(),
             default => $date->addWeek()->toDateString(),
         };
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
     public function goToToday(): void
     {
         $this->selectedDate = today()->toDateString();
+        $this->resetGridPage();
         $this->persistSchedulePreferences();
     }
 
@@ -225,6 +242,7 @@ class ScheduleBoard extends Component
     {
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
             $this->selectedDate = $date;
+            $this->resetGridPage();
             $this->persistSchedulePreferences();
         }
     }
@@ -246,6 +264,21 @@ class ScheduleBoard extends Component
     public function toggleAssignee(string $assigneeKey): void
     {
         $this->expandedAssignees[$assigneeKey] = ! ($this->expandedAssignees[$assigneeKey] ?? false);
+    }
+
+    public function nextGridPage(): void
+    {
+        $this->gridPage++;
+    }
+
+    public function previousGridPage(): void
+    {
+        $this->gridPage = max(1, $this->gridPage - 1);
+    }
+
+    private function resetGridPage(): void
+    {
+        $this->gridPage = 1;
     }
 
     public function openAssignmentModal(?int $projectId = null, ?string $assigneeType = null, ?int $assigneeId = null, ?string $startsOn = null): void
@@ -360,6 +393,7 @@ class ScheduleBoard extends Component
         }
 
         $this->closeAssignmentModal();
+        $this->dispatch('schedule-modal-saved');
     }
 
     public function closeAssignmentModal(): void
@@ -376,6 +410,7 @@ class ScheduleBoard extends Component
         if ($this->editingAssignmentId === $assignmentId) {
             $this->closeAssignmentModal();
         }
+        $this->dispatch('schedule-modal-saved');
     }
 
     public function moveAssignmentToPeriod(
@@ -481,6 +516,7 @@ class ScheduleBoard extends Component
         }
 
         $this->closeTimeOffModal();
+        $this->dispatch('schedule-modal-saved');
     }
 
     public function closeTimeOffModal(): void
@@ -497,6 +533,7 @@ class ScheduleBoard extends Component
         if ($this->editingTimeOffId === $timeOffId) {
             $this->closeTimeOffModal();
         }
+        $this->dispatch('schedule-modal-saved');
     }
 
     public function openPlaceholderModal(): void
@@ -557,6 +594,7 @@ class ScheduleBoard extends Component
         }
 
         $this->closePlaceholderModal();
+        $this->dispatch('schedule-modal-saved');
     }
 
     public function closePlaceholderModal(): void
@@ -584,6 +622,7 @@ class ScheduleBoard extends Component
         }
 
         $placeholder->delete();
+        $this->dispatch('schedule-modal-saved');
     }
 
     public function openShiftTimeline(int $projectId): void
@@ -629,6 +668,7 @@ class ScheduleBoard extends Component
         $moved = $shiftService->shiftProject($project, $this->shiftFromDate, $this->shiftNewStartDate);
         session()->flash('schedule_status', "Shifted {$moved} assignment".($moved === 1 ? '' : 's').'.');
         $this->closeShiftModal();
+        $this->dispatch('schedule-modal-saved');
     }
 
     public function render(ScheduleAvailabilityService $availability, TimesheetActualsService $actuals): View
@@ -683,10 +723,23 @@ class ScheduleBoard extends Component
         $projectLifetimeActuals = $actuals->lifetimeActualsByProject($projectIds);
         $userActualsByPeriod = $actuals->actualsByUserForPeriods($userIds, $periods);
 
+        $projectRows = $this->projectRows($projects, $assignments, $timeOff, $periods, $availability, $projectActualsByPeriod, $projectLifetimeActuals);
+        $teamRows = $this->teamRows($users, $placeholders, $assignments, $timeOff, $periods, $availability, $projectActualsByPeriod, $projectLifetimeActuals, $userActualsByPeriod);
+        $rowCount = count($this->viewMode === 'projects' ? $projectRows : $teamRows);
+        $gridLastPage = max(1, (int) ceil($rowCount / self::ROWS_PER_PAGE));
+        $this->gridPage = min(max(1, $this->gridPage), $gridLastPage);
+        $offset = ($this->gridPage - 1) * self::ROWS_PER_PAGE;
+
+        if ($this->viewMode === 'projects') {
+            $projectRows = array_slice($projectRows, $offset, self::ROWS_PER_PAGE);
+        } else {
+            $teamRows = array_slice($teamRows, $offset, self::ROWS_PER_PAGE);
+        }
+
         return view('livewire.schedule.schedule-board', [
             'periods' => $periods,
-            'projectRows' => $this->projectRows($projects, $assignments, $timeOff, $periods, $availability, $projectActualsByPeriod, $projectLifetimeActuals),
-            'teamRows' => $this->teamRows($users, $placeholders, $assignments, $timeOff, $periods, $availability, $projectActualsByPeriod, $projectLifetimeActuals, $userActualsByPeriod),
+            'projectRows' => $projectRows,
+            'teamRows' => $teamRows,
             'timeOffRows' => $this->timeOffRows($timeOff, $periods, $availability),
             'allProjects' => $projects,
             'allUsers' => $users,
@@ -698,6 +751,9 @@ class ScheduleBoard extends Component
             'scaleLabel' => ucfirst($this->scale),
             'periodLabel' => $this->periodLabel(),
             'weekDays' => $this->weekDays(),
+            'gridPage' => $this->gridPage,
+            'gridLastPage' => $gridLastPage,
+            'gridRowCount' => $rowCount,
         ]);
     }
 
