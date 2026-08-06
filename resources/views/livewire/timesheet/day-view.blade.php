@@ -643,21 +643,21 @@
                         this.projectSearch = '';
                         this.taskSearch = '';
                         this.closePickers();
-                        $wire.selectedProjectId = id;
-                        $wire.selectedTaskId = null;
-                        $wire.selectedAsanaTaskGid = '';
+                        $wire.set('selectedProjectId', id, false);
+                        $wire.set('selectedTaskId', null, false);
+                        $wire.set('selectedAsanaTaskGid', '', false);
                     },
                     pickTask(id) {
                         this.selectedTaskId = id;
                         this.taskSearch = '';
                         this.closePickers();
-                        $wire.selectedTaskId = id;
+                        $wire.set('selectedTaskId', id, false);
                     },
                     pickAsanaTask(gid) {
                         this.selectedAsanaTaskGid = gid;
                         this.asanaTaskSearch = '';
                         this.closePickers();
-                        $wire.selectedAsanaTaskGid = gid;
+                        $wire.set('selectedAsanaTaskGid', gid, false);
                     },
                     doSave(isTimer) {
                         isTimer ? $wire.startTimerFromModal() : $wire.save();

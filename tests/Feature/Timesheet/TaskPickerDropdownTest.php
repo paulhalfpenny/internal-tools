@@ -52,3 +52,28 @@ test('saving project billability clears cached project picker task grouping', fu
     expect($dayTask['is_billable'])->toBeTrue();
     expect($weekTask['is_billable'])->toBeTrue();
 });
+
+test('day entry picker selections stay local until the entry is submitted', function () {
+    $user = User::factory()->create(['role' => Role::User]);
+    $project = Project::factory()->create();
+    $task = Task::factory()->create(['is_archived' => false]);
+
+    $project->tasks()->attach($task->id, ['is_billable' => true, 'hourly_rate_override' => null]);
+    $project->users()->attach($user->id, ['hourly_rate_override' => null]);
+
+    $html = html_entity_decode(
+        Livewire::actingAs($user)
+            ->test(DayView::class)
+            ->call('openNewModal')
+            ->html(),
+        ENT_QUOTES | ENT_HTML5,
+    );
+
+    expect($html)
+        ->toContain("\$wire.set('selectedProjectId', id, false)")
+        ->toContain("\$wire.set('selectedTaskId', id, false)")
+        ->toContain("\$wire.set('selectedAsanaTaskGid', gid, false)")
+        ->not->toContain('\$wire.selectedProjectId = id')
+        ->not->toContain('\$wire.selectedTaskId = id')
+        ->not->toContain('\$wire.selectedAsanaTaskGid = gid');
+});

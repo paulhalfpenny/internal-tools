@@ -28,7 +28,7 @@ class PickerDiagnosticController extends Controller
             'url' => 'nullable|string|max:512',
         ]);
 
-        Log::warning('picker.diagnostic', [
+        Log::error('picker.diagnostic', [
             ...$data,
             'user_id' => $request->user()?->id,
             'ua' => substr((string) $request->userAgent(), 0, 256),
