@@ -55,9 +55,11 @@ test('saving an entry keeps the entry UI open and remembers the Asana board asso
     expect($html)
         ->toContain('openNewEntry()')
         ->toContain('closeNewEntry()')
+        ->toContain('x-cloak x-show="showEntryModal"')
         ->toContain('@click="showCalendarPanel = false"')
         ->toContain('@mousedown.self="closeEntry()"')
         ->toContain('@keydown.escape.window="closeEntry()"')
+        ->not->toContain('<template x-if="showEntryModal">')
         ->not->toContain('wire:click="closeModal"')
         ->not->toContain('wire:click="closeCalendarPanel"');
 

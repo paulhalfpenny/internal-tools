@@ -357,7 +357,10 @@
     {{-- ============================================================
          Entry modal
     ============================================================ --}}
-    <template x-if="showEntryModal">
+    {{-- Keep date-sensitive content mounted so Livewire can refresh the calendar
+         panel and title after switching days. Alpine x-if templates retain their
+         original server-rendered content across a Livewire morph. --}}
+    <div x-cloak x-show="showEntryModal">
     <div>
 
         {{-- ============================================================
@@ -1002,7 +1005,7 @@
 
         </div>{{-- end modal backdrop --}}
     </div>{{-- end modal wrapper --}}
-    </template>
+    </div>
 
     {{-- 60-second poll for running timers. Suspended while the entry modal is
          open: a poll morph landing mid-interaction leaves orphaned Alpine
