@@ -35,6 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Nightly DB backup to DO Spaces at 02:00, then cleanup at 02:30.
         $schedule->command('backup:run --only-db')->dailyAt('02:00');
         $schedule->command('backup:clean')->dailyAt('02:30');
+        $schedule->command('backup:send-weekly-summary')->mondays()->at('09:00');
 
         // Restore-test on the first Saturday of each month (staging only).
         $schedule->command('backup:restore-test')
