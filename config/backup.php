@@ -158,9 +158,11 @@ return [
             BackupHasFailedNotification::class => ['mail'],
             UnhealthyBackupWasFoundNotification::class => ['mail'],
             CleanupHasFailedNotification::class => ['mail'],
-            BackupWasSuccessfulNotification::class => ['mail'],
+            // The package still needs these handlers for successful events, but
+            // an empty channel list deliberately suppresses routine emails.
+            BackupWasSuccessfulNotification::class => [],
             HealthyBackupWasFoundNotification::class => ['mail'],
-            CleanupWasSuccessfulNotification::class => ['mail'],
+            CleanupWasSuccessfulNotification::class => [],
         ],
 
         /*
