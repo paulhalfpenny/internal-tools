@@ -53,11 +53,15 @@ test('saving an entry keeps the entry UI open and remembers the Asana board asso
     $html = $component->html();
 
     expect($html)
-        ->toContain('wire:click="closeModal"')
-        ->toContain('wire:click="closeCalendarPanel"')
-        ->toContain('@mousedown.self="$wire.closeModal()"')
-        ->toContain('@keydown.escape.window="$wire.closeModal()"');
-    expect(substr_count($html, 'wire:click="closeModal"'))->toBe(2);
+        ->toContain('openNewEntry()')
+        ->toContain('closeNewEntry()')
+        ->toContain('x-cloak x-show="showEntryModal"')
+        ->toContain('@click="showCalendarPanel = false"')
+        ->toContain('@mousedown.self="closeEntry()"')
+        ->toContain('@keydown.escape.window="closeEntry()"')
+        ->not->toContain('<template x-if="showEntryModal">')
+        ->not->toContain('wire:click="closeModal"')
+        ->not->toContain('wire:click="closeCalendarPanel"');
 
     $assoc = AsanaProjectAssociation::sole();
     expect($assoc->asana_project_gid)->toBe('BOARD1')

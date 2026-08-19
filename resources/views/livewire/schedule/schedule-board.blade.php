@@ -10,6 +10,75 @@
         dragAssignment: null,
         dragSourcePeriod: null,
         dropTargetPeriod: null,
+        activeModal: null,
+        setForm(values) {
+            Object.entries(values).forEach(([name, value]) => $wire.set(name, value, false));
+            this.$nextTick(() => {
+                Object.entries(values).forEach(([name, value]) => {
+                    this.$el.querySelectorAll(`[wire\\:model='${name}']`).forEach((input) => {
+                        if (input.type === 'checkbox') {
+                            input.checked = Array.isArray(value) ? value.includes(input.value) : Boolean(value);
+                            input.dispatchEvent(new Event('change', { bubbles: true }));
+                            return;
+                        }
+
+                        input.value = value ?? '';
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                    });
+                });
+            });
+        },
+        closeModal() {
+            this.activeModal = null;
+        },
+        openAssignment(seed = {}) {
+            const startsOn = seed.startsOn ?? '{{ \Carbon\CarbonImmutable::parse($selectedDate)->startOfWeek()->toDateString() }}';
+            this.setForm({
+                editingAssignmentId: seed.id ?? null,
+                assignmentProjectId: seed.projectId ?? null,
+                assignmentAssigneeType: seed.assigneeType ?? 'user',
+                assignmentUserId: seed.assigneeType === 'user' ? (seed.assigneeId ?? null) : null,
+                assignmentPlaceholderId: seed.assigneeType === 'placeholder' ? (seed.assigneeId ?? null) : null,
+                assignmentStartsOn: startsOn,
+                assignmentEndsOn: seed.endsOn ?? startsOn,
+                assignmentHoursPerDay: String(seed.hoursPerDay ?? 7.5),
+                assignmentNotes: seed.notes ?? '',
+                addUserToProjectTeam: true,
+            });
+            this.activeModal = 'assignment';
+        },
+        openTimeOff(seed = {}) {
+            const startsOn = seed.startsOn ?? '{{ \Carbon\CarbonImmutable::parse($selectedDate)->startOfWeek()->toDateString() }}';
+            this.setForm({
+                editingTimeOffId: seed.id ?? null,
+                timeOffUserId: seed.userId ?? null,
+                timeOffStartsOn: startsOn,
+                timeOffEndsOn: seed.endsOn ?? startsOn,
+                timeOffHoursPerDay: String(seed.hoursPerDay ?? 7.5),
+                timeOffLabel: seed.label ?? 'Time off',
+                timeOffNotes: seed.notes ?? '',
+            });
+            this.activeModal = 'time-off';
+        },
+        openPlaceholder(seed = {}) {
+            this.setForm({
+                editingPlaceholderId: seed.id ?? null,
+                placeholderName: seed.name ?? '',
+                placeholderRoleTitle: seed.roleTitle ?? '',
+                placeholderWeeklyCapacity: String(seed.weeklyCapacity ?? 40),
+                placeholderWorkDays: seed.workDays ?? ['1', '2', '3', '4', '5'],
+            });
+            this.activeModal = 'placeholder';
+        },
+        openShift(seed = {}) {
+            const fromDate = seed.fromDate ?? '{{ $selectedDate }}';
+            this.setForm({
+                shiftProjectId: seed.projectId ?? null,
+                shiftFromDate: fromDate,
+                shiftNewStartDate: seed.newStartDate ?? '{{ \Carbon\CarbonImmutable::parse($selectedDate)->addWeek()->toDateString() }}',
+            });
+            this.activeModal = 'shift';
+        },
         startAssignmentDrag(event, assignmentId, sourcePeriod) {
             this.clearDragState();
             this.dragAssignment = Number(assignmentId);
@@ -49,6 +118,7 @@
             this.dropTargetPeriod = null;
         },
     }"
+    @schedule-modal-saved.window="closeModal()"
 >
     <div class="relative z-30 w-[calc(100vw-2rem)] left-1/2 -translate-x-1/2 mb-6 flex flex-col gap-3">
         <div class="grid gap-y-3 xl:grid-cols-[minmax(220px,auto)_1fr] xl:items-start xl:gap-x-3">
@@ -66,13 +136,13 @@
                             x-transition.origin.top.left
                             class="absolute left-0 z-50 mt-2 w-44 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-lg"
                         >
-                            <button type="button" wire:click="openAssignmentModal" @click="addMenuOpen = false" class="block w-full px-3 py-2 text-left text-gray-700 hover:bg-gray-50">
+                            <button type="button" @click="openAssignment(); addMenuOpen = false" class="block w-full px-3 py-2 text-left text-gray-700 hover:bg-gray-50">
                                 Assignment
                             </button>
-                            <button type="button" wire:click="openTimeOffModal" @click="addMenuOpen = false" class="block w-full px-3 py-2 text-left text-gray-700 hover:bg-gray-50">
+                            <button type="button" @click="openTimeOff(); addMenuOpen = false" class="block w-full px-3 py-2 text-left text-gray-700 hover:bg-gray-50">
                                 Time off
                             </button>
-                            <button type="button" wire:click="openPlaceholderModal" @click="addMenuOpen = false" class="block w-full px-3 py-2 text-left text-gray-700 hover:bg-gray-50">
+                            <button type="button" @click="openPlaceholder(); addMenuOpen = false" class="block w-full px-3 py-2 text-left text-gray-700 hover:bg-gray-50">
                                 Placeholder
                             </button>
                         </div>
@@ -181,7 +251,7 @@
                         <div class="min-h-20 border-r border-gray-100 p-1.5 {{ $period['is_current'] ? 'bg-blue-50/50' : '' }}">
                             @foreach($timeOffRows as $entry)
                                 @if(isset($entry['period_hours'][$period['index']]))
-                                    <button wire:click="editTimeOff({{ $entry['id'] }})" class="mb-1 w-full rounded-md border border-gray-200 bg-gray-100 px-2 py-1 text-left text-xs text-gray-700 hover:bg-gray-200">
+                                    <button @click="openTimeOff({ id: {{ $entry['id'] }}, userId: {{ $entry['user_id'] }}, startsOn: '{{ $entry['starts_on'] }}', endsOn: '{{ $entry['ends_on'] }}', hoursPerDay: {{ $entry['hours_per_day'] }}, label: @js($entry['label']), notes: @js($entry['notes']) })" class="mb-1 w-full rounded-md border border-gray-200 bg-gray-100 px-2 py-1 text-left text-xs text-gray-700 hover:bg-gray-200">
                                         {{ $entry['user_name'] }} · {{ $formatHours($entry['period_hours'][$period['index']]) }}h
                                     </button>
                                 @endif
@@ -209,8 +279,8 @@
                             </div>
                             @if($canEdit)
                                 <div class="mt-3 flex flex-wrap gap-2">
-                                    <button wire:click="openAssignmentModal({{ $project['id'] }})" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Assign</button>
-                                    <button wire:click="openShiftTimeline({{ $project['id'] }})" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Shift</button>
+                                    <button @click="openAssignment({ projectId: {{ $project['id'] }} })" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Assign</button>
+                                    <button @click="openShift({ projectId: {{ $project['id'] }} })" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Shift</button>
                                 </div>
                             @endif
                         </div>
@@ -228,7 +298,7 @@
                                     @if(isset($assignment['period_hours'][$period['index']]))
                                         <button
                                             wire:key="project-assignment-{{ $assignment['id'] }}-period-{{ $period['index'] }}"
-                                            wire:click="editAssignment({{ $assignment['id'] }})"
+                                            @click="openAssignment({ id: {{ $assignment['id'] }}, projectId: {{ $assignment['project_id'] }}, assigneeType: '{{ $assignment['assignee_type'] }}', assigneeId: {{ $assignment['assignee_id'] }}, startsOn: '{{ $assignment['starts_on'] }}', endsOn: '{{ $assignment['ends_on'] }}', hoursPerDay: {{ $assignment['hours_per_day'] }}, notes: @js($assignment['notes']) })"
                                             @if($canEdit) draggable="true" @dragstart.stop="startAssignmentDrag($event, {{ $assignment['id'] }}, '{{ $period['starts_on'] }}')" @dragend="clearDragState()" @endif
                                             class="mb-1 w-full rounded-md px-2 py-1 text-left text-xs font-medium text-white shadow-sm {{ $canEdit ? 'cursor-grab active:cursor-grabbing' : '' }}"
                                             style="background-color: {{ $assignment['colour'] }}"
@@ -262,7 +332,7 @@
                                         @if(isset($assignment['period_hours'][$period['index']]))
                                             <button
                                                 wire:key="project-expanded-assignment-{{ $assignment['period_assignment_ids'][$period['index']] ?? $assignment['id'] }}-period-{{ $period['index'] }}"
-                                                wire:click="editAssignment({{ $assignment['period_assignment_ids'][$period['index']] ?? $assignment['id'] }})"
+                                                @click="openAssignment({ id: {{ $assignment['period_assignment_ids'][$period['index']] ?? $assignment['id'] }}, projectId: {{ $assignment['project_id'] }}, assigneeType: '{{ $assignment['assignee_type'] }}', assigneeId: {{ $assignment['assignee_id'] }}, startsOn: '{{ $assignment['starts_on'] }}', endsOn: '{{ $assignment['ends_on'] }}', hoursPerDay: {{ $assignment['hours_per_day'] }}, notes: @js($assignment['notes']) })"
                                                 @if($canEdit) draggable="true" @dragstart.stop="startAssignmentDrag($event, {{ $assignment['period_assignment_ids'][$period['index']] ?? $assignment['id'] }}, '{{ $period['starts_on'] }}')" @dragend="clearDragState()" @endif
                                                 class="w-full rounded-md px-2 py-1 text-left text-xs font-medium text-white {{ $canEdit ? 'cursor-grab active:cursor-grabbing' : '' }}"
                                                 style="background-color: {{ $assignment['colour'] }}"
@@ -294,11 +364,14 @@
                             </div>
                             @if($canEdit)
                                 <div class="mt-3 flex flex-wrap gap-2">
-                                    <button wire:click="openAssignmentModal(null, '{{ $row['type'] }}', {{ $row['id'] }})" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Assign</button>
+                                    <button @click="openAssignment({ assigneeType: '{{ $row['type'] }}', assigneeId: {{ $row['id'] }} })" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Assign</button>
                                     @if($row['type'] === 'user')
-                                        <button wire:click="openTimeOffModal({{ $row['id'] }})" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Time off</button>
+                                        <button @click="openTimeOff({ userId: {{ $row['id'] }} })" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Time off</button>
                                     @else
-                                        <button wire:click="editPlaceholder({{ $row['id'] }})" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Edit</button>
+                                        @php
+                                            $placeholder = $allPlaceholders->firstWhere('id', $row['id']);
+                                        @endphp
+                                        <button @click="openPlaceholder({ id: {{ $row['id'] }}, name: @js($placeholder?->name), roleTitle: @js($placeholder?->role_title), weeklyCapacity: {{ $placeholder?->weekly_capacity_hours ?? 40 }}, workDays: @js(collect($placeholder?->effectiveScheduleWorkDays() ?? [1, 2, 3, 4, 5])->map(fn ($day) => (string) $day)->all()) })" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Edit</button>
                                         <button wire:click="deletePlaceholder({{ $row['id'] }})" wire:confirm="Archive this placeholder?" class="rounded-md border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50">Archive</button>
                                     @endif
                                 </div>
@@ -359,7 +432,7 @@
                                         @if(isset($assignment['period_hours'][$period['index']]))
                                             <button
                                                 wire:key="team-assignment-{{ $assignment['period_assignment_ids'][$period['index']] ?? $assignment['id'] }}-period-{{ $period['index'] }}"
-                                                wire:click="editAssignment({{ $assignment['period_assignment_ids'][$period['index']] ?? $assignment['id'] }})"
+                                                @click="openAssignment({ id: {{ $assignment['period_assignment_ids'][$period['index']] ?? $assignment['id'] }}, projectId: {{ $assignment['project_id'] }}, assigneeType: '{{ $assignment['assignee_type'] }}', assigneeId: {{ $assignment['assignee_id'] }}, startsOn: '{{ $assignment['starts_on'] }}', endsOn: '{{ $assignment['ends_on'] }}', hoursPerDay: {{ $assignment['hours_per_day'] }}, notes: @js($assignment['notes']) })"
                                                 @if($canEdit) draggable="true" @dragstart.stop="startAssignmentDrag($event, {{ $assignment['period_assignment_ids'][$period['index']] ?? $assignment['id'] }}, '{{ $period['starts_on'] }}')" @dragend="clearDragState()" @endif
                                                 class="w-full rounded-md px-2 py-1 text-left text-xs font-medium text-white {{ $canEdit ? 'cursor-grab active:cursor-grabbing' : '' }}"
                                                 style="background-color: {{ $assignment['colour'] }}"
@@ -381,7 +454,7 @@
                                 @foreach($periods as $period)
                                     <div class="min-h-14 border-r border-gray-100 p-1.5 {{ $period['is_current'] ? 'bg-blue-50/50' : '' }}">
                                         @if(isset($entry['period_hours'][$period['index']]))
-                                            <button wire:click="editTimeOff({{ $entry['id'] }})" class="w-full rounded-md border border-gray-200 bg-gray-100 px-2 py-1 text-left text-xs text-gray-700">
+                                            <button @click="openTimeOff({ id: {{ $entry['id'] }}, userId: {{ $entry['user_id'] }}, startsOn: '{{ $entry['starts_on'] }}', endsOn: '{{ $entry['ends_on'] }}', hoursPerDay: {{ $entry['hours_per_day'] }}, label: @js($entry['label']), notes: @js($entry['notes']) })" class="w-full rounded-md border border-gray-200 bg-gray-100 px-2 py-1 text-left text-xs text-gray-700">
                                                 {{ $formatHours($entry['period_hours'][$period['index']]) }}h off
                                             </button>
                                         @endif
@@ -397,12 +470,22 @@
         </div>
     </div>
 
-    @if($showAssignmentModal)
-        <div class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-20" wire:click="closeAssignmentModal" x-data @keydown.escape.window="$wire.closeAssignmentModal()">
+    @if($gridLastPage > 1)
+        <div class="flex items-center justify-between px-1 text-sm text-gray-600">
+            <span>Showing {{ (($gridPage - 1) * \App\Livewire\Schedule\ScheduleBoard::ROWS_PER_PAGE) + 1 }}–{{ min($gridPage * \App\Livewire\Schedule\ScheduleBoard::ROWS_PER_PAGE, $gridRowCount) }} of {{ $gridRowCount }}</span>
+            <div class="flex items-center gap-2">
+                <button wire:click="previousGridPage" @disabled($gridPage === 1) class="schedule-secondary-button disabled:cursor-not-allowed disabled:opacity-50">Previous</button>
+                <span>Page {{ $gridPage }} of {{ $gridLastPage }}</span>
+                <button wire:click="nextGridPage" @disabled($gridPage === $gridLastPage) class="schedule-secondary-button disabled:cursor-not-allowed disabled:opacity-50">Next</button>
+            </div>
+        </div>
+    @endif
+
+        <div x-cloak x-show="activeModal === 'assignment'" class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-20" @click.self="closeModal()" @keydown.escape.window="closeModal()">
             <div class="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl" @click.stop>
                 <div class="mb-5 flex items-center justify-between">
-                    <h2 class="text-base font-semibold text-gray-900">{{ $editingAssignmentId ? 'Edit assignment' : 'New assignment' }}</h2>
-                    <button wire:click="closeAssignmentModal" class="text-xl leading-none text-gray-400 hover:text-gray-700">&times;</button>
+                    <h2 class="text-base font-semibold text-gray-900" x-text="$wire.editingAssignmentId ? 'Edit assignment' : 'New assignment'"></h2>
+                    <button @click="closeModal()" class="text-xl leading-none text-gray-400 hover:text-gray-700">&times;</button>
                 </div>
 
                 <div class="space-y-4">
@@ -420,14 +503,14 @@
                     <div class="grid grid-cols-3 gap-3">
                         <div>
                             <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Assignee</label>
-                            <select wire:model.live="assignmentAssigneeType" class="schedule-modal-select">
+                            <select wire:model="assignmentAssigneeType" class="schedule-modal-select">
                                 <option value="user">Person</option>
                                 <option value="placeholder">Placeholder</option>
                             </select>
                         </div>
                         <div class="col-span-2">
                             <label class="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">&nbsp;</label>
-                            @if($assignmentAssigneeType === 'placeholder')
+                            <div x-show="$wire.assignmentAssigneeType === 'placeholder'">
                                 <select wire:model="assignmentPlaceholderId" class="schedule-modal-select">
                                     <option value="">Default placeholder</option>
                                     @foreach($allPlaceholders as $placeholder)
@@ -435,7 +518,8 @@
                                     @endforeach
                                 </select>
                                 @error('assignmentPlaceholderId')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                            @else
+                            </div>
+                            <div x-show="$wire.assignmentAssigneeType === 'user'">
                                 <select wire:model="assignmentUserId" class="schedule-modal-select">
                                     <option value="">Select person...</option>
                                     @foreach($allUsers as $user)
@@ -443,17 +527,17 @@
                                     @endforeach
                                 </select>
                                 @error('assignmentUserId')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
-                            @endif
+                            </div>
                         </div>
                     </div>
 
-                    @if($assignmentAssigneeType === 'user')
+                    <div x-show="$wire.assignmentAssigneeType === 'user'">
                         <label class="flex items-center gap-2 text-sm text-gray-600">
                             <input wire:model="addUserToProjectTeam" type="checkbox" class="rounded">
                             Add to project team if needed
                         </label>
                         @error('addUserToProjectTeam')<p class="text-xs text-red-600">{{ $message }}</p>@enderror
-                    @endif
+                    </div>
 
                     <div class="grid grid-cols-3 gap-3">
                         <div>
@@ -481,25 +565,21 @@
 
                 <div class="mt-6 flex items-center justify-between gap-3">
                     <div>
-                        @if($editingAssignmentId)
-                            <button wire:click="deleteAssignment({{ $editingAssignmentId }})" wire:confirm="Delete this assignment?" class="text-sm text-red-600 hover:underline">Delete</button>
-                        @endif
+                        <button x-show="$wire.editingAssignmentId" @click="if (confirm('Delete this assignment?')) $wire.deleteAssignment($wire.editingAssignmentId)" class="text-sm text-red-600 hover:underline">Delete</button>
                     </div>
                     <div class="flex gap-2">
-                        <button wire:click="closeAssignmentModal" class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button @click="closeModal()" class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button wire:click="saveAssignment" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Save assignment</button>
                     </div>
                 </div>
             </div>
         </div>
-    @endif
 
-    @if($showTimeOffModal)
-        <div class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-20" wire:click="closeTimeOffModal" x-data @keydown.escape.window="$wire.closeTimeOffModal()">
+        <div x-cloak x-show="activeModal === 'time-off'" class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-20" @click.self="closeModal()" @keydown.escape.window="closeModal()">
             <div class="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl" @click.stop>
                 <div class="mb-5 flex items-center justify-between">
-                    <h2 class="text-base font-semibold text-gray-900">{{ $editingTimeOffId ? 'Edit time off' : 'New time off' }}</h2>
-                    <button wire:click="closeTimeOffModal" class="text-xl leading-none text-gray-400 hover:text-gray-700">&times;</button>
+                    <h2 class="text-base font-semibold text-gray-900" x-text="$wire.editingTimeOffId ? 'Edit time off' : 'New time off'"></h2>
+                    <button @click="closeModal()" class="text-xl leading-none text-gray-400 hover:text-gray-700">&times;</button>
                 </div>
 
                 <div class="space-y-4">
@@ -543,25 +623,21 @@
 
                 <div class="mt-6 flex items-center justify-between gap-3">
                     <div>
-                        @if($editingTimeOffId)
-                            <button wire:click="deleteTimeOff({{ $editingTimeOffId }})" wire:confirm="Delete this time off?" class="text-sm text-red-600 hover:underline">Delete</button>
-                        @endif
+                        <button x-show="$wire.editingTimeOffId" @click="if (confirm('Delete this time off?')) $wire.deleteTimeOff($wire.editingTimeOffId)" class="text-sm text-red-600 hover:underline">Delete</button>
                     </div>
                     <div class="flex gap-2">
-                        <button wire:click="closeTimeOffModal" class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                        <button @click="closeModal()" class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
                         <button wire:click="saveTimeOff" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Save time off</button>
                     </div>
                 </div>
             </div>
         </div>
-    @endif
 
-    @if($showPlaceholderModal)
-        <div class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-20" wire:click="closePlaceholderModal" x-data @keydown.escape.window="$wire.closePlaceholderModal()">
+        <div x-cloak x-show="activeModal === 'placeholder'" class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-20" @click.self="closeModal()" @keydown.escape.window="closeModal()">
             <div class="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl" @click.stop>
                 <div class="mb-5 flex items-center justify-between">
                     <h2 class="text-base font-semibold text-gray-900">{{ $editingPlaceholderId ? 'Edit placeholder' : 'New placeholder' }}</h2>
-                    <button wire:click="closePlaceholderModal" class="text-xl leading-none text-gray-400 hover:text-gray-700">&times;</button>
+                    <button @click="closeModal()" class="text-xl leading-none text-gray-400 hover:text-gray-700">&times;</button>
                 </div>
 
                 <div class="space-y-4">
@@ -594,19 +670,17 @@
                 </div>
 
                 <div class="mt-6 flex justify-end gap-2">
-                    <button wire:click="closePlaceholderModal" class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button @click="closeModal()" class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
                     <button wire:click="savePlaceholder" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Save placeholder</button>
                 </div>
             </div>
         </div>
-    @endif
 
-    @if($showShiftModal)
-        <div class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-20" wire:click="closeShiftModal" x-data @keydown.escape.window="$wire.closeShiftModal()">
+        <div x-cloak x-show="activeModal === 'shift'" class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 pt-20" @click.self="closeModal()" @keydown.escape.window="closeModal()">
             <div class="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl" @click.stop>
                 <div class="mb-5 flex items-center justify-between">
                     <h2 class="text-base font-semibold text-gray-900">Shift project timeline</h2>
-                    <button wire:click="closeShiftModal" class="text-xl leading-none text-gray-400 hover:text-gray-700">&times;</button>
+                    <button @click="closeModal()" class="text-xl leading-none text-gray-400 hover:text-gray-700">&times;</button>
                 </div>
                 <div class="space-y-4">
                     <div>
@@ -621,10 +695,9 @@
                     </div>
                 </div>
                 <div class="mt-6 flex justify-end gap-2">
-                    <button wire:click="closeShiftModal" class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                    <button @click="closeModal()" class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
                     <button wire:click="shiftTimeline" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">Shift timeline</button>
                 </div>
             </div>
         </div>
-    @endif
 </div>

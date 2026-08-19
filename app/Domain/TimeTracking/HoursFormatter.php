@@ -36,6 +36,16 @@ final class HoursFormatter
     }
 
     /**
+     * Format decimal hours for reports and spreadsheet exports. Reports use a
+     * fixed precision so totals can be compared without HH:MM conversion or
+     * disappearing trailing zeroes.
+     */
+    public static function asReportDecimal(float $hours): string
+    {
+        return number_format($hours, 2, '.', '');
+    }
+
+    /**
      * Format decimal hours using the given display format (FORMAT_DECIMAL or
      * FORMAT_HHMM), falling back to decimal for anything unrecognised.
      */

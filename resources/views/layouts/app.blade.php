@@ -19,6 +19,9 @@
     <meta name="theme-color" content="#ffffff">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
+    @if ($livewireRuntimePreload = app(\App\Support\LivewireRuntimeAsset::class)->preloadUrl())
+        <link rel="preload" href="{{ $livewireRuntimePreload }}" as="script">
+    @endif
 </head>
 <body class="bg-gray-50 text-gray-900 antialiased">
 
@@ -26,15 +29,15 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-14">
             <div class="flex items-center gap-6">
-                <a href="{{ route('timesheet') }}"><img src="/assets/filter-logo-white-rgb.png" alt="Filter" class="w-auto" style="height: 1.75rem;"></a>
+                <a href="{{ route('timesheet') }}" wire:navigate.hover><img src="/assets/filter-logo-white-rgb.png" alt="Filter" class="w-auto" style="height: 1.75rem;"></a>
 
-                <a href="{{ route('timesheet') }}"
+                <a href="{{ route('timesheet') }}" wire:navigate.hover
                    class="text-sm font-medium text-white {{ request()->routeIs('timesheet') ? 'opacity-100 font-semibold' : 'opacity-70 hover:opacity-100' }}">
                     Track Time
                 </a>
 
                 @if(auth()->user()->isManager())
-                <a href="{{ route('schedule') }}"
+                <a href="{{ route('schedule') }}" wire:navigate.hover
                    class="text-sm font-medium text-white {{ request()->routeIs('schedule') ? 'opacity-100 font-semibold' : 'opacity-70 hover:opacity-100' }}">
                     Schedule
                 </a>
@@ -46,11 +49,11 @@
                     </button>
                     <div x-show="open" x-cloak
                          class="absolute top-full left-0 mt-1 w-36 bg-white border border-gray-200 rounded shadow-md z-50 py-1">
-                        <a href="{{ route('reports.time') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Time</a>
-                        <a href="{{ route('reports.clients') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Clients</a>
-                        <a href="{{ route('reports.projects') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Projects</a>
-                        <a href="{{ route('reports.tasks') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Tasks</a>
-                        <a href="{{ route('reports.team') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Team</a>
+                        <a href="{{ route('reports.time') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Time</a>
+                        <a href="{{ route('reports.clients') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Clients</a>
+                        <a href="{{ route('reports.projects') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Projects</a>
+                        <a href="{{ route('reports.tasks') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Tasks</a>
+                        <a href="{{ route('reports.team') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Team</a>
                     </div>
                 </div>
                 @endif
@@ -67,22 +70,22 @@
                     <div x-show="open" x-cloak
                          class="absolute top-full right-0 mt-1 w-40 bg-white border border-gray-200 rounded shadow-md z-50 py-1">
                         @can('access-admin')
-                        <a href="{{ route('admin.users') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Users</a>
-                        <a href="{{ route('admin.clients') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Clients</a>
+                        <a href="{{ route('admin.users') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Users</a>
+                        <a href="{{ route('admin.clients') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Clients</a>
                         @endcan
                         @can('manage-projects')
-                        <a href="{{ route('admin.projects') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Projects</a>
+                        <a href="{{ route('admin.projects') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Projects</a>
                         @endcan
                         @can('access-admin')
-                        <a href="{{ route('admin.teams') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Teams</a>
-                        <a href="{{ route('admin.tasks') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Tasks</a>
+                        <a href="{{ route('admin.teams') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Teams</a>
+                        <a href="{{ route('admin.tasks') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Tasks</a>
                         <hr class="my-1 border-gray-100">
-                        <a href="{{ route('admin.rates.library') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Rates</a>
-                        <a href="{{ route('admin.timesheets') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Timesheets</a>
-                        <a href="{{ route('admin.time-entries.bulk-move') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Bulk Assign</a>
+                        <a href="{{ route('admin.rates.library') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Rates</a>
+                        <a href="{{ route('admin.timesheets') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Timesheets</a>
+                        <a href="{{ route('admin.time-entries.bulk-move') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Bulk Assign</a>
                         <hr class="my-1 border-gray-100">
-                        <a href="{{ route('admin.integrations.asana') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Asana integration</a>
-                        <a href="{{ route('admin.notifications') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Notifications</a>
+                        <a href="{{ route('admin.integrations.asana') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Asana integration</a>
+                        <a href="{{ route('admin.notifications') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Notifications</a>
                         @endcan
                     </div>
                 </div>
@@ -101,10 +104,10 @@
                         <p class="text-sm font-medium text-gray-900 truncate">{{ auth()->user()->name }}</p>
                         <p class="text-xs text-gray-500 truncate">{{ auth()->user()->email }}</p>
                     </div>
-                    <a href="{{ route('profile.preferences') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Preferences</a>
-                    <a href="{{ route('profile.asana') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Asana connection</a>
-                    <a href="{{ route('profile.api-tokens') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">API tokens</a>
-                    <a href="{{ route('profile.mcp') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">MCP guide</a>
+                    <a href="{{ route('profile.preferences') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Preferences</a>
+                    <a href="{{ route('profile.asana') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Asana connection</a>
+                    <a href="{{ route('profile.api-tokens') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">API tokens</a>
+                    <a href="{{ route('profile.mcp') }}" wire:navigate.hover class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">MCP guide</a>
                     <form method="POST" action="{{ route('auth.logout') }}">
                         @csrf
                         <button type="submit"

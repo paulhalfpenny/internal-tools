@@ -30,12 +30,12 @@
             <div class="bg-white rounded-lg border border-gray-200 p-4">
                 <div class="text-xs uppercase tracking-wide text-gray-500">This month spent</div>
                 <div class="text-base font-semibold text-gray-900 mt-1">£{{ number_format($thisMonthAmount, 2) }}</div>
-                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::format((float) $thisMonthHours, $hoursFormat) }} hrs</div>
+                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::asReportDecimal((float) $thisMonthHours) }} hrs</div>
             </div>
             <div class="bg-white rounded-lg border border-gray-200 p-4">
                 <div class="text-xs uppercase tracking-wide text-gray-500">Cumulative spent</div>
                 <div class="text-base font-semibold text-gray-900 mt-1">£{{ number_format($cumulativeSpend?->running_amount ?? 0, 2) }}</div>
-                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::format((float) ($cumulativeSpend?->running_hours ?? 0), $hoursFormat) }} hrs</div>
+                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::asReportDecimal((float) ($cumulativeSpend?->running_hours ?? 0)) }} hrs</div>
             </div>
         </div>
 
@@ -63,9 +63,9 @@
                                     @if($isCurrentMonth)<span class="ml-2 text-xs text-blue-700">(current)</span>@endif
                                 </td>
                                 <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->month_amount, 2) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::format((float) $row->month_hours, $hoursFormat) }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::asReportDecimal((float) $row->month_hours) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->running_amount, 2) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::format((float) $row->running_hours, $hoursFormat) }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::asReportDecimal((float) $row->running_hours) }}</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -94,7 +94,7 @@
             <div class="bg-white rounded-lg border border-gray-200 p-4">
                 <div class="text-xs uppercase tracking-wide text-gray-500">This month spent</div>
                 <div class="text-base font-semibold text-gray-900 mt-1">£{{ number_format($thisMonthAmount, 2) }}</div>
-                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::format((float) $thisMonthHours, $hoursFormat) }} hrs</div>
+                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::asReportDecimal((float) $thisMonthHours) }} hrs</div>
             </div>
             <div class="bg-white rounded-lg border border-gray-200 p-4">
                 <div class="text-xs uppercase tracking-wide text-gray-500">This month budget</div>
@@ -123,13 +123,13 @@
                 <div class="text-xs uppercase tracking-wide text-gray-500">Cumulative budget</div>
                 <div class="text-base font-semibold text-gray-900 mt-1">£{{ number_format($status->budgetAmount, 2) }}</div>
                 @if($status->budgetHours !== null)
-                    <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::format((float) $status->budgetHours, $hoursFormat) }} hrs target</div>
+                    <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::asReportDecimal((float) $status->budgetHours) }} hrs target</div>
                 @endif
             </div>
             <div class="bg-white rounded-lg border border-gray-200 p-4">
                 <div class="text-xs uppercase tracking-wide text-gray-500">Cumulative spent</div>
                 <div class="text-base font-semibold text-gray-900 mt-1">£{{ number_format($status->actualAmount, 2) }}</div>
-                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::format((float) $status->actualHours, $hoursFormat) }} hrs</div>
+                <div class="text-xs text-gray-500 mt-0.5">{{ HoursFormatter::asReportDecimal((float) $status->actualHours) }} hrs</div>
             </div>
             <div class="bg-white rounded-lg border border-gray-200 p-4">
                 <div class="text-xs uppercase tracking-wide text-gray-500">Variance</div>
@@ -168,7 +168,7 @@
                                 </td>
                                 <td class="px-4 py-3 text-right tabular-nums">{{ $row->month_budget > 0 ? '£'.number_format($row->month_budget, 2) : '—' }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->month_amount, 2) }}</td>
-                                <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::format((float) $row->month_hours, $hoursFormat) }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::asReportDecimal((float) $row->month_hours) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->running_budget, 2) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->running_amount, 2) }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums {{ $varClass }}">£{{ number_format($row->running_variance, 2) }}</td>
@@ -225,7 +225,7 @@
                 <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
                     <div class="text-sm text-gray-600">
                         <span class="font-medium text-gray-900">{{ $entries->total() }}</span> entries
-                        · <span class="font-medium text-gray-900">{{ HoursFormatter::format((float) $filteredTotals->totalHours, $hoursFormat) }}</span> hrs
+                        · <span class="font-medium text-gray-900">{{ HoursFormatter::asReportDecimal((float) $filteredTotals->totalHours) }}</span> hrs
                         · <span class="font-medium text-gray-900">£{{ number_format($filteredTotals->billableAmount, 2) }}</span>
                     </div>
                     <button wire:click="clearFilters" class="text-sm text-gray-500 hover:text-gray-700">Clear filters</button>
@@ -263,7 +263,7 @@
                                         —
                                     @endif
                                 </td>
-                                <td class="px-4 py-3 text-right tabular-nums">{{ HoursFormatter::format((float) $entry->hours, $hoursFormat) }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums">{{ HoursFormatter::asReportDecimal((float) $entry->hours) }}</td>
                                 <td class="px-4 py-3 text-gray-500 truncate max-w-xs">{{ $entry->notes }}</td>
                             </tr>
                         @endforeach

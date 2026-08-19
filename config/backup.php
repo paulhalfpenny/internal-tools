@@ -161,7 +161,7 @@ return [
             // The package still needs these handlers for successful events, but
             // an empty channel list deliberately suppresses routine emails.
             BackupWasSuccessfulNotification::class => [],
-            HealthyBackupWasFoundNotification::class => ['mail'],
+            HealthyBackupWasFoundNotification::class => [],
             CleanupWasSuccessfulNotification::class => [],
         ],
 

@@ -1,3 +1,4 @@
+@use('App\Domain\TimeTracking\HoursFormatter')
 <div>
     @include('livewire.reports.partials.header', [
         'title' => $member->name,
@@ -48,8 +49,8 @@
                     </td>
                     @endif
                     <td class="px-4 py-3 font-medium text-gray-900">{{ $row->label }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums">{{ number_format($row->total_hours, 1) }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ number_format($row->billable_hours, 1) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums">{{ HoursFormatter::asReportDecimal((float) $row->total_hours) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums text-gray-500">{{ HoursFormatter::asReportDecimal((float) $row->billable_hours) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->billable_amount, 2) }}</td>
                 </tr>
                 @endforeach

@@ -7,7 +7,6 @@ use App\Domain\TimeTracking\CalendarEventAssociationService;
 use App\Domain\TimeTracking\HoursFormatter;
 use App\Domain\TimeTracking\HoursParser;
 use App\Domain\TimeTracking\TimeEntryService;
-use App\Models\AsanaProject;
 use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\Task;
@@ -271,6 +270,36 @@ class DayView extends Component
         $this->resetModal();
     }
 
+    /**
+     * Load the compact task picker data only after the user has chosen a project.
+     *
+     * @return array<int, array{gid: string, name: string, search_text: string|null, board_name: string}>
+     */
+    public function loadAsanaTasksForProject(int $projectId): array
+    {
+        $project = Project::query()
+            ->whereKey($projectId)
+            ->where('is_archived', false)
+            ->whereHas('users', fn ($query) => $query->whereKey($this->viewedUser()->id))
+            ->with('asanaProjects')
+            ->firstOrFail();
+
+        $boardNames = $project->asanaProjects->pluck('name', 'gid');
+
+        return AsanaTask::query()
+            ->whereIn('asana_project_gid', $boardNames->keys())
+            ->where('is_completed', false)
+            ->orderBy('name')
+            ->get(['gid', 'asana_project_gid', 'name', 'search_text'])
+            ->map(fn (AsanaTask $task) => [
+                'gid' => $task->gid,
+                'name' => $task->name,
+                'search_text' => $task->search_text,
+                'board_name' => (string) $boardNames->get($task->asana_project_gid),
+            ])
+            ->all();
+    }
+
     public function startTimerFromModal(): void
     {
         if ($this->isImpersonating || $this->isReadOnly) {
@@ -315,6 +344,7 @@ class DayView extends Component
         $this->rememberLastSavedProjectAndTask((int) $this->selectedProjectId, (int) $this->selectedTaskId);
         $service->startTimer($entry);
         $this->closeModal();
+        $this->dispatch('day-entry-timer-started');
     }
 
     public function save(): void
@@ -512,7 +542,7 @@ class DayView extends Component
         $user = $this->viewedUser();
 
         $alreadyHasEntries = TimeEntry::where('user_id', $user->id)
-            ->whereDate('spent_on', $this->selectedDate)
+            ->where('spent_on', $this->selectedDate)
             ->exists();
         if ($alreadyHasEntries) {
             return;
@@ -529,7 +559,7 @@ class DayView extends Component
 
         $sourceEntries = TimeEntry::with(['project.tasks', 'project.users', 'project.asanaProjects'])
             ->where('user_id', $user->id)
-            ->whereDate('spent_on', $mostRecentPrior)
+            ->where('spent_on', CarbonImmutable::parse($mostRecentPrior)->toDateString())
             ->orderBy('created_at')
             ->get();
 
@@ -703,12 +733,11 @@ class DayView extends Component
 
         $weekTotal = $weekEntries->sum($currentHours);
 
-        // Entries for the selected day. whereDate() instead of where() to keep
-        // matching when spent_on is stored as a full datetime (MySQL DATE columns
-        // truncate to date-only, SQLite stores whatever string Eloquent writes).
+        // spent_on is a DATE column, so direct equality preserves the composite
+        // user/date index on both MySQL and SQLite.
         $dayEntries = TimeEntry::with(['project.client', 'task', 'asanaTask'])
             ->where('user_id', $user->id)
-            ->whereDate('spent_on', $this->selectedDate)
+            ->where('spent_on', $this->selectedDate)
             ->orderBy('created_at')
             ->get();
 
@@ -755,30 +784,6 @@ class DayView extends Component
                 ->values()
                 ->all()
         );
-
-        $linkedAsanaProjectGids = collect($projectsForPicker)
-            ->flatMap(fn ($p) => $p['asana_project_gids'])
-            ->unique()
-            ->values()
-            ->all();
-
-        $asanaProjectNames = AsanaProject::query()
-            ->whereIn('gid', $linkedAsanaProjectGids)
-            ->pluck('name', 'gid');
-
-        $asanaTasksByProject = AsanaTask::query()
-            ->whereIn('asana_project_gid', $linkedAsanaProjectGids)
-            ->where('is_completed', false)
-            ->orderBy('name')
-            ->get(['gid', 'asana_project_gid', 'name', 'search_text'])
-            ->groupBy('asana_project_gid')
-            ->map(fn ($group) => $group->map(fn (AsanaTask $t) => [
-                'gid' => $t->gid,
-                'name' => $t->name,
-                'search_text' => $t->search_text,
-                'board_name' => $asanaProjectNames[$t->asana_project_gid] ?? null,
-            ])->values()->all())
-            ->all();
 
         // Track which calendar event titles are already logged today
         $usedEventTitles = $dayEntries->pluck('notes')->filter()->map(fn ($n) => strtolower($n))->all();
@@ -838,7 +843,6 @@ class DayView extends Component
             'dayTotal' => $dayTotal,
             'canCopyFromPrior' => $canCopyFromPrior,
             'projectsForPicker' => $projectsForPicker,
-            'asanaTasksByProject' => $asanaTasksByProject,
             'asanaAvailable' => $this->asanaIntegrationAvailable(),
             'usedEventTitles' => $usedEventTitles,
             'calendarEvents' => $calendarEvents,

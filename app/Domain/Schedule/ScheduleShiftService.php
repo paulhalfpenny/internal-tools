@@ -21,7 +21,7 @@ final class ScheduleShiftService
 
         return DB::transaction(function () use ($project, $from, $deltaDays) {
             $assignments = $project->scheduleAssignments()
-                ->whereDate('starts_on', '>=', $from->toDateString())
+                ->where('starts_on', '>=', $from->toDateString())
                 ->lockForUpdate()
                 ->get();
 

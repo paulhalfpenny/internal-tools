@@ -1,6 +1,6 @@
 @use('App\Domain\TimeTracking\HoursFormatter')
 <div>
-    @include('livewire.reports.partials.header', ['title' => 'Projects', 'totals' => $totals, 'hoursFormat' => $hoursFormat])
+    @include('livewire.reports.partials.header', ['title' => 'Projects', 'totals' => $totals])
 
     <div class="bg-white rounded-lg border border-gray-200 overflow-x-auto">
         @if($rows->isEmpty())
@@ -49,13 +49,13 @@
                     <td class="px-4 py-3 font-medium text-gray-900">
                         <a href="{{ route('reports.projects.detail', $row->id) }}" class="text-blue-700 hover:underline">{{ $row->label }}</a>
                     </td>
-                    <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ HoursFormatter::format((float) $row->total_hours, $hoursFormat) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ HoursFormatter::asReportDecimal((float) $row->total_hours) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($row->billable_amount, 0) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums {{ $periodPctClass }}">{{ $periodPct === null ? '—' : number_format($periodPct, 1).'%' }}</td>
                     <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100" title="{{ $tooltip }}">{{ $b ? '£'.number_format($b->budgetAmount, 0) : '—' }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">{{ $b ? '£'.number_format($b->actualAmount, 0) : '—' }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums">{{ $b && $b->budgetHours !== null ? HoursFormatter::format((float) $b->budgetHours, $hoursFormat) : '—' }}</td>
-                    <td class="px-4 py-3 text-right tabular-nums">{{ $b ? HoursFormatter::format((float) $b->actualHours, $hoursFormat) : '—' }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums">{{ $b && $b->budgetHours !== null ? HoursFormatter::asReportDecimal((float) $b->budgetHours) : '—' }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums">{{ $b ? HoursFormatter::asReportDecimal((float) $b->actualHours) : '—' }}</td>
                     <td class="px-4 py-3 text-right tabular-nums {{ $pctClass }}">{{ $pct === null ? '—' : number_format($pct, 1).'%' }}</td>
                 </tr>
                 @endforeach
@@ -63,7 +63,7 @@
             <tfoot class="border-t border-gray-200 bg-gray-50">
                 <tr class="text-sm font-semibold text-gray-900">
                     <td class="px-4 py-3" colspan="2">Total</td>
-                    <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ HoursFormatter::format((float) $totals->totalHours, $hoursFormat) }}</td>
+                    <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100">{{ HoursFormatter::asReportDecimal((float) $totals->totalHours) }}</td>
                     <td class="px-4 py-3 text-right tabular-nums">£{{ number_format($totals->billableAmount, 0) }}</td>
                     <td class="px-4 py-3"></td>
                     <td class="px-4 py-3 text-right tabular-nums border-l border-gray-100" colspan="5"></td>

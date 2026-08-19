@@ -142,7 +142,7 @@ test('budget page lists time entries for this project only, with who/what/when',
     $component->assertSee('Alice Example')
         ->assertSee('Discovery')
         ->assertSee('Kickoff call')
-        ->assertSee('2:30')
+        ->assertSee('2.50')
         ->assertDontSee('Should not appear');
 });
 

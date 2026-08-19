@@ -43,9 +43,11 @@ class TimeReport extends Component
 
     public function render(): View
     {
+        $result = $this->buildQuery()->groupedReport(GroupBy::tryFrom($this->groupBy) ?? GroupBy::Client);
+
         return view('livewire.reports.time-report', [
-            'totals' => $this->totals(),
-            'rows' => $this->rows(),
+            'totals' => $result->totals,
+            'rows' => $result->rows,
         ]);
     }
 }

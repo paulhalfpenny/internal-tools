@@ -5,7 +5,6 @@ namespace App\Livewire\Reports;
 use App\Domain\Budgeting\ProjectBudgetCalculator;
 use App\Domain\Reporting\DetailedTimeCsvExport;
 use App\Domain\Reporting\TimeReportQuery;
-use App\Domain\TimeTracking\HoursFormatter;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
@@ -130,12 +129,14 @@ class ProjectDetail extends Component
     #[Renderless]
     public function export(): StreamedResponse
     {
-        [$from, $to] = $this->lifetimeWindow();
+        [$from, $to] = $this->filteredWindow();
 
         $query = new TimeReportQuery(
             from: $from,
             to: $to,
+            userId: $this->filterUserId,
             projectId: $this->project->id,
+            taskId: $this->filterTaskId,
         );
         $export = new DetailedTimeCsvExport($query);
 
@@ -171,9 +172,6 @@ class ProjectDetail extends Component
             || $this->filterUserId !== null
             || $this->filterTaskId !== null;
 
-        /** @var User|null $user */
-        $user = auth()->user();
-
         return view('livewire.reports.project-detail', [
             'status' => $status,
             'monthlyRows' => $status === null ? collect() : $calculator->monthlyBreakdown($this->project),
@@ -184,7 +182,6 @@ class ProjectDetail extends Component
             'monthOptions' => $this->monthOptions(),
             'taskOptions' => $this->taskOptions(),
             'userOptions' => $this->userOptions(),
-            'hoursFormat' => $user?->hoursDisplayFormat() ?? HoursFormatter::FORMAT_HHMM,
         ]);
     }
 
