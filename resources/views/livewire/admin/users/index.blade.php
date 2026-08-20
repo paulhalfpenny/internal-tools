@@ -231,7 +231,7 @@
                                 <option value="{{ $candidate->id }}">{{ $candidate->name }} ({{ ucfirst($candidate->role->value) }})</option>
                             @endforeach
                         </select>
-                        <p class="text-xs text-gray-500 mt-1">Determines who receives the Friday digest about this user's hours.</p>
+                        <p class="text-xs text-gray-500 mt-1">If this user finishes below target, their line manager receives the Monday completed-week digest (only when at least one direct report is below target).</p>
                         @error('editReportsToUserId')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
                     </div>
 

@@ -46,9 +46,15 @@ class SendTimesheetReminders extends Command
         $weekStart = $now->startOfWeek(CarbonImmutable::MONDAY);
         $rows = $this->limitToUser($service->usersBelowMidWeekThreshold($weekStart));
 
-        $this->info("Mid-week nudges: {$rows->count()} user(s) below 60% by Wednesday.");
+        $this->info("Mid-week nudges: {$rows->count()} user(s) below their Mon–Wed scheduled-hours checkpoint.");
         foreach ($rows as $row) {
-            $this->line(sprintf('  - %s: %.1f / %.1fh', $row['user']->name, $row['hours'], $row['target']));
+            $this->line(sprintf(
+                '  - %s: %.1f / %.1fh checkpoint (%.1fh weekly target)',
+                $row['user']->name,
+                $row['hours'],
+                $row['threshold'],
+                $row['target'],
+            ));
             if (! $this->option('dry-run')) {
                 $row['user']->notify(new MidWeekTimesheetNudge($row['hours'], $row['target'], $row['threshold'], $weekStart));
             }
@@ -91,7 +97,7 @@ class SendTimesheetReminders extends Command
 
     private function dispatchManagerDigest(TimesheetCompletionService $service, CarbonImmutable $now): int
     {
-        $weekStart = $now->startOfWeek(CarbonImmutable::MONDAY);
+        $weekStart = $now->startOfWeek(CarbonImmutable::MONDAY)->subWeek();
         $allRows = $service->usersWithIncompleteWeek($weekStart);
 
         $rowsByManager = $allRows->groupBy(fn (array $row) => $row['user']->reports_to_user_id ?? 0);

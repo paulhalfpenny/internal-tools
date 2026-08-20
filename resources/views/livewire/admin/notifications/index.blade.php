@@ -12,7 +12,7 @@
             <div class="flex items-start justify-between gap-4">
                 <div>
                     <label class="text-sm font-semibold text-gray-900">Email reminders</label>
-                    <p class="text-xs text-gray-500 mt-1">Sends mid-week, weekly-overdue, monthly-overdue, and Friday manager-digest emails via Resend.</p>
+                    <p class="text-xs text-gray-500 mt-1">Sends mid-week, weekly-overdue, monthly-overdue, and Monday completed-week manager-digest emails via Resend.</p>
                     <p class="text-xs {{ $mailerDriver === 'resend' ? 'text-green-700' : 'text-amber-700' }} mt-1">
                         Mail driver: <span class="font-mono">{{ $mailerDriver }}</span>
                         @if ($mailerDriver !== 'resend')
@@ -114,6 +114,6 @@
     </div>
 
     <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
-        <strong>Heads up:</strong> turning a channel on takes effect immediately for the next scheduled run. The current schedule is Thu 09:30 (mid-week), Mon 09:30 (weekly), 1st @ 09:30 (monthly), Fri 16:00 (manager digest).
+        <strong>Heads up:</strong> turning a channel on takes effect immediately for the next scheduled run. The current schedule (Europe/London) is Thu 13:00 (mid-week schedule-aware checkpoint), Mon 09:30 (weekly overdue), 1st @ 09:30 (monthly), and Mon 08:45 (completed-week manager digest).
     </div>
 </div>

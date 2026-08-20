@@ -47,13 +47,13 @@ return Application::configure(basePath: dirname(__DIR__))
 
         // Timesheet reminders. Times are in APP_TIMEZONE (Europe/London).
         $schedule->command('timesheets:send-reminders --type=mid-week')
-            ->thursdays()->at('09:30');
+            ->thursdays()->at('13:00');
         $schedule->command('timesheets:send-reminders --type=weekly-overdue')
             ->mondays()->at('09:30');
         $schedule->command('timesheets:send-reminders --type=monthly-overdue')
             ->monthlyOn(1, '09:30');
         $schedule->command('timesheets:send-reminders --type=manager-digest')
-            ->fridays()->at('16:00');
+            ->mondays()->at('08:45');
     })
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->redirectGuestsTo(fn () => route('auth.login'));
