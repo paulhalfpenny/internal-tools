@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Domain\Schedule\ScheduleAvailabilityService;
 use App\Models\TimeEntry;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -10,7 +11,7 @@ use Illuminate\Support\Collection;
 
 class TimesheetCompletionService
 {
-    public const MID_WEEK_THRESHOLD = 0.6;
+    public function __construct(private readonly ScheduleAvailabilityService $scheduleAvailability) {}
 
     public function weeklyTarget(User $user): float
     {
@@ -47,9 +48,9 @@ class TimesheetCompletionService
     }
 
     /**
-     * Active users whose Mon–Wed total is below the mid-week threshold (60% by default).
+     * Active users whose Mon–Wed total is below their scheduled-hours checkpoint.
      *
-     * Run on Thursdays after the user has had three working days to log time.
+     * Run on Thursdays after the Monday-to-Wednesday checkpoint period has concluded.
      *
      * @return Collection<int, array{user: User, hours: float, target: float, threshold: float}>
      */
@@ -62,9 +63,9 @@ class TimesheetCompletionService
 
         $totals = $this->aggregateHours($users->pluck('id')->all(), $start, $endOfWednesday);
 
-        return $users->map(function (User $user) use ($totals) {
+        return $users->map(function (User $user) use ($totals, $start, $endOfWednesday) {
             $target = $user->effectiveWeeklyTarget();
-            $threshold = $target * self::MID_WEEK_THRESHOLD;
+            $threshold = $this->scheduleAvailability->capacityForPeriod($user, $start, $endOfWednesday);
             $hours = (float) ($totals[$user->id] ?? 0.0);
 
             return compact('user', 'hours', 'target', 'threshold');

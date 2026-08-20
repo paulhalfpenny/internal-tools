@@ -46,7 +46,7 @@ class ManagerWeeklyDigest extends Notification implements ShouldQueue
         $weekEnd = $this->weekStart->addDays(6);
 
         return (new MailMessage)
-            ->subject(($this->isAdminDigest ? 'Team' : 'Direct reports').' timesheet status (so far this week) — '.$this->weekStart->format('j M').' – '.$weekEnd->format('j M Y'))
+            ->subject(($this->isAdminDigest ? 'Team' : 'Direct reports').' timesheet status (completed week) — '.$this->weekStart->format('j M').' – '.$weekEnd->format('j M Y'))
             ->view('emails.timesheets.manager-digest', [
                 'managerFirstName' => explode(' ', trim($notifiable->name))[0],
                 'rows' => $this->rows,

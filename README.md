@@ -9,7 +9,7 @@ Email + Slack reminders that chase users when their timesheets fall behind.
 **Per-user settings** live on `users` (managed in **Admin → Users**):
 
 - `weekly_capacity_hours` — weekly target (default 40h, override per user).
-- `reports_to_user_id` — line manager (drives the Friday digest).
+- `reports_to_user_id` — line manager (drives the Monday completed-week digest).
 - `notifications_paused_until` — vacation pause; no reminders fire until it passes.
 - `email_notifications_enabled`, `slack_notifications_enabled` — per-channel opt-out.
 - `slack_user_id` — resolved nightly from the user's email.
@@ -18,10 +18,10 @@ Email + Slack reminders that chase users when their timesheets fall behind.
 
 | When | Command | What it does |
 | --- | --- | --- |
-| Thu 09:30 | `timesheets:send-reminders --type=mid-week` | DM + email to anyone <60% of weekly target by end of Wednesday |
+| Thu 13:00 | `timesheets:send-reminders --type=mid-week` | DM + email to anyone below their schedule-aware Monday–Wednesday checkpoint |
 | Mon 09:30 | `timesheets:send-reminders --type=weekly-overdue` | Chases anyone who finished last week below target |
 | 1st @ 09:30 | `timesheets:send-reminders --type=monthly-overdue` | Chases anyone who finished last month below pro-rata target |
-| Fri 16:00 | `timesheets:send-reminders --type=manager-digest` | Sends each manager a digest of their direct reports who are behind; admins additionally get a global digest |
+| Mon 08:45 | `timesheets:send-reminders --type=manager-digest` | Sends managers a completed-week digest only when at least one direct report finished below target; admins also receive a global digest |
 | 03:00 daily | `slack:sync-user-ids` | Resolves `slack_user_id` for new joiners via `users.lookupByEmail` |
 
 Runs depend on `php artisan schedule:run` being wired up in cron in production. The reminder command takes:
@@ -30,6 +30,8 @@ Runs depend on `php artisan schedule:run` being wired up in cron in production. 
 - `--user=<id>` — limit dispatch to a single user (handy for staging tests).
 
 Example: `php artisan timesheets:send-reminders --type=mid-week --dry-run` or `--user=42` for a single-recipient end-to-end test against Resend / Slack staging.
+
+The mid-week checkpoint is calculated from each user's configured working days through Wednesday, rather than applying a fixed weekly percentage. For a standard Monday–Friday schedule, this is 60% of weekly capacity.
 
 **Production prerequisites.** Verify the Filter sending domain in the Resend dashboard, set `RESEND_KEY` in the production `.env`, install the Slack app to the workspace and capture the bot token, then run `php artisan slack:sync-user-ids` once to populate `slack_user_id` for the existing team.
 

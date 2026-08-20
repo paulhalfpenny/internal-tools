@@ -61,14 +61,16 @@ class MidWeekTimesheetNudge extends Notification implements ShouldQueue
     public function toSlack(object $notifiable): array
     {
         /** @var User $notifiable */
-        $shortfall = max(0, $this->target - $this->hours);
+        $checkpointShortfall = max(0, $this->threshold - $this->hours);
+        $remainingHours = max(0, $this->target - $this->hours);
         $url = route('timesheet');
 
         $text = sprintf(
-            ":warning: *Timesheet check-in.* You're at %.1fh of your %.1fh target this week — %.1fh below the mid-week checkpoint. <%s|Open your timesheet> when you have a moment.",
+            ":warning: *Timesheet check-in.* By the end of Wednesday, you've logged %.1fh. Your mid-week checkpoint is %.1fh, so you're %.1fh short. Based on that Wednesday snapshot, %.1fh remain to log for the week. <%s|Open your timesheet> when you have a moment.",
             $this->hours,
-            $this->target,
-            $shortfall,
+            $this->threshold,
+            $checkpointShortfall,
+            $remainingHours,
             $url,
         );
 

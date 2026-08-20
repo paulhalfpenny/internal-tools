@@ -1,15 +1,15 @@
 <x-email-shell
   :heading="'Timesheet status — '.$weekRange"
-  :subheading="$isAdminDigest ? 'Team overview' : 'Your direct reports'"
+  :subheading="$isAdminDigest ? 'Completed-week team overview' : 'Your direct reports — completed week'"
   :cta-url="$adminUrl"
   cta-label="Open admin timesheets"
 >
   <p style="margin:0 0 16px;">Hi {{ $managerFirstName }},</p>
 
   @if (count($rows) === 0)
-    <p style="margin:0 0 16px;">Nice — every {{ $isAdminDigest ? 'active user' : 'direct report' }} is on or above target this week. Nothing to chase.</p>
+    <p style="margin:0 0 16px;">Nice — every {{ $isAdminDigest ? 'active user' : 'direct report' }} was on or above target last week. Nothing to chase.</p>
   @else
-    <p style="margin:0 0 16px;">The following {{ $isAdminDigest ? 'team members' : 'direct reports' }} are below their weekly target so far this week:</p>
+    <p style="margin:0 0 16px;">The following {{ $isAdminDigest ? 'team members' : 'direct reports' }} finished last week below their weekly target:</p>
 
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; margin:0 0 24px;">
       <thead>
