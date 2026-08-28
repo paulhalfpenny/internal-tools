@@ -27,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $asana_task_gid
  * @property Carbon|null $asana_synced_at
  * @property string|null $asana_sync_error
+ * @property string|null $asana_sync_error_code
  * @property User $user
  * @property Project $project
  * @property Task $task
@@ -34,6 +35,8 @@ use Illuminate\Support\Carbon;
  */
 class TimeEntry extends Model
 {
+    public const ASANA_SYNC_ERROR_ACTOR_UNAVAILABLE = 'actor_unavailable';
+
     /** @use HasFactory<TimeEntryFactory> */
     use HasFactory;
 
@@ -41,7 +44,7 @@ class TimeEntry extends Model
         'user_id', 'project_id', 'task_id', 'spent_on', 'hours', 'notes',
         'is_running', 'timer_started_at', 'is_billable', 'billable_rate_snapshot',
         'billable_amount', 'invoiced_at', 'external_reference',
-        'asana_task_gid', 'asana_synced_at', 'asana_sync_error',
+        'asana_task_gid', 'asana_synced_at', 'asana_sync_error', 'asana_sync_error_code',
     ];
 
     protected function casts(): array

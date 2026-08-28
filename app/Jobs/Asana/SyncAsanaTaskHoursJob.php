@@ -8,8 +8,11 @@ use App\Models\AsanaTask;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\Asana\AsanaHoursSyncRecovery;
 use App\Services\Asana\AsanaService;
+use App\Services\Asana\AsanaSyncActorAlert;
 use App\Services\Asana\AsanaTaskHoursAggregator;
+use App\Services\Asana\AsanaTokenManager;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Relations\Pivot;
@@ -18,6 +21,7 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 use Throwable;
 
 class SyncAsanaTaskHoursJob implements ShouldQueue
@@ -37,10 +41,16 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
         public readonly int $projectId,
     ) {}
 
-    public function handle(AsanaService $service, AsanaTaskHoursAggregator $aggregator): void
-    {
+    public function handle(
+        AsanaService $service,
+        AsanaTaskHoursAggregator $aggregator,
+        AsanaSyncActorAlert $actorAlert,
+        AsanaTokenManager $tokens,
+        AsanaHoursSyncRecovery $hoursRecovery,
+    ): void {
         $project = Project::find($this->projectId);
         if ($project === null) {
+            $hoursRecovery->resolve($this->asanaTaskGid, $this->projectId);
             $this->markEntriesError('Project is no longer linked to Asana.');
 
             return;
@@ -48,6 +58,7 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
 
         $asanaTask = AsanaTask::find($this->asanaTaskGid);
         if ($asanaTask === null) {
+            $hoursRecovery->resolve($this->asanaTaskGid, $this->projectId);
             $this->markEntriesError('Asana task '.$this->asanaTaskGid.' is no longer cached locally.');
 
             return;
@@ -57,6 +68,7 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
         $linkedBoard = $project->asanaProjects()->where('gid', $boardGid)->first();
 
         if ($linkedBoard === null) {
+            $hoursRecovery->resolve($this->asanaTaskGid, $this->projectId);
             // The board has been unlinked from this project since the entry was logged.
             // Mark the entries with a soft error so the sync isn't retried, but don't fail the job.
             $this->markEntriesError('Project is no longer linked to the Asana board for this task.');
@@ -71,15 +83,37 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
 
         $workspaceGid = $linkedBoard->workspace_gid;
 
-        $actor = $this->pickActor($workspaceGid);
-        if ($actor === null) {
-            AsanaSyncLog::warn('asana.sync_hours.no_actor', [
+        $actor = User::asanaSyncActor();
+        $actorUnavailableReason = $this->actorUnavailableReason($actor, $workspaceGid, $tokens);
+        if ($actorUnavailableReason !== null) {
+            $this->markEntriesError(
+                'Hours are pending because the designated Asana sync account is unavailable.',
+                TimeEntry::ASANA_SYNC_ERROR_ACTOR_UNAVAILABLE,
+            );
+
+            AsanaSyncLog::warn('asana.sync_hours.actor_unavailable', [
                 'asana_task_gid' => $this->asanaTaskGid,
                 'project_id' => $this->projectId,
+                'workspace_gid' => $workspaceGid,
+                'designated_user_id' => $actor?->id,
+                'designated_asana_user_gid' => $actor?->asana_user_gid,
+                'reason' => $actorUnavailableReason,
             ], $project);
+            $hoursRecovery->markPending(
+                $this->asanaTaskGid,
+                $this->projectId,
+                $actorUnavailableReason,
+            );
+            $actorAlert->reportUnavailable($actor, $actorUnavailableReason);
 
             return;
         }
+
+        if ($actor === null) {
+            throw new LogicException('Asana sync actor resolution returned an invalid state.');
+        }
+
+        $hoursRecovery->resolve($this->asanaTaskGid, $this->projectId);
 
         $svc = $service->forUser($actor);
 
@@ -173,12 +207,15 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
             ->update([
                 'asana_synced_at' => now(),
                 'asana_sync_error' => null,
+                'asana_sync_error_code' => null,
             ]);
 
         AsanaSyncLog::info('asana.sync_hours.pushed', [
             'asana_task_gid' => $this->asanaTaskGid,
             'hours' => $total,
             'project_id' => $this->projectId,
+            'actor_user_id' => $actor->id,
+            'actor_asana_user_gid' => $actor->asana_user_gid,
         ], $project);
     }
 
@@ -187,44 +224,43 @@ class SyncAsanaTaskHoursJob implements ShouldQueue
         $this->markEntriesError(substr($exception->getMessage(), 0, 500));
     }
 
-    private function pickActor(string $workspaceGid): ?User
-    {
-        $designated = User::asanaSyncActor();
-
-        if ($designated !== null
-            && $designated->asana_access_token !== null
-            && $designated->asana_workspace_gid === $workspaceGid) {
-            return $designated;
+    private function actorUnavailableReason(
+        ?User $actor,
+        string $workspaceGid,
+        AsanaTokenManager $tokens,
+    ): ?string {
+        if ($actor === null) {
+            return 'actor_not_designated';
         }
 
-        $fallback = User::query()
-            ->whereNotNull('asana_access_token')
-            ->whereNotNull('asana_user_gid')
-            ->where('asana_workspace_gid', $workspaceGid)
-            ->where('is_active', true)
-            ->orderByRaw('CASE WHEN role = "admin" THEN 0 WHEN role = "manager" THEN 1 ELSE 2 END')
-            ->first();
-
-        if ($designated !== null) {
-            AsanaSyncLog::warn('asana.sync_hours.actor_fallback', [
-                'asana_task_gid' => $this->asanaTaskGid,
-                'project_id' => $this->projectId,
-                'designated_user_id' => $designated->id,
-                'reason' => $designated->asana_access_token === null
-                    ? 'actor_no_token'
-                    : 'actor_workspace_mismatch',
-            ]);
+        if ($actor->asana_access_token === null) {
+            return 'actor_no_token';
         }
 
-        return $fallback;
+        if ($actor->asana_user_gid === null) {
+            return 'actor_no_identity';
+        }
+
+        if ($actor->asana_workspace_gid !== $workspaceGid) {
+            return 'actor_workspace_mismatch';
+        }
+
+        if ($tokens->getValidToken($actor) === null) {
+            return 'actor_token_unavailable';
+        }
+
+        return null;
     }
 
-    private function markEntriesError(string $message): void
+    private function markEntriesError(string $message, ?string $code = null): void
     {
         TimeEntry::query()
             ->where('asana_task_gid', $this->asanaTaskGid)
             ->where('project_id', $this->projectId)
-            ->update(['asana_sync_error' => $message]);
+            ->update([
+                'asana_sync_error' => $message,
+                'asana_sync_error_code' => $code,
+            ]);
     }
 
     private function handlePermissionDenied(

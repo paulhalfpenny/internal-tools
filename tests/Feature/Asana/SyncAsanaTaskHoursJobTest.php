@@ -9,10 +9,14 @@ use App\Models\Project;
 use App\Models\Task;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\Asana\AsanaHoursSyncRecovery;
 use App\Services\Asana\AsanaService;
+use App\Services\Asana\AsanaSyncActorAlert;
 use App\Services\Asana\AsanaTaskHoursAggregator;
+use App\Services\Asana\AsanaTokenManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 
 uses(RefreshDatabase::class);
@@ -23,7 +27,10 @@ beforeEach(function () {
         'services.asana.client_secret' => 's',
         'services.asana.redirect' => 'http://localhost/cb',
         'services.asana.custom_field_name' => 'Hours tracked (Internal Tools)',
+        'services.asana.sync_alert_email' => 'paul@filteragency.com',
     ]);
+
+    app(AsanaSyncActorAlert::class)->resolve();
 });
 
 function asanaTestLinkedProject(?string $customFieldGid = 'F1', string $boardGid = 'P1', string $workspaceGid = 'WS1'): Project
@@ -48,13 +55,17 @@ function asanaTestEnsureCachedTask(string $gid, string $boardGid = 'P1'): void
 
 function asanaTestConnectedAdmin(): User
 {
-    return User::factory()->create([
+    $admin = User::factory()->create([
         'role' => Role::Admin,
         'asana_access_token' => 'tok',
         'asana_token_expires_at' => now()->addHour(),
         'asana_user_gid' => 'admin-gid',
         'asana_workspace_gid' => 'WS1',
     ]);
+
+    User::designateAsanaSyncActor($admin);
+
+    return $admin;
 }
 
 function asanaTestEntry(Project $p, Task $t, User $u, string $gid, float $hours): TimeEntry
@@ -92,6 +103,9 @@ test('pushes summed hours to asana custom field', function () {
     (new SyncAsanaTaskHoursJob('T1', $project->id))->handle(
         app(AsanaService::class),
         app(AsanaTaskHoursAggregator::class),
+        app(AsanaSyncActorAlert::class),
+        app(AsanaTokenManager::class),
+        app(AsanaHoursSyncRecovery::class),
     );
 
     Http::assertSent(function ($r) {
@@ -101,6 +115,10 @@ test('pushes summed hours to asana custom field', function () {
     });
 
     expect(TimeEntry::query()->whereNotNull('asana_synced_at')->count())->toBe(2);
+
+    $log = AsanaSyncLog::query()->where('event', 'asana.sync_hours.pushed')->firstOrFail();
+    expect($log->context['actor_user_id'])->toBe($admin->id)
+        ->and($log->context['actor_asana_user_gid'])->toBe('admin-gid');
 });
 
 test('routes hours to the correct board when project links to multiple Asana boards', function () {
@@ -129,19 +147,25 @@ test('routes hours to the correct board when project links to multiple Asana boa
     (new SyncAsanaTaskHoursJob('A1', $project->id))->handle(
         app(AsanaService::class),
         app(AsanaTaskHoursAggregator::class),
+        app(AsanaSyncActorAlert::class),
+        app(AsanaTokenManager::class),
+        app(AsanaHoursSyncRecovery::class),
     );
     (new SyncAsanaTaskHoursJob('B1', $project->id))->handle(
         app(AsanaService::class),
         app(AsanaTaskHoursAggregator::class),
+        app(AsanaSyncActorAlert::class),
+        app(AsanaTokenManager::class),
+        app(AsanaHoursSyncRecovery::class),
     );
 
     Http::assertSent(fn ($r) => str_contains($r->url(), '/tasks/A1') && $r['data']['custom_fields']['F1'] === 1.0);
     Http::assertSent(fn ($r) => str_contains($r->url(), '/tasks/B1') && $r['data']['custom_fields']['F2'] === 2.0);
 });
 
-test('falls back to an admin and warns when the designated actor has no token', function () {
+test('keeps hours pending instead of falling back when the designated actor has no token', function () {
     $project = asanaTestLinkedProject();
-    asanaTestConnectedAdmin(); // token "tok"
+    $admin = asanaTestConnectedAdmin(); // token "tok"
     $bot = User::factory()->create([
         'role' => Role::User,
         'asana_access_token' => null,
@@ -150,22 +174,220 @@ test('falls back to an admin and warns when the designated actor has no token', 
     User::designateAsanaSyncActor($bot);
 
     $task = Task::factory()->create();
+    Notification::fake();
     Http::preventStrayRequests();
     Http::fake(['app.asana.com/api/1.0/tasks/T1' => Http::response(['data' => []])]);
 
     asanaTestEnsureCachedTask('T1');
-    asanaTestEntry($project, $task, $bot, 'T1', 1.0);
+    $entry = asanaTestEntry($project, $task, $bot, 'T1', 1.0);
 
     (new SyncAsanaTaskHoursJob('T1', $project->id))->handle(
         app(AsanaService::class),
         app(AsanaTaskHoursAggregator::class),
+        app(AsanaSyncActorAlert::class),
+        app(AsanaTokenManager::class),
+        app(AsanaHoursSyncRecovery::class),
     );
 
-    Http::assertSent(fn ($r) => $r->hasHeader('Authorization', 'Bearer tok'));
+    Http::assertNothingSent();
 
-    $log = AsanaSyncLog::query()->where('event', 'asana.sync_hours.actor_fallback')->first();
-    expect($log)->not->toBeNull();
-    expect($log->context['reason'])->toBe('actor_no_token');
+    $log = AsanaSyncLog::query()->where('event', 'asana.sync_hours.actor_unavailable')->first();
+    expect($entry->fresh()->asana_sync_error)->toContain('designated Asana sync account')
+        ->and($entry->fresh()->asana_sync_error_code)->toBe('actor_unavailable')
+        ->and($log)->not->toBeNull()
+        ->and($log->context['reason'])->toBe('actor_no_token')
+        ->and($log->context['designated_user_id'])->toBe($bot->id);
+
+    Notification::assertSentOnDemand(
+        'App\\Notifications\\AsanaSyncActorUnavailable',
+        fn ($notification, array $channels, $notifiable) => $channels === ['mail']
+            && $notifiable->routes['mail'] === 'paul@filteragency.com',
+    );
+    Notification::assertNothingSentTo($admin);
+});
+
+test('keeps hours pending when no sync actor is designated', function () {
+    $project = asanaTestLinkedProject();
+    $admin = User::factory()->create([
+        'role' => Role::Admin,
+        'asana_access_token' => 'human-token',
+        'asana_token_expires_at' => now()->addHour(),
+        'asana_user_gid' => 'human-gid',
+        'asana_workspace_gid' => 'WS1',
+    ]);
+    $task = Task::factory()->create();
+
+    Notification::fake();
+    Http::preventStrayRequests();
+    asanaTestEnsureCachedTask('T-NONE');
+    $entry = asanaTestEntry($project, $task, $admin, 'T-NONE', 1.0);
+
+    (new SyncAsanaTaskHoursJob('T-NONE', $project->id))->handle(
+        app(AsanaService::class),
+        app(AsanaTaskHoursAggregator::class),
+        app(AsanaSyncActorAlert::class),
+        app(AsanaTokenManager::class),
+        app(AsanaHoursSyncRecovery::class),
+    );
+
+    Http::assertNothingSent();
+    $log = AsanaSyncLog::query()->where('event', 'asana.sync_hours.actor_unavailable')->firstOrFail();
+    expect($entry->fresh()->asana_sync_error_code)->toBe('actor_unavailable')
+        ->and($log->context['reason'])->toBe('actor_not_designated');
+    Notification::assertNothingSentTo($admin);
+});
+
+test('keeps hours pending when the designated actor token cannot be refreshed', function () {
+    $project = asanaTestLinkedProject();
+    $actor = asanaTestConnectedAdmin();
+    $actor->forceFill([
+        'asana_access_token' => 'expired-token',
+        'asana_refresh_token' => null,
+        'asana_token_expires_at' => now()->subMinute(),
+    ])->save();
+    $task = Task::factory()->create();
+
+    Notification::fake();
+    Http::preventStrayRequests();
+    asanaTestEnsureCachedTask('T-EXPIRED');
+    $entry = asanaTestEntry($project, $task, $actor, 'T-EXPIRED', 1.0);
+
+    $thrown = null;
+    try {
+        (new SyncAsanaTaskHoursJob('T-EXPIRED', $project->id))->handle(
+            app(AsanaService::class),
+            app(AsanaTaskHoursAggregator::class),
+            app(AsanaSyncActorAlert::class),
+            app(AsanaTokenManager::class),
+            app(AsanaHoursSyncRecovery::class),
+        );
+    } catch (Throwable $exception) {
+        $thrown = $exception;
+    }
+
+    expect($thrown)->toBeNull()
+        ->and($entry->fresh()->asana_sync_error_code)->toBe('actor_unavailable')
+        ->and($entry->fresh()->asana_synced_at)->toBeNull();
+    Http::assertNothingSent();
+});
+
+test('keeps hours pending rather than using a human account for another workspace', function () {
+    $project = asanaTestLinkedProject();
+    $human = asanaTestConnectedAdmin();
+    $bot = User::factory()->create([
+        'asana_access_token' => 'bot-token',
+        'asana_token_expires_at' => now()->addHour(),
+        'asana_user_gid' => 'bot-gid',
+        'asana_workspace_gid' => 'WS-OTHER',
+    ]);
+    User::designateAsanaSyncActor($bot);
+    $task = Task::factory()->create();
+
+    Notification::fake();
+    Http::preventStrayRequests();
+    asanaTestEnsureCachedTask('T-WORKSPACE');
+    $entry = asanaTestEntry($project, $task, $human, 'T-WORKSPACE', 1.0);
+
+    (new SyncAsanaTaskHoursJob('T-WORKSPACE', $project->id))->handle(
+        app(AsanaService::class),
+        app(AsanaTaskHoursAggregator::class),
+        app(AsanaSyncActorAlert::class),
+        app(AsanaTokenManager::class),
+        app(AsanaHoursSyncRecovery::class),
+    );
+
+    Http::assertNothingSent();
+    $log = AsanaSyncLog::query()->where('event', 'asana.sync_hours.actor_unavailable')->firstOrFail();
+    expect($entry->fresh()->asana_sync_error_code)->toBe('actor_unavailable')
+        ->and($log->context['reason'])->toBe('actor_workspace_mismatch');
+});
+
+test('uses only the designated bot and clears its recoverable pending state', function () {
+    $project = asanaTestLinkedProject();
+    User::factory()->create([
+        'role' => Role::Admin,
+        'asana_access_token' => 'human-token',
+        'asana_token_expires_at' => now()->addHour(),
+        'asana_user_gid' => 'human-gid',
+        'asana_workspace_gid' => 'WS1',
+    ]);
+    $bot = User::factory()->create([
+        'asana_access_token' => 'bot-token',
+        'asana_token_expires_at' => now()->addHour(),
+        'asana_user_gid' => 'bot-gid',
+        'asana_workspace_gid' => 'WS1',
+    ]);
+    User::designateAsanaSyncActor($bot);
+    $task = Task::factory()->create();
+
+    Http::preventStrayRequests();
+    Http::fake(['app.asana.com/api/1.0/tasks/T-BOT' => Http::response(['data' => []])]);
+    asanaTestEnsureCachedTask('T-BOT');
+    $entry = asanaTestEntry($project, $task, $bot, 'T-BOT', 1.0);
+    $entry->forceFill([
+        'asana_sync_error' => 'Waiting for the designated account.',
+        'asana_sync_error_code' => TimeEntry::ASANA_SYNC_ERROR_ACTOR_UNAVAILABLE,
+    ])->saveQuietly();
+    app(AsanaHoursSyncRecovery::class)->markPending(
+        'T-BOT',
+        $project->id,
+        'actor_no_token',
+    );
+
+    (new SyncAsanaTaskHoursJob('T-BOT', $project->id))->handle(
+        app(AsanaService::class),
+        app(AsanaTaskHoursAggregator::class),
+        app(AsanaSyncActorAlert::class),
+        app(AsanaTokenManager::class),
+        app(AsanaHoursSyncRecovery::class),
+    );
+
+    Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer bot-token'));
+    Http::assertNotSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer human-token'));
+
+    $log = AsanaSyncLog::query()->where('event', 'asana.sync_hours.pushed')->firstOrFail();
+    expect($entry->fresh()->asana_sync_error)->toBeNull()
+        ->and($entry->fresh()->asana_sync_error_code)->toBeNull()
+        ->and($log->context['actor_user_id'])->toBe($bot->id)
+        ->and($log->context['actor_asana_user_gid'])->toBe('bot-gid');
+
+    Queue::fake();
+    expect(app(AsanaHoursSyncRecovery::class)->dispatchPending())->toBe(0);
+    Queue::assertNothingPushed();
+});
+
+test('recovers a pending zero total after the last matching entry was deleted', function () {
+    $project = asanaTestLinkedProject();
+    $bot = User::factory()->create([
+        'asana_access_token' => null,
+        'asana_user_gid' => null,
+        'asana_workspace_gid' => null,
+    ]);
+    User::designateAsanaSyncActor($bot);
+    asanaTestEnsureCachedTask('T-ZERO');
+
+    Notification::fake();
+    (new SyncAsanaTaskHoursJob('T-ZERO', $project->id))->handle(
+        app(AsanaService::class),
+        app(AsanaTaskHoursAggregator::class),
+        app(AsanaSyncActorAlert::class),
+        app(AsanaTokenManager::class),
+        app(AsanaHoursSyncRecovery::class),
+    );
+
+    $bot->forceFill([
+        'asana_access_token' => 'bot-token',
+        'asana_user_gid' => 'bot-gid',
+        'asana_workspace_gid' => 'WS1',
+    ])->save();
+    Queue::fake();
+
+    expect(app(AsanaHoursSyncRecovery::class)->dispatchPending())->toBe(1);
+    Queue::assertPushed(
+        SyncAsanaTaskHoursJob::class,
+        fn (SyncAsanaTaskHoursJob $job) => $job->asanaTaskGid === 'T-ZERO'
+            && $job->projectId === $project->id,
+    );
 });
 
 test('handles permission denied while setting hours without retrying', function () {
@@ -192,6 +414,9 @@ test('handles permission denied while setting hours without retrying', function 
         (new SyncAsanaTaskHoursJob('T403', $project->id))->handle(
             app(AsanaService::class),
             app(AsanaTaskHoursAggregator::class),
+            app(AsanaSyncActorAlert::class),
+            app(AsanaTokenManager::class),
+            app(AsanaHoursSyncRecovery::class),
         );
     } catch (Throwable $e) {
         $thrown = $e;
@@ -236,7 +461,13 @@ test('releases rate limited jobs without an immediate HTTP retry', function () {
     asanaTestEntry($project, $task, $actor, 'T429', 1.0);
 
     $job = (new SyncAsanaTaskHoursJob('T429', $project->id))->withFakeQueueInteractions();
-    $job->handle(app(AsanaService::class), app(AsanaTaskHoursAggregator::class));
+    $job->handle(
+        app(AsanaService::class),
+        app(AsanaTaskHoursAggregator::class),
+        app(AsanaSyncActorAlert::class),
+        app(AsanaTokenManager::class),
+        app(AsanaHoursSyncRecovery::class),
+    );
 
     $job->assertReleased(45);
     expect($requests)->toBe(1);
