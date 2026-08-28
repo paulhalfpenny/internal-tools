@@ -7,7 +7,10 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Backup\Notifications\Notifications\BackupHasFailedNotification;
+use Spatie\Backup\Notifications\Notifications\BackupWasSuccessfulNotification;
 use Spatie\Backup\Notifications\Notifications\CleanupHasFailedNotification;
+use Spatie\Backup\Notifications\Notifications\CleanupWasSuccessfulNotification;
+use Spatie\Backup\Notifications\Notifications\HealthyBackupWasFoundNotification;
 use Spatie\Backup\Notifications\Notifications\UnhealthyBackupWasFoundNotification;
 
 uses(RefreshDatabase::class);
@@ -78,6 +81,9 @@ test('sends immediate email only for backup failures and unhealthy backups', fun
         BackupHasFailedNotification::class => ['mail'],
         UnhealthyBackupWasFoundNotification::class => ['mail'],
         CleanupHasFailedNotification::class => ['mail'],
+        BackupWasSuccessfulNotification::class => [],
+        HealthyBackupWasFoundNotification::class => [],
+        CleanupWasSuccessfulNotification::class => [],
     ]);
 });
 
