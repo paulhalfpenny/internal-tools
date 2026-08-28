@@ -3,11 +3,14 @@
 namespace App\Livewire\Admin\Integrations;
 
 use App\Jobs\Asana\PullAsanaProjectsJob;
+use App\Models\AsanaPendingHourSync;
 use App\Models\AsanaProject;
 use App\Models\AsanaSyncLog;
 use App\Models\Project;
 use App\Models\TimeEntry;
 use App\Models\User;
+use App\Services\Asana\AsanaHoursSyncRecovery;
+use App\Services\Asana\AsanaSyncActorAlert;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
@@ -30,13 +33,22 @@ class AsanaSettings extends Component
         Gate::authorize('access-admin');
 
         $user = $value
-            ? User::query()->whereNotNull('asana_access_token')->find((int) $value)
+            ? User::query()
+                ->whereNotNull('asana_access_token')
+                ->whereNotNull('asana_user_gid')
+                ->find((int) $value)
             : null;
 
         User::designateAsanaSyncActor($user);
 
+        $queued = 0;
+        if ($user !== null) {
+            app(AsanaSyncActorAlert::class)->resolve();
+            $queued = app(AsanaHoursSyncRecovery::class)->dispatchPending();
+        }
+
         session()->flash('asana_status', $user
-            ? 'Asana sync account set to '.$user->name.'.'
+            ? 'Asana sync account set to '.$user->name.'. '.$queued.' pending total(s) queued.'
             : 'Asana sync account cleared.');
     }
 
@@ -58,11 +70,14 @@ class AsanaSettings extends Component
 
     public function render(): View
     {
+        $syncActor = User::asanaSyncActor();
+
         // Match by job class slug. Backslash-escaping PHP -> MySQL LIKE gets messy fast,
         // and "Asana" only appears in our integration jobs in this codebase.
         $pendingAsana = DB::table('jobs')->where('payload', 'like', '%Asana%')->count();
         $failedAsana = DB::table('failed_jobs')->where('payload', 'like', '%Asana%')->count();
         $entriesWithSyncError = TimeEntry::query()->whereNotNull('asana_sync_error')->count();
+        $pendingActorRecoveryCount = AsanaPendingHourSync::query()->count();
 
         $lastSuccessfulSync = AsanaSyncLog::query()
             ->where('event', 'asana.sync_hours.pushed')
@@ -88,17 +103,26 @@ class AsanaSettings extends Component
             'pendingAsana' => $pendingAsana,
             'failedAsana' => $failedAsana,
             'entriesWithSyncError' => $entriesWithSyncError,
+            'pendingActorRecoveryCount' => $pendingActorRecoveryCount,
             'lastSuccessfulSync' => $lastSuccessfulSync,
             'lastSuccessfulTaskPull' => $lastSuccessfulTaskPull,
             'workerLikelyRunning' => $workerLikelyRunning,
             'recentLogs' => AsanaSyncLog::query()->orderByDesc('id')->limit(20)->get(),
-            'syncActorFallbackRecently' => AsanaSyncLog::query()
-                ->where('event', 'asana.sync_hours.actor_fallback')
-                ->where('created_at', '>=', now()->subDay())
-                ->exists(),
+            'syncActor' => $syncActor,
+            'syncActorUnavailable' => $syncActor === null
+                || ! $syncActor->asanaConnected()
+                || $pendingActorRecoveryCount > 0,
             'connectedUsers' => User::query()
-                ->whereNotNull('asana_access_token')
-                ->whereNotNull('asana_user_gid')
+                ->where(function ($query) use ($syncActor) {
+                    $query->where(function ($connected) {
+                        $connected->whereNotNull('asana_access_token')
+                            ->whereNotNull('asana_user_gid');
+                    });
+
+                    if ($syncActor !== null) {
+                        $query->orWhere('id', $syncActor->id);
+                    }
+                })
                 ->orderBy('name')
                 ->get(),
         ]);

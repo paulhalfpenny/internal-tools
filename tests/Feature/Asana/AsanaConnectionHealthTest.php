@@ -1,12 +1,19 @@
 <?php
 
+use App\Jobs\Asana\SyncAsanaTaskHoursJob;
+use App\Models\Project;
+use App\Models\Task;
+use App\Models\TimeEntry;
 use App\Models\User;
 use App\Notifications\AsanaConnectionLost;
+use App\Services\Asana\AsanaHoursSyncRecovery;
+use App\Services\Asana\AsanaSyncActorAlert;
 use App\Services\Asana\AsanaTokenManager;
 use App\Settings\NotificationSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 
 uses(RefreshDatabase::class);
 
@@ -15,11 +22,13 @@ beforeEach(function () {
         'services.asana.client_id' => 'test-client',
         'services.asana.client_secret' => 'test-secret',
         'services.asana.redirect' => 'http://localhost/integrations/asana/callback',
+        'services.asana.sync_alert_email' => 'paul@filteragency.com',
     ]);
 
     NotificationSettings::flushCache();
     NotificationSettings::setEmailEnabled(true);
     NotificationSettings::setSlackEnabled(true);
+    app(AsanaSyncActorAlert::class)->resolve();
 });
 
 // --- Root cause: the reconnect that stranded the connection -------------------
@@ -107,6 +116,66 @@ test('reconnecting clears a recorded drop', function () {
     expect($user->asana_connection_alerted_at)->toBeNull();
 });
 
+test('reconnecting the designated actor retries each pending task and project total once', function () {
+    Queue::fake();
+    $actor = User::factory()->create();
+    User::designateAsanaSyncActor($actor);
+    $project = Project::factory()->create();
+    $task = Task::factory()->create();
+
+    foreach ([1.0, 2.0] as $hours) {
+        TimeEntry::factory()->make([
+            'user_id' => $actor->id,
+            'project_id' => $project->id,
+            'task_id' => $task->id,
+            'hours' => $hours,
+            'asana_task_gid' => 'T-PENDING',
+            'asana_sync_error' => 'Waiting for the designated account.',
+            'asana_sync_error_code' => TimeEntry::ASANA_SYNC_ERROR_ACTOR_UNAVAILABLE,
+        ])->saveQuietly();
+    }
+
+    TimeEntry::factory()->make([
+        'user_id' => $actor->id,
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'asana_task_gid' => 'T-PERMANENT',
+        'asana_sync_error' => 'Asana task not found.',
+        'asana_sync_error_code' => null,
+    ])->saveQuietly();
+
+    app(AsanaHoursSyncRecovery::class)->markPending(
+        'T-PENDING',
+        $project->id,
+        'actor_no_token',
+    );
+
+    Http::fake([
+        'app.asana.com/-/oauth_token' => Http::response([
+            'access_token' => 'a', 'refresh_token' => 'r', 'expires_in' => 3600,
+        ]),
+        'app.asana.com/api/1.0/users/me*' => Http::response([
+            'data' => ['gid' => 'me-1', 'name' => 'Internal Tools', 'workspaces' => [['gid' => 'ws-1', 'name' => 'Acme']]],
+        ]),
+    ]);
+
+    $this->actingAs($actor)
+        ->withSession(['asana_oauth_state' => 'st'])
+        ->get(route('integrations.asana.callback', ['code' => 'c', 'state' => 'st']))
+        ->assertRedirect(route('profile.asana'));
+
+    Queue::assertPushed(SyncAsanaTaskHoursJob::class, 1);
+    Queue::assertPushed(
+        SyncAsanaTaskHoursJob::class,
+        fn (SyncAsanaTaskHoursJob $job) => $job->asanaTaskGid === 'T-PENDING'
+            && $job->projectId === $project->id,
+    );
+    Queue::assertNotPushed(
+        SyncAsanaTaskHoursJob::class,
+        fn (SyncAsanaTaskHoursJob $job) => $job->asanaTaskGid === 'T-PERMANENT',
+    );
+});
+
 // --- Recording the drop -------------------------------------------------------
 
 test('a rejected refresh records the drop', function () {
@@ -173,6 +242,26 @@ test('disconnecting clears the health stamps', function () {
     expect($user->asana_connection_alerted_at)->toBeNull();
 });
 
+test('disconnecting the designated actor immediately emails Paul', function () {
+    Notification::fake();
+    $actor = User::factory()->create([
+        'asana_access_token' => 'a',
+        'asana_user_gid' => 'actor-gid',
+        'asana_workspace_gid' => 'ws-1',
+    ]);
+    User::designateAsanaSyncActor($actor);
+
+    $this->actingAs($actor)
+        ->post(route('integrations.asana.disconnect'))
+        ->assertRedirect(route('profile.asana'));
+
+    Notification::assertSentOnDemand(
+        'App\\Notifications\\AsanaSyncActorUnavailable',
+        fn ($notification, array $channels, $notifiable) => $channels === ['mail']
+            && $notifiable->routes['mail'] === 'paul@filteragency.com',
+    );
+});
+
 // --- The daily check ----------------------------------------------------------
 
 test('the check notifies a user whose connection dropped', function () {
@@ -204,6 +293,26 @@ test('the check finds a stranded connection that no job has touched', function (
     $this->artisan('asana:check-connections')->assertSuccessful();
 
     Notification::assertSentTo($user, AsanaConnectionLost::class);
+});
+
+test('the check emails only Paul when the designated actor has no connection history', function () {
+    Notification::fake();
+
+    $actor = User::factory()->create([
+        'is_active' => true,
+        'asana_access_token' => null,
+        'asana_connection_lost_at' => null,
+    ]);
+    User::designateAsanaSyncActor($actor);
+
+    $this->artisan('asana:check-connections')->assertSuccessful();
+
+    Notification::assertSentOnDemand(
+        'App\\Notifications\\AsanaSyncActorUnavailable',
+        fn ($notification, array $channels, $notifiable) => $channels === ['mail']
+            && $notifiable->routes['mail'] === 'paul@filteragency.com',
+    );
+    Notification::assertNothingSentTo($actor);
 });
 
 test('the check does not notify twice for the same drop', function () {

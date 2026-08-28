@@ -7,7 +7,9 @@ use App\Jobs\Asana\PullAsanaProjectsJob;
 use App\Models\AsanaSyncLog;
 use App\Models\AsanaWorkspace;
 use App\Models\User;
+use App\Services\Asana\AsanaHoursSyncRecovery;
 use App\Services\Asana\AsanaService;
+use App\Services\Asana\AsanaSyncActorAlert;
 use App\Services\Asana\AsanaTokenManager;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +25,8 @@ class AsanaOAuthController extends Controller
     public function __construct(
         private readonly AsanaService $service,
         private readonly AsanaTokenManager $tokens,
+        private readonly AsanaHoursSyncRecovery $hoursRecovery,
+        private readonly AsanaSyncActorAlert $actorAlert,
     ) {}
 
     public function redirect(Request $request): RedirectResponse
@@ -148,6 +152,16 @@ class AsanaOAuthController extends Controller
             'workspace_count' => count($workspaces),
         ], $user);
 
+        if (User::asanaSyncActor()?->is($user)) {
+            $this->actorAlert->resolve();
+            $queued = $this->hoursRecovery->dispatchPending();
+            AsanaSyncLog::info('asana.sync_hours.recovery_queued', [
+                'actor_user_id' => $user->id,
+                'actor_asana_user_gid' => $user->asana_user_gid,
+                'totals_queued' => $queued,
+            ], $user);
+        }
+
         return redirect()->route('profile.asana')
             ->with('asana_status', 'Connected to Asana as '.$me['name'].'.');
     }
@@ -156,9 +170,13 @@ class AsanaOAuthController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
+        $wasSyncActor = User::asanaSyncActor()?->is($user) ?? false;
         $this->tokens->disconnect($user);
 
         AsanaSyncLog::info('asana.oauth.disconnected', ['user_id' => $user->id], $user);
+        if ($wasSyncActor) {
+            $this->actorAlert->reportUnavailable($user, 'actor_disconnected');
+        }
 
         return redirect()->route('profile.asana')->with('asana_status', 'Disconnected from Asana.');
     }

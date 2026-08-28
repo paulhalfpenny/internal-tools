@@ -1,9 +1,18 @@
 <div>
-    @if($syncActorFallbackRecently)
-        <div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            The designated Asana sync account is disconnected — hours are being
-            attributed to an admin until it is reconnected. Reconnect it, then
-            reselect it below.
+    @if($syncActorUnavailable)
+        <div class="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            @if($pendingActorRecoveryCount > 0)
+                {{ $pendingActorRecoveryCount.' task '.\Illuminate\Support\Str::plural('total', $pendingActorRecoveryCount).' '.($pendingActorRecoveryCount === 1 ? 'is' : 'are').' pending Asana recovery.' }}
+            @else
+                Asana hours syncing is paused and hours are pending in Internal Tools.
+            @endif
+            @if($syncActor && ! $syncActor->asanaConnected())
+                Reconnect {{ $syncActor->name }} to retry them automatically.
+            @elseif(! $syncActor)
+                Select a connected sync account below to retry them automatically.
+            @else
+                Pending totals will retry automatically through {{ $syncActor->name }}.
+            @endif
         </div>
     @endif
     <div class="mb-6">
@@ -81,7 +90,12 @@
             <ul class="divide-y divide-gray-100">
                 @foreach($connectedUsers as $u)
                     <li class="py-2 flex items-center justify-between text-sm">
-                        <span class="text-gray-700">{{ $u->name }} <span class="text-gray-400">({{ $u->email }})</span></span>
+                        <span class="text-gray-700">
+                            {{ $u->name }} <span class="text-gray-400">({{ $u->email }})</span>
+                            @if(! $u->asanaConnected())
+                                <span class="text-red-600">— disconnected</span>
+                            @endif
+                        </span>
                         <span class="text-xs text-gray-500">workspace {{ $u->asana_workspace_gid ?? '—' }}</span>
                     </li>
                 @endforeach
@@ -92,14 +106,16 @@
                 Asana sync account
             </label>
             <p class="text-xs text-gray-500 mb-2">
-                Hours-tracked updates in Asana are attributed to this account. Leave as
-                “None” to fall back to an admin.
+                Hours-tracked updates in Asana are attributed only to this account.
+                Selecting “None” pauses hours synchronization.
             </p>
             <select id="syncActor" wire:model.live="syncActorUserId"
                     class="w-full max-w-sm text-sm border-gray-300 rounded">
-                <option value="">None (fall back to an admin)</option>
+                <option value="">None (hours sync paused)</option>
                 @foreach($connectedUsers as $u)
-                    <option value="{{ $u->id }}">{{ $u->name }} ({{ $u->email }})</option>
+                    <option value="{{ $u->id }}">
+                        {{ $u->name }} ({{ $u->email }}){{ $u->asanaConnected() ? '' : ' — disconnected' }}
+                    </option>
                 @endforeach
             </select>
         </div>

@@ -46,6 +46,7 @@ return [
         'client_secret' => env('ASANA_CLIENT_SECRET'),
         'redirect' => env('ASANA_REDIRECT_URI'),
         'custom_field_name' => env('ASANA_HOURS_FIELD_NAME', 'Hours tracked (Internal Tools)'),
+        'sync_alert_email' => env('ASANA_SYNC_ALERT_EMAIL', 'paul@filteragency.com'),
     ],
 
 ];
