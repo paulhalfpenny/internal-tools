@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\TimeTracking\TimeEntryService;
 use App\Livewire\Timesheet\DayView;
 use App\Models\AsanaProject;
 use App\Models\AsanaProjectAssociation;
@@ -80,4 +81,32 @@ test('saving an entry keeps the entry UI open and remembers the Asana board asso
     Livewire::withQueryParams(['log_asana' => 'AT1'])
         ->test(DayView::class)
         ->assertSet('selectedTaskId', $task->id);
+});
+
+test('the local close path clears Livewire modal state after saving an edit', function () {
+    [$user, $project, $task] = deepLinkSetup();
+    $this->actingAs($user);
+
+    $entry = app(TimeEntryService::class)->create($user, [
+        'project_id' => $project->id,
+        'task_id' => $task->id,
+        'spent_on' => now()->toDateString(),
+        'hours' => 0.5,
+        'notes' => 'Original note',
+    ]);
+
+    $html = html_entity_decode(
+        Livewire::test(DayView::class)
+            ->call('openEditModal', $entry->id)
+            ->call('save')
+            ->assertSet('showModal', true)
+            ->assertSet('editingEntryId', null)
+            ->html(),
+        ENT_QUOTES | ENT_HTML5,
+    );
+
+    preg_match('/closeNewEntry\(\) \{(?<body>.*?)\n        \},\n        closeEntry\(\)/s', $html, $matches);
+
+    expect($matches['body'] ?? '')
+        ->toContain("\$wire.set('showModal', false, false)");
 });
