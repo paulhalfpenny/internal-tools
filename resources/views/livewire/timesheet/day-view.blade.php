@@ -23,6 +23,7 @@
         closeNewEntry() {
             this.showEntryModal = false;
             this.showCalendarPanel = false;
+            $wire.set('showModal', false, false);
             $wire.set('editingEntryId', null, false);
             $wire.set('selectedProjectId', null, false);
             $wire.set('selectedTaskId', null, false);
